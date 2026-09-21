@@ -70,6 +70,9 @@
         }
         /* 失効した旧型を使っていないこと */
         (d.floor || []).concat(d.ceil || []).forEach((e) => {
+          /* SYNCSW は「対のパッド＋その先の橋」へ展開される譜面上の型（P3b / 契約§4.5）。
+             実体は SYNCPAD / SYNCGAP なので OBS には載っていない。 */
+          if (e.type === 'SYNCSW') { t.ok(typeof In.Sync.expand === 'function', d.id + ': SYNCSW は Sync が展開する'); return; }
           t.ok(!!In.OBS[e.type], d.id + ': 未定義の障害物型を使っていない (' + e.type + ')');
           t.ok(e.type !== 'WALLSOLID', d.id + ': WALLSOLID はチャンクに直接書かない');
         });
@@ -151,8 +154,13 @@
                         occ ⇔ hits の総当りで、判定と見た目の一致を直接検証している）
            BRIDGE     … 板（判定の外＝踏んでいる間は無害）と谷が前後・左右・下へ伸びる。
                         落ちる位置と判定の一致は tests/test_p3a.js が直接見ている */
+      /* P3b で足した S4 の新ギミック:
+           SYNCPAD … 当たり判定を持たない（踏むだけ）ので外接箱と比べられない
+           SYNCGAP … 谷・折れた橋脚・架かる橋の3態を重ねて持つ（tests/test_p3b.js が occ⇔hits で見る）
+           DROPCEIL … 床のブロックと天井の穴の2枚を絶対 y で持つので y/z は外接箱と合わない */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
-                     BRIDGE: ['x', 'y', 'z'] };
+                     BRIDGE: ['x', 'y', 'z'],
+                     SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);

@@ -69,6 +69,8 @@ const Game = {
        前のゾーンのプール・マテリアルを取りこぼさずに捨てられる。同じゾーンなら何もしない。 */
     Game.clearWorld();
     Zones.ensure(Game.stage.zone);
+    /* 同じゾーンでも区間パターンを替える（古代遺跡の 外周 ⇄ 内部 / 契約§4.4 S4） */
+    Zones.mode(Game.stage.zoneMode);
     Game.seed = (seed === undefined) ? ((Math.random() * 1e9) | 0) : seed;
     Game.handSwap = false;
     Game.lastCheckpoint = 0;
@@ -124,7 +126,9 @@ const Game = {
     Game.gen.ensure(fromM + CFG.SPAWN_AHEAD, fromM);
     /* 再開直後の助走: 視認距離ぶんの空白を必ず確保する（§4.7 視認距離） */
     const runway = Math.max(CFG.LEAD_IN * 0.6, Game.speed * CFG.FAIR.SEE + 10);
-    Game.active = Game.gen.obstacles.filter((o) => o.at >= fromM + runway);
+    /* 同時スイッチは「パッドは通り過ぎたのに橋だけ残る」を作らない（P3b）＝
+       助走の中にパッドがあるグループは橋ごと取り込まない。 */
+    Game.active = Sync.dropOrphans(Game.gen.obstacles.filter((o) => o.at >= fromM + runway), fromM + runway);
     Game.active.forEach((o) => { o.spawnDist = fromM; });
     Game.genPtr = Game.gen.obstacles.length;
     /* 再開位置より手前のイベントだけ「済み」にする。
@@ -165,7 +169,11 @@ const Game = {
       /* 減速帯（§4.4 S3「瓦礫の山」）: 越えそこねると速度が一時的に -20%。
          遅くなるぶんには §4.7 の不変条件（時間基準）は緩む方向なので公平性は壊れない。 */
       if (Game.slowT > 0) Game.slowT = Math.max(0, Game.slowT - d);
-      Game.speed = Game.stage.speedAt(Game.dist) * (1 - CFG.SLOW.MUL * U.clamp(Game.slowT / CFG.SLOW.T, 0, 1));
+      /* 光の輪のブースト（契約§4.5 2026-09-22）は **速度そのもの** に乗せる。
+         ＝ HUD の m/s 表示もボットの判断も、実際に走っている速さと一致する。
+         （FF 側の「距離を上乗せする」暫定処理は二重加速になるので止めてある） */
+      const boost = (typeof FF !== 'undefined' && FF.boostK) ? FF.boostK() : 1;
+      Game.speed = Game.stage.speedAt(Game.dist) * (1 - CFG.SLOW.MUL * U.clamp(Game.slowT / CFG.SLOW.T, 0, 1)) * boost;
       Game.prevDist = Game.dist;                        // 自由飛行の当たり判定（跨ぎ）に使う
       Game.dist += Game.speed * d;
 
@@ -180,6 +188,9 @@ const Game = {
       }
 
       Game.runners.forEach((r) => Runners.update(r, d));
+      /* 同時スイッチ（契約§4.5 / P3b）: パッドを踏んだかを見て 0.3秒窓の成否を決める。
+         判定（bands）より先に置く＝その場で橋が架かる／崩れる。 */
+      Sync.update(Game);
       Game.fireEvents();
       Setpieces.update(Game, d);
       Tutorial.update(dt);
@@ -387,6 +398,9 @@ const Game = {
       chunk: Game.gen ? (Game.gen.log.filter((c) => c.startM <= Game.dist).pop() || null) : null,
       obstacles: Game.active.length,
       slowT: +Game.slowT.toFixed(3),
+      /* 同時スイッチ（§4.5 / P3b）と神殿崩壊（§4.4 S4）の観測窓口 */
+      sync: Sync.snapshot(Game),
+      templeExit: +Setpieces.templeExit(Game.dist).toFixed(3),
       rockGap: Setpieces.rockGap(),
       lookBack: +Setpieces.lookBack(Game.dist).toFixed(3),
       setpiece: Setpieces.id(),

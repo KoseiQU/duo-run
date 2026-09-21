@@ -72,10 +72,40 @@ const Bot = {
     return true;
   },
 
+  /* 同時スイッチ（契約§4.5 / S4）: **完璧反応のボットは2人同時に踏める**。
+     踏むのは任意（踏み損ねても迂回で生き残れる＝§4.7 は occ が最悪値で担保している）ので、
+     「次のウォールより手前にパッドがあり、そこへ動いても危なくない」ときだけ寄せる。
+     0.25秒遅延のボットは寄せない＝踏み損ねて迂回する道を通る。 */
+  padAim(game, r, walls) {
+    let best = null;
+    for (let i = 0; i < game.active.length; i++) {
+      const o = game.active[i];
+      if (!OBS[o.type].pad || o.surface !== r.surface || !o.grp || o.grp.ok !== null) continue;
+      if (o.grp[r.surface] !== null) continue;                 // もう踏んだ
+      const rel = o.at - game.dist;
+      if (rel < -game.speed * CFG.SYNC.PAD_T * 0.4 || rel > CFG.BOT.LOOKAHEAD) continue;
+      if (!best || o.at < best.at) best = o;
+    }
+    if (!best || best.lane === r.laneTo) return null;
+    /* パッドより手前に「動作を要求するウォール」があるなら、そちらが先 */
+    for (let i = 0; i < walls.length; i++) {
+      if (walls[i].at < best.at + game.speed * CFG.SYNC.PAD_T * 0.5) {
+        const acts = Fair.laneActs(walls[i], r.surface);
+        const a = acts[best.lane];
+        if (!a || !a.run) return null;                         // パッドのレーンでは抜けられない
+      }
+    }
+    if (r.act === 'jump') return null;
+    const dir = (best.lane > r.laneTo) ? 1 : -1;
+    const step = U.clamp(r.laneTo + dir, -1, 1);
+    if (!Bot.moveIsSafe(game, r, step)) return null;
+    return { act: (dir * (r.mirrored ? -1 : 1) > 0) ? 'right' : 'left' };
+  },
+
   decideFor(game, r, delaySec) {
     const sp = game.speed;
     const walls = Bot.wallsFor(game, r.surface);
-    if (!walls.length) return null;
+    if (!walls.length) return delaySec ? null : Bot.padAim(game, r, walls);
     const w = walls[0];
     const acts = Bot.laneActs(w, r.surface);
 
@@ -112,7 +142,8 @@ const Bot = {
     }
 
     const a = acts[lane];
-    if (a.run) return null;                       // そのまま走れば通れる
+    /* そのまま走れば通れる ＝ 手が空いているので、同時スイッチのパッドへ寄せてよい */
+    if (a.run) return delaySec ? null : Bot.padAim(game, r, walls);
 
     /* このレーンを塞いでいる一番手前の障害物までの「見かけの距離」
        （動く／点滅する障害物は「到達時の占有」で見る＝契約§4.5） */

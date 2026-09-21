@@ -13,9 +13,12 @@ const HUD = {
     const ids = ['hud-dist', 'hud-speed', 'hud-stage', 'hand-left', 'hand-right',
                  'hand-left-name', 'hand-right-name', 'hand-left-keys', 'hand-right-keys',
                  'flag-mirror', 'flag-swap', 'dead-dist', 'dead-cp', 'dead-best',
-                 'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub'];
+                 'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub',
+                 'sync', 'sync-main', 'sync-sub'];
     ids.forEach((id) => { HUD.el[id] = document.getElementById(id); });
     HUD.cueHide();
+    HUD.syncState = 'x';
+    HUD.syncCue(null);
   },
 
   /* 大演出の予告（§4.4 大ジャンプの「JUMP!」）。2体に被らない位置は CSS 側で担保 */
@@ -44,6 +47,30 @@ const HUD = {
     if (e) e.classList.toggle('free', HUD.free);
     return HUD.free;
   },
+  /* 同時スイッチ（契約§4.5 / S4）の予告と成否（P3b）。
+     'cue' … これから踏む（SYNC!） / 'ok' … 橋が架かった / 'miss' … 迂回しろ / null … 消す */
+  SYNC_TEXT: { cue: ['SYNC!', '2人同時にパッドを踏め'],
+               ok:  ['BRIDGE', '橋が架かった'],
+               miss:['MISS', '細い足場へ迂回しろ'] },
+  syncState: null,
+  syncCue(state) {
+    const e = HUD.el.sync || (HUD.el.sync = document.getElementById('sync'));
+    if (!e) return false;
+    if (HUD.syncState === state) return true;
+    HUD.syncState = state || null;
+    const txt = HUD.SYNC_TEXT[state];
+    e.classList.toggle('on', !!txt);
+    e.classList.toggle('ok', state === 'ok');
+    e.classList.toggle('miss', state === 'miss');
+    if (txt) {
+      const m = HUD.el['sync-main'] || (HUD.el['sync-main'] = document.getElementById('sync-main'));
+      const s = HUD.el['sync-sub'] || (HUD.el['sync-sub'] = document.getElementById('sync-sub'));
+      if (m) m.textContent = txt[0];
+      if (s) s.textContent = txt[1];
+    }
+    return true;
+  },
+
   _set(id, txt) {
     if (HUD._last[id] === txt) return;
     HUD._last[id] = txt;
@@ -78,7 +105,7 @@ const UI = {
     { id: 'S1', name: 'ネオン都市・入門', ready: true },
     { id: 'S2', name: 'ネオン都市・夜', ready: true },
     { id: 'S3', name: '古代遺跡・外周', ready: true },
-    { id: 'S4', name: '古代遺跡・内部', ready: false },
+    { id: 'S4', name: '古代遺跡・内部', ready: true },
     { id: 'S5', name: '深海', ready: false },
     { id: 'S6', name: '宇宙ステーション', ready: false },
     { id: 'S7', name: '鏡の世界', ready: false },

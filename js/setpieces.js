@@ -113,7 +113,63 @@ const Setpieces = {
         { at: 34,  type: 'rock.cue' },       // 予告を引っ込める（振り返りカット1のあと）
         { at: 200, type: 'rock.end' }
       ]
+    },
+
+    /* ====================================================================
+       S4「神殿崩壊」（契約§4.4 / P3b）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0     予告（HUD「COLLAPSE!」）＋ 地響き。両脇の柱が次々に倒れ始める
+         14〜  **倒れる柱**（見た目）が 15m おきに前方で倒れる＝崩壊が画面で分かる
+         30    倒れた柱が **横断する梁**（COLUMN・3レーン全幅）になる → 跳ぶ
+         58〜  **落ちる天井の連鎖**（DROPCEIL）＝床はレーン移動・天井はジャンプ
+         108   瓦礫（PILLAR）で通路が狭まる
+         176   出口が見え始める（霧が晴れて光が差す）
+         190   **崩れる出口を潜り抜ける**（WALLHOLE）
+         200   外へ抜けてゴール
+       §4.7 は通常どおり（演出でも理不尽な死を作らない）。
+       ==================================================================== */
+    templefall: {
+      id: 'templefall',
+      lengthM: 200,
+      floor: [
+        { at: 30,  lane: -1, type: 'COLUMN' },     // 倒れた柱が全幅を横断（跳ぶ）
+        { at: 58,  lane: 0,  type: 'DROPCEIL' },   // 落ちる天井（床=レーン／天井=ジャンプ）
+        { at: 80,  lane: 1,  type: 'DROPCEIL' },
+        { at: 108, lane: -1, type: 'PILLAR' },     // 崩れ落ちた柱（both＝両者レーン移動）
+        { at: 128, lane: -1, type: 'COLUMN' },
+        { at: 156, lane: 0,  type: 'DROPCEIL' },
+        { at: 176, lane: -1, type: 'WIDEBAR' },    // 瓦礫の隙間を抜ける
+        { at: 190, lane: 0,  type: 'WALLHOLE' }    // 崩れる出口を潜り抜ける
+      ],
+      ceil: [
+        { at: 30,  lane: 0,  type: 'ROVER' },
+        { at: 128, lane: -1, type: 'COLUMN' },
+        { at: 176, lane: 1,  type: 'ROVER' }
+      ],
+      events: [
+        { at: 0,   type: 'temple.start' },
+        { at: 22,  type: 'temple.cue' },
+        { at: 176, type: 'temple.exit' },
+        { at: 200, type: 'temple.end' }
+      ]
     }
+  },
+
+  /* ---- 神殿崩壊のキーフレーム（距離 m。すべてここから引く） --------------- */
+  TEMPLE: {
+    EXIT0: 168,           // 出口の光が差し始める相対距離
+    END: 200,
+    COL_N: 10,            // 倒れる柱（見た目）の本数
+    DUST_N: 64,           // 粉塵の粒（描画の塗り面積を抑えるため巨岩より少なめ）
+    COL_FROM: 12,         // 1本目の相対距離
+    COL_STEP: 13,         // 何 m おきに倒れるか（複数本が同時に倒れる）
+    COL_X: 2.30,          // 走行空間（|x| ≤ 1.45）の外・壁パネルの内側
+    COL_H: 5.0,
+    COL_R: 0.55,
+    COL_LEAD: 42,         // プレイヤーの何 m 手前で倒れ始めるか（＝画面の中で倒れる）
+    COL_FALL: 35,         // 倒れきるまでの距離（倒れ終わるのは 7m 手前＝大きく映る）
+    BEAM_N: 7,            // 天井の上を横切って落ちる梁
+    BEAM_FROM: 24, BEAM_STEP: 19, BEAM_LEAD: 30, BEAM_FALL: 16
   },
 
   /* ---- 巨岩の追跡のキーフレーム（距離 m。すべてここから引く） ------------- */
@@ -146,13 +202,15 @@ const Setpieces = {
   },
 
   /* ---- 生成（createGenerator から呼ばれる） ------------------------------- */
-  build(id, startM, nowDist) {
+  /* scale …「その地点の速度 / 基準速度」。演出の at は実寸だが、落ちる天井や
+     同時スイッチの**時刻規則**はここを通して実寸の秒へ直す（§4.7 と同じ考え方）。 */
+  build(id, startM, nowDist, scale, syncs) {
     const d = Setpieces.DEFS[id];
     if (!d) return null;
     const items = [];
-    const pr = (e) => scaleParams(normParams(e.type, e.params), 1);
-    (d.floor || []).forEach((e) => items.push(Obstacles.make(e.type, 'floor', e.lane, startM + e.at, nowDist, pr(e))));
-    (d.ceil || []).forEach((e) => items.push(Obstacles.make(e.type, 'ceil', e.lane, startM + e.at, nowDist, pr(e))));
+    const sc = (scale === undefined) ? 1 : scale;
+    (d.floor || []).forEach((e) => expandEntry(items, e, 'floor', startM + e.at, nowDist, sc, syncs));
+    (d.ceil || []).forEach((e) => expandEntry(items, e, 'ceil', startM + e.at, nowDist, sc, syncs));
     items.sort((a, b) => a.at - b.at);
     const events = (d.events || []).map((e) => ({ at: startM + e.at, type: e.type, params: e.params || null, done: false }));
     return { id: id, items: items, events: events, lengthM: d.lengthM, startM: startM };
@@ -198,7 +256,84 @@ const Setpieces = {
     } else if (e.type === 'rock.end') {
       if (Setpieces.state) Setpieces.state.ending = true;
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'temple.start') {
+      Setpieces.state = { id: 'templefall', startM: e.at, t: 0, exit: 0 };
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('COLLAPSE!', '神殿が崩れる ／ 出口へ走れ');
+    } else if (e.type === 'temple.cue') {
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'temple.exit') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('EXIT', '崩れる出口を潜り抜けろ');
+    } else if (e.type === 'temple.end') {
+      if (Setpieces.state) Setpieces.state.ending = true;
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     }
+  },
+
+  /* ---- 神殿崩壊（距離の関数。フレームに依存しない） ----------------------- */
+  templeActive() { const s = Setpieces.state; return !!(s && s.id === 'templefall'); },
+  /* 出口の光 0..1（霧が晴れて外の光が差す） */
+  templeExit(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'templefall') return 0;
+    const T = Setpieces.TEMPLE;
+    return U.clamp((m - s.startM - T.EXIT0) / (T.END - T.EXIT0), 0, 1);
+  },
+  /* 崩壊の激しさ 0..1（出口に近づくと収まる） */
+  templeRage(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'templefall') return 0;
+    const rel = m - s.startM;
+    return U.clamp(rel / 26, 0, 1) * (1 - Setpieces.templeExit(m) * 0.85);
+  },
+  /* i 本目の倒れる柱（見た目）: 倒れ始める距離と、倒れ具合 0..1 */
+  templeColumnAt(i) {
+    const s = Setpieces.state, T = Setpieces.TEMPLE;
+    return (s ? s.startM : 0) + T.COL_FROM + i * T.COL_STEP;
+  },
+  templeColumnK(i, dist) {
+    const T = Setpieces.TEMPLE;
+    const at = Setpieces.templeColumnAt(i);
+    return U.clamp((dist - (at - T.COL_LEAD)) / T.COL_FALL, 0, 1);
+  },
+  /* 「今まさに倒れている柱」（契約§6 P3b「倒れる柱が前方で見える」の測定窓口）。
+     見つからなければ null。box は世界座標（World.projectCoverage / projectRect に渡す）。 */
+  templeColumns(dist) {
+    const s = Setpieces.state, T = Setpieces.TEMPLE;
+    const out = [];
+    if (!s || s.id !== 'templefall') return out;
+    for (let i = 0; i < T.COL_N; i++) {
+      const k = Setpieces.templeColumnK(i, dist);
+      if (k <= 0.001 || k >= 0.999) continue;
+      const at = Setpieces.templeColumnAt(i);
+      const z = -(at - dist);
+      const side = (i % 2) ? 1 : -1;
+      const ang = U.smooth(k) * 1.48;
+      const hx = T.COL_R + 0.12;
+      /* 根元を軸に前方（+z＝カメラ側）へ倒れる。x はほぼ固定で、y と z が振れる */
+      const ty = T.COL_H * Math.cos(ang), tz = T.COL_H * Math.sin(ang);
+      out.push({ i: i, k: k, at: at, side: side,
+                 box: { x0: side * T.COL_X - hx, x1: side * T.COL_X + hx,
+                        y0: Math.min(0, ty) - hx, y1: Math.max(0.2, ty) + hx,
+                        z0: z + Math.min(0, tz) - hx, z1: z + Math.max(0, tz) + hx } });
+    }
+    return out;
+  },
+  /* 今いちばん倒れている柱（倒れ具合が最大＝いちばん近い） */
+  templeColumn(dist) {
+    const list = Setpieces.templeColumns(dist);
+    let best = null;
+    for (let i = 0; i < list.length; i++) if (!best || list[i].k > best.k) best = list[i];
+    return best;
+  },
+  /* 倒れている柱が画面をどれだけ覆っているか（0 = 1本も映っていない）。
+     契約§6 P3b「画面で崩壊が分かること」の測定窓口 */
+  templeOnScreen(dist) {
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    const m = (dist === undefined) ? (Setpieces.state ? Setpieces.state.dist : 0) : dist;
+    const list = Setpieces.templeColumns(m);
+    let best = 0;
+    for (let i = 0; i < list.length; i++) best = Math.max(best, World.projectCoverage(list[i].box));
+    return best;
   },
 
   /* ---- 巨岩の追跡（距離の関数。フレームに依存しない） --------------------- */
@@ -379,6 +514,11 @@ const Setpieces = {
       }
       return;
     }
+    if (s.id === 'templefall') {
+      s.exit = Setpieces.templeExit(game.dist);
+      s.rage = Setpieces.templeRage(game.dist);
+      return;
+    }
     /* 崩落前線はプレイヤーの後ろを上下しながら追う（演出＝絶対に追いつかない） */
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
@@ -405,6 +545,13 @@ const Setpieces = {
       const ahead = atM - dist;
       if (ahead < -4 || ahead > 40) return 0;
       return (0.012 + 0.05 * p) * (1 - U.clamp(ahead / 40, 0, 1)) * Math.sin(s.t * 31 + atM * 2.1);
+    }
+    if (s && s.id === 'templefall') {
+      /* 神殿崩壊: 前方の床と天井が地響きで震える（落とさない＝公平性に影響しない） */
+      const r = Setpieces.templeRage(dist);
+      const ahead = atM - dist;
+      if (ahead < -6 || ahead > 52) return 0;
+      return (0.010 + 0.055 * r) * (1 - U.clamp(ahead / 52, 0, 1)) * Math.sin(s.t * 29 + atM * 2.3);
     }
     if (!s || s.id !== 'collapse' || atM < s.front) return 0;
     const ahead = atM - dist;
@@ -467,6 +614,25 @@ const Setpieces = {
         prox: p
       };
     }
+    if (s.id === 'templefall') {
+      const m = s.dist || s.startM;
+      const q = Setpieces.templeExit(m), r = Setpieces.templeRage(m);
+      /* 外へ抜けるほど霧が晴れて明るくなる（黄土色 → 外光の白） */
+      const c = new THREE.Color(0x4a3418).lerp(new THREE.Color(0xffd9a0), q);
+      return {
+        shake: 0.016 + 0.062 * r * (0.7 + 0.3 * Math.sin(s.t * 26)),
+        fovAdd: 3 + 4 * r + 7 * q,
+        camBack: 0,
+        camUp: 0.30 + 0.22 * r,
+        lookUp: -0.22 - 0.16 * r + 0.5 * q,
+        /* 外へ抜けるほど霧が晴れる。遠景まで開けすぎない（神殿の中なので視線は出口の光へ集める。
+           霧の far は「どこまで障害物を描くか」にも効くので、ドローコールの天井とも釣り合わせる） */
+        fogFar: U.lerp(72, 104, q),
+        fogColor: c.getHex(),
+        glide: 0,
+        rage: r, exit: q
+      };
+    }
     const ramp = U.clamp(s.t / 1.2, 0, 1);              // 立ち上がり
     return {
       shake: 0.055 * ramp * (0.7 + 0.3 * Math.sin(s.t * 23.3)),
@@ -500,6 +666,132 @@ const Setpieces = {
     Setpieces.dust = { mesh: im, mat: mat, count: N, dummy: new THREE.Object3D(),
                        base: new THREE.Color(0x9b86c8) };
     Setpieces._buildRock(scene);
+    Setpieces._buildTemple(scene);
+  },
+
+  /* ---- 神殿崩壊（S4）の造形 ----------------------------------------------
+     ・**倒れる柱**: 走行空間（|x| ≤ 1.45）の外・壁パネルの内側（|x| = 2.42）に立ち、
+       根元を軸に前方へ倒れる。当たり判定は持たない見た目だが、判定を持つ
+       「横断する梁（COLUMN）」と「落ちる天井（DROPCEIL）」が同じ場面で来るので、
+       画面の崩壊と手の忙しさが一致する。
+     ・**天井の上を横切る梁**: y > H（天井の外）を落ちて渡る。走行空間には入らない。
+     ・出口の光: 演出の終わりに前方が白く抜ける。 */
+  _buildTemple(scene) {
+    const T = Setpieces.TEMPLE;
+    const col = ZoneKit.merge([
+      { g: new THREE.CylinderGeometry(T.COL_R, T.COL_R * 1.12, T.COL_H, 7), p: [0, T.COL_H / 2, 0] },
+      { g: ZoneKit.box(T.COL_R * 2.5, 0.26, T.COL_R * 2.5), p: [0, 0.13, 0] },
+      { g: ZoneKit.box(T.COL_R * 2.6, 0.30, T.COL_R * 2.6), p: [0, T.COL_H - 0.15, 0] },
+      { g: ZoneKit.box(T.COL_R * 2.1, 0.16, T.COL_R * 2.1), p: [0, T.COL_H - 0.40, 0] }
+    ]);
+    const cm = new THREE.InstancedMesh(col, new THREE.MeshLambertMaterial({ color: 0x9b845a, flatShading: true }), T.COL_N);
+    cm.frustumCulled = false;
+    cm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    cm.visible = false;
+    scene.add(cm);
+    const beam = ZoneKit.merge([
+      { g: ZoneKit.box(7.4, 0.42, 0.62), p: [0, 0, 0] },
+      { g: ZoneKit.box(0.7, 0.5, 0.7), p: [-3.3, -0.1, 0] },
+      { g: ZoneKit.box(0.7, 0.5, 0.7), p: [3.3, -0.1, 0] }
+    ]);
+    const bm = new THREE.InstancedMesh(beam, new THREE.MeshLambertMaterial({ color: 0x7d6a45, flatShading: true }), T.BEAM_N);
+    bm.frustumCulled = false;
+    bm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    bm.visible = false;
+    scene.add(bm);
+    /* 出口の光（外へ抜ける瞬間） */
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffe9c2, transparent: true, opacity: 0,
+                                                  depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2 + 2.6, CFG.H + 2.6), glowMat);
+    glow.renderOrder = 7;
+    glow.visible = false;
+    scene.add(glow);
+    /* 崩壊を照らす明かり（倒れる柱の面を起こす） */
+    Setpieces.templeLight = new THREE.PointLight(0xffc184, 0, 34, 2);
+    Setpieces.templeLight.position.set(0, CFG.H / 2, -12);
+    scene.add(Setpieces.templeLight);
+    Setpieces.temple = { cols: cm, beams: bm, glow: glow, glowMat: glowMat, dummy: new THREE.Object3D() };
+  },
+
+  _hideTemple() {
+    const tp = Setpieces.temple;
+    if (!tp) return;
+    if (tp.cols.visible || tp.beams.visible || tp.glow.visible) {
+      tp.cols.visible = false; tp.beams.visible = false;
+      tp.glow.visible = false; tp.glowMat.opacity = 0;
+    }
+    if (Setpieces.templeLight) Setpieces.templeLight.intensity = 0;
+  },
+
+  /* 倒れる柱・落ちる梁・出口の光の更新（すべて距離の関数） */
+  _syncTemple(dist, t) {
+    const s = Setpieces.state, tp = Setpieces.temple, T = Setpieces.TEMPLE, d = Setpieces.dust;
+    if (!tp) return;
+    tp.cols.visible = true;
+    tp.beams.visible = true;
+    const o = tp.dummy;
+    for (let i = 0; i < T.COL_N; i++) {
+      const at = Setpieces.templeColumnAt(i);
+      const k = Setpieces.templeColumnK(i, dist);
+      const side = (i % 2) ? 1 : -1;
+      const ang = U.smooth(k) * 1.48 + (k >= 1 ? 0.02 * Math.sin(t * 3 + i) : 0);
+      o.position.set(side * T.COL_X, 0, -(at - dist));
+      o.rotation.set(ang, 0, 0);                       // 根元を軸に前方（+z）へ倒れる
+      o.scale.set(1, 1, 1);
+      o.updateMatrix();
+      tp.cols.setMatrixAt(i, o.matrix);
+    }
+    tp.cols.instanceMatrix.needsUpdate = true;
+    for (let i = 0; i < T.BEAM_N; i++) {
+      const at = (s ? s.startM : 0) + T.BEAM_FROM + i * T.BEAM_STEP;
+      const k = U.clamp((dist - (at - T.BEAM_LEAD)) / T.BEAM_FALL, 0, 1);
+      const e = k * k;
+      o.position.set((i % 2 ? 0.8 : -0.8), CFG.H + 3.4 - e * 3.1, -(at - dist));
+      o.rotation.set(0, (i % 2 ? 0.12 : -0.12) * k, (i % 2 ? 1 : -1) * 0.55 * e);
+      o.scale.set(1, 1, 1);
+      o.updateMatrix();
+      tp.beams.setMatrixAt(i, o.matrix);
+    }
+    tp.beams.instanceMatrix.needsUpdate = true;
+    /* 出口の光 */
+    const q = Setpieces.templeExit(dist);
+    tp.glow.visible = q > 0.01;
+    if (tp.glow.visible) {
+      tp.glowMat.opacity = 0.46 * q * q;
+      tp.glow.position.set(0, CFG.H / 2, -Math.max(2, (s.startM + T.END) - dist));
+      tp.glow.scale.setScalar(1 + q * 0.45);
+    }
+    const rage = Setpieces.templeRage(dist);
+    if (Setpieces.templeLight) {
+      Setpieces.templeLight.intensity = 16 * (0.7 + 0.3 * Math.sin(t * 8.1)) * (0.4 + 0.6 * rage);
+      Setpieces.templeLight.position.z = -14;
+    }
+    /* 粉塵（既存の粒子を砂色で使い回す） */
+    if (d) {
+      d.mat.color.setHex(0xd9c49a);
+      d.mat.opacity = 0.14 + 0.24 * rage;
+      const o2 = d.dummy;
+      /* 粒は DUST_N 個だけ使う（残りは畳む）＝塗り面積を抑えて1フレームの予算を守る */
+      const use = Math.min(d.count, T.DUST_N);
+      for (let i = 0; i < d.count; i++) {
+        if (i >= use) {
+          o2.position.set(0, -9999, 0);
+          o2.rotation.set(0, 0, 0);
+          o2.scale.set(0.0001, 0.0001, 0.0001);
+        } else {
+          const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+          const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+          const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+          const u = (h1 + (t * 0.26 + i * 0.013)) % 1;
+          o2.position.set((h2 - 0.5) * 6.4, (h3 < 0.5 ? 0.25 : CFG.H - 0.25) + (h3 - 0.5) * 3.0, -6 - u * 58);
+          o2.rotation.set(t * (0.6 + h1) + i, t * 0.4 + i, t * (0.3 + h2));
+          o2.scale.setScalar((0.4 + h3 * 1.5) * (1 - u * 0.3));
+        }
+        o2.updateMatrix();
+        d.mesh.setMatrixAt(i, o2.matrix);
+      }
+      d.mesh.instanceMatrix.needsUpdate = true;
+    }
   },
 
   /* ---- 巨岩（S3「巨岩の追跡」）の造形 ------------------------------------
@@ -619,6 +911,8 @@ const Setpieces = {
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
       FF.syncView(dist, t, Setpieces.viewLift(dist), Setpieces.duoK(dist));
     }
+    if (s && s.id === 'templefall') { Setpieces._hideRock(); Setpieces._syncTemple(dist, t); return; }
+    Setpieces._hideTemple();
     if (s && s.id === 'rockchase') { Setpieces._syncRock(dist, t); return; }
     Setpieces._hideRock();
     if (s && s.id === 'bigjump') {
@@ -741,6 +1035,7 @@ const Setpieces = {
     FF.reset();
     if (typeof HUD !== 'undefined' && HUD.freeFlight) HUD.freeFlight(false);
     Setpieces._hideRock();
+    Setpieces._hideTemple();
     if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 0;

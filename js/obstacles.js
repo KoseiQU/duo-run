@@ -73,6 +73,33 @@ const OBS = {
      ■ 抜け方: 板に乗ってから 0.4秒以内にレーン移動するか、跳び越す。 */
   BRIDGE:   { span: 1, depth: 1.60, y0: -1.60, y1: 0.04, both: false, safe: ['jump'],
               motion: 'bridge', lead: true, label: '崩れる橋' },
+  /* ------------------------------------------------------------------------
+     S4「古代遺跡・内部」の新ギミック（契約§4.4 / §4.5 / P3b）
+     ------------------------------------------------------------------------ */
+  /* 同時スイッチのパッド: 当たり判定は持たない（bands は常に空＝踏んでも死なない）。
+     「踏んだ」の記録と 0.3秒窓の判定は Sync が唯一の出所。
+     奥行き（z窓）は速度に比例して伸びる＝「0.36秒ぶんの長さ」が一定（zWin が pad を見る）。 */
+  SYNCPAD:  { span: 1, depth: 0.60, y0: 0.00, y1: 0.08, both: false, safe: [],
+              pad: true, harmless: true, label: 'スイッチのパッド' },
+  /* 同時スイッチの橋: 成功すれば橋が架かって**完全に無害**、失敗すると谷になる。
+     谷は「抜け落ちた床＋折れた橋脚」＝ 跳んでも越えられない（y1 = 1.60）。
+     ＝ 契約§4.5 の「レーン移動で迂回路あり」が唯一の抜け方になる。
+     occ（＝生成器・ボット・不変条件が読む planning の値）は **必ず失敗側**で測る
+     （Obstacles.occ が grp を外して測る）ので、迂回路まで含めて §4.7 が担保される。 */
+  SYNCGAP:  { span: 1, depth: 1.60, y0: -1.60, y1: 1.60, both: false, safe: [],
+              motion: 'sync', label: '同時スイッチの橋' },
+  /* 落ちる天井: **1つの事象が床と天井で別の要求になる**（契約§6 P3b）。
+       床側 … 落ちてきた石のブロック（0〜1.60 ＝ 跳んでも越えられない）→ レーン移動
+       天井側 … 抜けた穴（GAP と同じ寸法）→ ジャンプ
+     bands() が絶対 y で2枚返す both 型。ブロックの高さ 1.60 は
+     「床側は跳んでも届かない（跳躍の足元 1.30 < 1.60）」かつ
+     「天井側で跳んだ体の下端 H-1.30-0.90 = 1.80 には触れない」ぎりぎりの値。 */
+  DROPCEIL: { span: 1, depth: 0.70, y0: 0.00, y1: 1.60, both: true, safe: [],
+              motion: 'drop', label: '落ちる天井' },
+  /* 倒れた柱（神殿崩壊）: 3レーンを横断する低い梁（高さ0.62）→ ジャンプ */
+  COLUMN:   { span: 3, depth: 0.62, y0: 0.00, y1: 0.62, both: false, safe: ['jump'],
+              label: '倒れた柱' },
+
   /* 減速帯（瓦礫の山）: 巨岩の追跡で使う**死なない**障害物。
      ジャンプで越えなければ速度が一時的に -20%（契約§4.4 S3 の大演出）。
      公平性（§4.7）の扱いは通常のジャンプ要求と同じ＝間隔も生存経路も守られる。 */
@@ -132,6 +159,29 @@ const MOT = {
     return (dist <= f) ? 0 : Math.min(1, (dist - f) / 3.2);
   },
 
+  /* ------------------------------------------------------------------------
+     落ちる天井（契約§4.4 S4）の時刻規則。**ここが唯一の出所**。
+     すべて「到達（dist = o.at）の何秒手前か」で書き、生成時に実寸へ伸縮した
+     unitM（＝その地点の速度×1秒）を掛けて距離にする。崩れる橋と同じ流儀。
+       warnAt  … ひび・砂が落ち始める（予告）
+       fallAt  … 天井から外れて落ち始める。**ここから bands が最終形を返す**
+       landAt  … 床に着く（= 到達の CFG.DROP.LAND_T 秒手前 ≥ 視認距離）
+     ------------------------------------------------------------------------ */
+  dropUnit(o) { return (o.params && o.params.drop && o.params.drop.unitM) || CFG.REF_SPEED; },
+  dropLandAt(o) { return o.at - CFG.DROP.LAND_T * MOT.dropUnit(o); },
+  dropFallAt(o) { return MOT.dropLandAt(o) - CFG.DROP.FALL_T * MOT.dropUnit(o); },
+  dropWarnAt(o) { return MOT.dropFallAt(o) - CFG.DROP.WARN_T * MOT.dropUnit(o); },
+  /* 落下の進み具合 0..1（0 = 天井にある / 1 = 着地）。見た目も判定もこの1本から引く */
+  dropFall(o, dist) {
+    const a = MOT.dropFallAt(o), b = MOT.dropLandAt(o);
+    return U.clamp((dist - a) / Math.max(1e-6, b - a), 0, 1);
+  },
+  /* 予告（ひび・砂）の強さ 0..1 */
+  dropWarn(o, dist) {
+    const a = MOT.dropWarnAt(o), b = MOT.dropFallAt(o);
+    return U.clamp((dist - a) / Math.max(1e-6, b - a), 0, 1);
+  },
+
   /* 次に ON になるまでの距離（予告灯用。ON 中は 0） */
   toNextOn(o, dist) {
     const p = o.params && o.params.blink;
@@ -140,6 +190,126 @@ const MOT = {
     if (MOT.blinkOn(o, dist)) return 0;
     const k = Math.floor((dist - o.at) / P + 0.5);
     return ((k + 0.5) * P + o.at) - dist;       // 今の枠の終わり
+  }
+};
+
+/* ============================================================================
+   Sync — 同時スイッチ（契約§4.5 / §4.4 S4）の**時刻規則の唯一の出所**
+
+   ■ 形
+     パッド（床・天井の対） → その先の橋（SYNCGAP × 2レーン × 2面）。
+     どの実体も同じ「グループ」 `o.grp` を指す:
+       { padAt, gapAt, unit, floor, ceil, ok, okM, deadM, safe, csafe }
+     floor/ceil には「踏んだ距離」が入る（未踏は null）。
+
+   ■ 規則（崩れる橋と同じ流儀で、距離＝時刻として書く）
+     ・踏んだ ＝ そのパッドの z窓の中に、その面を走る体が**足を着けて**いる
+       （跳んでいる間は踏めない）。最初に重なった距離を記録する。
+     ・両方踏んだら |floor - ceil| / unit ≤ CFG.SYNC.WINDOW_T(0.3秒) で **成功**。
+     ・パッドを通り過ぎても片方しか踏んでいなければ **失敗**。
+     ・成功なら先の橋が架かる（SYNCGAP の bands が空になる）。
+       失敗なら谷のまま＝迂回の1レーンだけが生き残る（§4.7 は occ が最悪値で担保）。
+   ============================================================================ */
+const Sync = {
+  unitOf(o) { return (o.params && o.params.sync && o.params.sync.unitM) || CFG.REF_SPEED; },
+
+  /* 譜面の1エントリ（type:'SYNCSW'）を実体へ展開する。
+     params.sync = { cl:天井パッドのレーン, dt:天井パッドのずれ(秒/テスト用),
+                     gapT:橋までの距離(秒), safe:床の迂回レーン, csafe:天井の迂回レーン } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.sync) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);   // その地点の「1秒ぶんの距離」
+    const cl = (p.cl === undefined) ? e.lane : p.cl;
+    const dOff = (p.dt || 0) * unit;
+    const gapAt = at + ((p.gapT === undefined) ? CFG.SYNC.GAP_T : p.gapT) * unit;
+    const safe = (p.safe === undefined) ? 0 : p.safe;
+    const csafe = (p.csafe === undefined) ? safe : p.csafe;
+    const grp = {
+      padAt: at, ceilPadAt: at + dOff, gapAt: gapAt, unit: unit,
+      floor: null, ceil: null, ok: null, okM: 0,
+      deadM: Math.max(at, at + dOff) + unit * CFG.SYNC.PAD_T / 2,
+      safe: safe, csafe: csafe, cued: false
+    };
+    const pp = { sync: { unitM: unit } };
+    const pf = Obstacles.make('SYNCPAD', 'floor', e.lane, at, nowDist, pp);
+    const pc = Obstacles.make('SYNCPAD', 'ceil', cl, at + dOff, nowDist, pp);
+    pf.grp = grp; pc.grp = grp;
+    items.push(pf, pc);
+    CFG.LANES.forEach((l) => {
+      if (l !== safe) { const o = Obstacles.make('SYNCGAP', 'floor', l, gapAt, nowDist, pp); o.grp = grp; items.push(o); }
+      if (l !== csafe) { const o = Obstacles.make('SYNCGAP', 'ceil', l, gapAt, nowDist, pp); o.grp = grp; items.push(o); }
+    });
+    if (sink) sink.push(grp);
+    return grp;
+  },
+
+  /* 0.3秒窓の判定（**この1行が契約§4.5 の「同じ0.3秒窓内」**） */
+  inWindow(grp) {
+    if (grp.floor === null || grp.ceil === null) return false;
+    return Math.abs(grp.floor - grp.ceil) / Math.max(1e-6, grp.unit) <= CFG.SYNC.WINDOW_T + 1e-9;
+  },
+  /* 成否を確定する（両方踏んだ瞬間 or パッドを通り過ぎた瞬間） */
+  settle(grp, dist) {
+    if (grp.ok !== null) return grp.ok;
+    if (grp.floor !== null && grp.ceil !== null) { grp.ok = Sync.inWindow(grp); grp.okM = dist; return grp.ok; }
+    if (dist > grp.deadM) { grp.ok = false; grp.okM = grp.deadM; return false; }
+    return null;
+  },
+
+  /* パッドを踏んだかを見て、成否を確定する。Game.step から毎フレーム1回 */
+  update(game) {
+    const dist = game.dist;
+    const gs = (game.gen && game.gen.syncs) ? game.gen.syncs : null;
+    if (!gs || !gs.length) { Sync.hud(game, null); return; }
+    for (let i = 0; i < game.active.length; i++) {
+      const o = game.active[i];
+      if (!OBS[o.type].pad || !o.grp || o.grp.ok !== null) continue;
+      const side = o.surface;
+      if (o.grp[side] !== null) continue;
+      const r = game.runners.filter((x) => x.surface === side)[0];
+      if (!r) continue;
+      if (r.act === 'jump') continue;                       // 足が面から離れている間は踏めない
+      const z = Obstacles.zWin(o, dist);
+      if (!U.overlap1(-CFG.BODY_D / 2, CFG.BODY_D / 2, z.z0, z.z1)) continue;
+      const rb = Runners.box(r);
+      const x0 = (o.lane - 0.5) * CFG.LANE_W + OBS_INSET, x1 = (o.lane + 0.5) * CFG.LANE_W - OBS_INSET;
+      if (!U.overlap1(rb.x0, rb.x1, x0, x1)) continue;
+      o.grp[side] = dist;
+    }
+    for (let k = 0; k < gs.length; k++) Sync.settle(gs[k], dist);
+    Sync.hud(game, gs);
+  },
+
+  /* HUD の「SYNC!」予告と成否の演出（契約§6 P3b）。距離の関数なので巻き戻しても壊れない */
+  hud(game, gs) {
+    if (typeof HUD === 'undefined' || !HUD.syncCue) return;
+    if (!gs) { HUD.syncCue(null); return; }
+    const dist = game.dist, sp = Math.max(1, game.speed);
+    let show = null;
+    for (let k = 0; k < gs.length; k++) {
+      const g = gs[k];
+      if (g.ok === null) {
+        if (g.padAt - dist <= sp * CFG.SYNC.CUE_T && g.padAt - dist > -sp * CFG.SYNC.PAD_T) show = 'cue';
+      } else if (dist - g.okM >= 0 && dist - g.okM <= sp * CFG.SYNC.RESULT_T) {
+        show = g.ok ? 'ok' : 'miss';
+      }
+    }
+    HUD.syncCue(show);
+  },
+
+  /* 中断・チェックポイント再開で「パッドは通り過ぎたのに橋だけ残る」を作らない。
+     再開位置より手前にパッドがあるグループは、橋ごと取り込まない。 */
+  dropOrphans(list, cutM) {
+    return list.filter((o) => !(o.grp && o.grp.padAt < cutM));
+  },
+
+  /* テスト・監査の窓口 */
+  snapshot(game) {
+    const gs = (game.gen && game.gen.syncs) ? game.gen.syncs : [];
+    return gs.filter((g) => Math.abs(g.padAt - game.dist) < 260)
+             .map((g) => ({ padAt: +g.padAt.toFixed(1), gapAt: +g.gapAt.toFixed(1), ok: g.ok,
+                            dt: (g.floor !== null && g.ceil !== null)
+                                ? +(Math.abs(g.floor - g.ceil) / g.unit).toFixed(3) : null }));
   }
 };
 
@@ -184,6 +354,28 @@ const Obstacles = {
       out.push(ceil ? { x0: x0, x1: x1, y0: CFG.H - y1, y1: CFG.H - y0 }
                     : { x0: x0, x1: x1, y0: y0, y1: y1 });
     };
+
+    if (t.pad) return out;                                 // スイッチのパッドは当たらない
+
+    if (t.motion === 'sync') {
+      /* 同時スイッチの橋（契約§4.5）: 成功していれば橋が架かっている＝完全に無害。
+         成否が決まる前・失敗したあとは谷（抜けた床＋折れた橋脚）。
+         ＝ 成否の規則は Sync の1か所だけで、ここはその結果を読むだけ。 */
+      if (o.grp && o.grp.ok === true) return out;
+      put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET, t.y0, t.y1);
+      return out;
+    }
+
+    if (t.motion === 'drop') {
+      /* 落ちる天井（契約§4.4 S4）: 天井から外れる（dropFallAt）より手前では
+         まだ天井にはまっているので無害。外れた後は **床のブロック** と
+         **天井の穴** の2枚を絶対 y で返す＝床と天井で別の要求になる。 */
+      if (dist < MOT.dropFallAt(o) - 1e-9) return out;
+      const x0 = (o.lane - 0.5) * CFG.LANE_W + OBS_INSET, x1 = (o.lane + 0.5) * CFG.LANE_W - OBS_INSET;
+      out.push({ x0: x0, x1: x1, y0: t.y0, y1: t.y1 });                             // 落ちたブロック（床側）
+      out.push({ x0: x0, x1: x1, y0: CFG.H - OBS.GAP.y1, y1: CFG.H - OBS.GAP.y0 }); // 抜けた天井（天井側）
+      return out;
+    }
 
     if (t.motion === 'bridge') {
       /* 崩れる橋（契約§4.4 S3）: 「踏んだ時刻+0.4秒」より手前では板があるので無害。
@@ -235,6 +427,11 @@ const Obstacles = {
         踏んだ瞬間から落ちる瞬間までを1つの実体で扱える。 */
   zWin(o, dist) {
     const t = OBS[o.type], zc = -(o.at - dist);
+    /* スイッチのパッドだけは「秒」で長さが決まる（速度が上がっても踏む時間は同じ） */
+    if (t.pad) {
+      const d = Sync.unitOf(o) * CFG.SYNC.PAD_T;
+      return { z0: zc - d / 2, z1: zc + d / 2 };
+    }
     const lead = t.lead ? MOT.bridgeLead(o) : 0;
     return { z0: zc - t.depth / 2, z1: zc + t.depth / 2 + lead };
   },
@@ -271,10 +468,20 @@ const Obstacles = {
 
   /* 路面タイルを消す区間（穴の下は空洞・崩れる橋の下は谷）。World.syncCorridor が読む。
      null なら路面はそのまま。区間は **距離 m** で返す。 */
-  holeSpan(o) {
+  holeSpan(o, dist) {
     if (o.type === 'GAP') return { from: o.at - OBS.GAP.depth / 2, to: o.at + OBS.GAP.depth / 2 };
     if (o.type === 'BRIDGE') {
       return { from: MOT.bridgeEntry(o) - 0.7, to: o.at + OBS.BRIDGE.depth / 2 + 0.7 };
+    }
+    /* 同時スイッチ: 成功していれば橋が架かるので路面はそのまま。失敗なら谷 */
+    if (o.type === 'SYNCGAP') {
+      if (o.grp && o.grp.ok === true) return null;
+      return { from: o.at - OBS.SYNCGAP.depth / 2, to: o.at + OBS.SYNCGAP.depth / 2 };
+    }
+    /* 落ちる天井: 天井から外れたら、その**天井側**の路面が抜ける（床側は抜けない） */
+    if (o.type === 'DROPCEIL') {
+      if (dist !== undefined && dist < MOT.dropFallAt(o)) return null;
+      return { from: o.at - OBS.DROPCEIL.depth / 2, to: o.at + OBS.DROPCEIL.depth / 2, side: 'ceil' };
     }
     return null;
   },
@@ -297,6 +504,13 @@ const Obstacles = {
     const key = Obstacles._occKey(o);
     const hit = Obstacles._occCache[key];
     if (hit) return hit;
+    /* 同時スイッチの橋は **必ず「踏み損ねた側」** で測る（planning は最悪値で見る）。
+       ＝ 生成器・ボット・不変条件は「橋が架からなかったとき」でも通れる道を要求する。 */
+    const grp = o.grp;
+    o.grp = null;
+    try { return Obstacles._occCalc(o, key); } finally { o.grp = grp; }
+  },
+  _occCalc(o, key) {
     const t = OBS[o.type];
     const moving = !!(t.motion || (o.params && o.params.blink));
     const K = moving ? CFG.OCC.SAMPLES : 1;
@@ -426,13 +640,31 @@ const Obstacles = {
                    r: rot ? [rot[0] || 0, rot[1] || 0, rot[2] || 0] : [0, 0, 0],
                    s: scl ? [scl[0], scl[1], scl[2]] : [1, 1, 1] });
     };
+    /* 警告灯。**同じ色の灯は1メッシュに融合する**（明滅の位相は1障害物で共通なので
+       色ごとに1つの材質で足りる）。1障害物あたり2〜4ドローコールを1〜2へ落とす
+       （契約§3 ドローコール300以下 / 2026-09-22 P3b）。 */
+    const lampParts = [];
     const lamp = (r, color, x, y, z) => {
-      const mat = new THREE.MeshBasicMaterial({ color: color, fog: true });
-      const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), mat);
-      m.position.set(x, y, z);
-      g.add(m);
-      g.userData.blink.push({ mesh: m, mat: mat, color: new THREE.Color(color) });
-      return m;
+      lampParts.push({ r: r, color: color, p: [x || 0, y || 0, z || 0] });
+      return null;
+    };
+    const buildLamps = () => {
+      const byColor = [];
+      for (let i = 0; i < lampParts.length; i++) {
+        const p = lampParts[i];
+        let b = null;
+        for (let k = 0; k < byColor.length; k++) if (byColor[k].color === p.color) { b = byColor[k]; break; }
+        if (!b) { b = { color: p.color, list: [] }; byColor.push(b); }
+        b.list.push({ g: new THREE.SphereGeometry(p.r, 6, 4), p: p.p });
+      }
+      for (let k = 0; k < byColor.length; k++) {
+        const mat = new THREE.MeshBasicMaterial({ color: byColor[k].color, fog: true });
+        const m = new THREE.Mesh(ZoneKit.merge(byColor[k].list), mat);
+        byColor[k].list.forEach((q) => q.g.dispose());
+        g.add(m);
+        g.userData.blink.push({ mesh: m, mat: mat, color: new THREE.Color(byColor[k].color) });
+      }
+      lampParts.length = 0;
     };
     /* 危険を示す斜めの縞。板の上に小さな箱を並べて彫る */
     const stripes = (gw, gh, z, y, n) => {
@@ -446,60 +678,248 @@ const Obstacles = {
        ここでは **z方向の長さ1の部品** を並べておく（プールで使い回すため）。 */
     const bridge = (mats) => {
       const n = 10;
+      /* 谷（板の下）。材質ごとに1メッシュへ融合する（ドローコール削減 / 契約§3 の300以下） */
       const pit = new THREE.Group();
-      const pf = new THREE.Mesh(new THREE.BoxGeometry(w + 0.5, 0.06, 1), mats.pit);
-      pf.position.y = -1.62;
-      pit.add(pf);
-      [-1, 1].forEach((s) => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.7, 1), mats.pit);
-        m.position.set(s * (w / 2 + 0.24), -0.8, 0);
-        pit.add(m);
-      });
+      pit.add(new THREE.Mesh(ZoneKit.merge([
+        { g: new THREE.BoxGeometry(w + 0.5, 0.06, 1), p: [0, -1.62, 0] },
+        { g: new THREE.BoxGeometry(0.06, 1.7, 1), p: [-(w / 2 + 0.24), -0.8, 0] },
+        { g: new THREE.BoxGeometry(0.06, 1.7, 1), p: [w / 2 + 0.24, -0.8, 0] }
+      ]), mats.pit));
       if (mats.deep) {
         const gl = new THREE.Mesh(new THREE.BoxGeometry(w * 0.8, 0.05, 1), mats.deep);
         gl.position.y = -1.56;
         pit.add(gl);
       }
       g.add(pit);
-      const planks = [];
-      for (let i = 0; i < n; i++) {
-        const h = new THREE.Group();
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.15, 1), mats.slab);
-        m.position.y = -0.075;
-        h.add(m);
-        const b = new THREE.Mesh(new THREE.BoxGeometry(w * 0.24, 0.10, 1), mats.beam);
-        b.position.y = -0.18;
-        h.add(b);
-        if (mats.edge) {
-          [-1, 1].forEach((s) => {
-            const e = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.26, 1), mats.edge);
-            e.position.set(s * (w / 2 - 0.03), 0.10, 0);
-            h.add(e);
-          });
-        }
-        g.add(h);
-        planks.push(h);
+      /* 板は10枚が別々に傾いて落ちる＝**材質ごとの InstancedMesh** にして、
+         1枚あたり4メッシュ（＝40ドローコール）だったものを3ドローコールにする。
+         板ごとの姿勢は place() が1つの行列を作り、3つのインスタンスへ同じ行列を書く。 */
+      const plankIMs = [];
+      const addIM = (geo, mat) => {
+        if (!mat) return;
+        const im = new THREE.InstancedMesh(geo, mat, n);
+        im.frustumCulled = false;
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        g.add(im);
+        plankIMs.push(im);
+      };
+      addIM(ZoneKit.merge([{ g: new THREE.BoxGeometry(w, 0.15, 1), p: [0, -0.075, 0] }]), mats.slab);
+      addIM(ZoneKit.merge([{ g: new THREE.BoxGeometry(w * 0.24, 0.10, 1), p: [0, -0.18, 0] }]), mats.beam);
+      if (mats.edge) {
+        addIM(ZoneKit.merge([
+          { g: new THREE.BoxGeometry(0.07, 0.26, 1), p: [-(w / 2 - 0.03), 0.10, 0] },
+          { g: new THREE.BoxGeometry(0.07, 0.26, 1), p: [w / 2 - 0.03, 0.10, 0] }
+        ]), mats.edge);
       }
       /* 板の「踏み口」を示す標示（ここを踏んだら 0.4秒で落ちる、と一目で分かる）。
          判定の外なので体には当たらない（見た目と判定のズレ検査でも BRIDGE は x/y/z 例外）。 */
       const mark = new THREE.Group();
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(w + 0.18, 0.09, 0.34), mats.mark || mats.edge || mats.beam);
-      bar.position.y = 0.05;
-      mark.add(bar);
-      [-1, 1].forEach((sx) => {
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.62, 0.13), mats.post || mats.beam);
-        post.position.set(sx * (w / 2 + 0.06), 0.31, 0);
-        mark.add(post);
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), mats.mark || mats.edge || mats.beam);
-        cap.position.set(sx * (w / 2 + 0.06), 0.64, 0);
-        mark.add(cap);
-      });
+      const markMat = mats.mark || mats.edge || mats.beam;
+      mark.add(new THREE.Mesh(ZoneKit.merge([
+        { g: new THREE.BoxGeometry(w + 0.18, 0.09, 0.34), p: [0, 0.05, 0] },
+        { g: new THREE.BoxGeometry(0.18, 0.12, 0.18), p: [-(w / 2 + 0.06), 0.64, 0] },
+        { g: new THREE.BoxGeometry(0.18, 0.12, 0.18), p: [w / 2 + 0.06, 0.64, 0] }
+      ]), markMat));
+      mark.add(new THREE.Mesh(ZoneKit.merge([
+        { g: new THREE.BoxGeometry(0.13, 0.62, 0.13), p: [-(w / 2 + 0.06), 0.31, 0] },
+        { g: new THREE.BoxGeometry(0.13, 0.62, 0.13), p: [w / 2 + 0.06, 0.31, 0] }
+      ]), mats.post || mats.beam));
       g.add(mark);
-      g.userData.bridge = { pit: pit, planks: planks, mark: mark, n: n };
+      g.userData.bridge = { pit: pit, ims: plankIMs, mark: mark, n: n,
+                            dummy: new THREE.Object3D() };
     };
+    /* ------------------------------------------------------------------------
+       S4 の新ギミックの骨組み（ゾーン共通・2026-09-22 P3b）
+       崩れる橋 bridge() と同じ考え方。**動く部分は必ずここで作る**ので、
+       スキンが用意していないゾーン（エンドレスでネオンに混ざる等）でも
+       見た目と判定がずれない。スキンは色（mats）を渡すだけでよい。
+       ------------------------------------------------------------------------ */
+    /* 同時スイッチのパッド: 長さ1で作り、place() が「0.36秒ぶん」へ z を伸ばす */
+    const padKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const emis = (col) => { const m = new THREE.MeshBasicMaterial({ color: col, fog: true }); own.push(m); return m; };
+      const grp = new THREE.Group();
+      grp.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.05, 1), p: [0, 0.025, 0] },
+        { g: ZoneKit.box(w + 0.16, 0.08, 0.10), p: [0, 0.04, -0.5] },
+        { g: ZoneKit.box(w + 0.16, 0.08, 0.10), p: [0, 0.04, 0.5] }
+      ]), mats.stone || Obstacles._material('spStone', C.dark)));
+      const litMat = emis(C.warn);
+      grp.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w * 0.74, 0.03, 0.86), p: [0, 0.062, 0] },
+        { g: ZoneKit.box(w * 0.22, 0.05, 0.22), p: [0, 0.085, 0] },
+        { g: ZoneKit.box(0.07, 0.07, 1.0), p: [-(w / 2 - 0.05), 0.06, 0] },
+        { g: ZoneKit.box(0.07, 0.07, 1.0), p: [w / 2 - 0.05, 0.06, 0] }
+      ]), litMat));
+      g.add(grp);
+      g.userData.pad = grp;
+      g.userData.padLen = 1;
+      g.userData.padMats = own;
+    };
+    /* 同時スイッチの橋: 架かった橋(span) / 予告の輪郭(ghost) / 崩れた谷(wreck) */
+    const syncKit = (mats) => {
+      mats = mats || {};
+      const stone = mats.stone || Obstacles._material('sgStone', C.body);
+      const pitM = mats.pit || Obstacles._material('sgPit', C.pit);
+      const L = D;                                   // 判定の奥行き（1.60）
+      const own = [];
+      /* 谷＋折れた橋脚（失敗＝跳んでも越えられない 0〜1.60 をここで見せる） */
+      const wreck = new THREE.Group();
+      wreck.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w + 0.4, 0.06, L + 0.8), p: [0, -1.56, 0] },
+        { g: ZoneKit.box(0.06, 1.6, L + 0.8), p: [-(w / 2 + 0.2), -0.8, 0] },
+        { g: ZoneKit.box(0.06, 1.6, L + 0.8), p: [w / 2 + 0.2, -0.8, 0] }
+      ]), pitM));
+      /* 折れた橋脚（判定 0〜1.60 をそのまま塞ぐ）＝「跳べない・潜れない」が目で分かる形 */
+      wreck.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w * 0.94, 1.50, 0.26), p: [0, 0.74, -L * 0.26], r: [0.18, 0, 0.05] },
+        { g: ZoneKit.box(w * 0.70, 1.20, 0.24), p: [0.08, 0.58, L * 0.24], r: [-0.26, 0, -0.08] },
+        { g: ZoneKit.box(0.24, 1.40, 0.24), p: [-(w / 2 - 0.13), 0.70, L * 0.30], r: [0, 0, 0.16] },
+        { g: ZoneKit.box(0.24, 1.10, 0.24), p: [w / 2 - 0.13, 0.55, -L * 0.34], r: [0, 0, -0.12] },
+        { g: ZoneKit.box(w * 0.5, 0.30, 0.5), p: [-0.1, 0.16, 0], r: [0.3, 0.4, 0.2] }
+      ]), stone));
+      const wm = new THREE.MeshBasicMaterial({ color: C.red, fog: true });
+      own.push(wm);
+      wreck.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w * 0.98, 0.11, 0.14), p: [0, 1.52, -L * 0.26] },
+        { g: ZoneKit.box(w * 0.72, 0.09, 0.12), p: [0.08, 1.16, L * 0.24] },
+        { g: ZoneKit.box(w, 0.09, 0.12), p: [0, 0.05, -(L / 2 + 0.2)] }
+      ]), wm));
+      g.add(wreck);
+      /* 架かった橋（成功）: 石畳が渡り、縁が光る */
+      const span = new THREE.Group();
+      span.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.16, L + 0.9), p: [0, -0.08, 0] },
+        { g: ZoneKit.box(w + 0.18, 0.10, 0.22), p: [0, 0.02, -(L / 2 + 0.4)] },
+        { g: ZoneKit.box(w + 0.18, 0.10, 0.22), p: [0, 0.02, L / 2 + 0.4] }
+      ]), stone));
+      const sm = new THREE.MeshBasicMaterial({ color: C.cyan, fog: true });
+      own.push(sm);
+      span.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.07, 0.05, L + 0.8), p: [-(w / 2 - 0.05), 0.03, 0] },
+        { g: ZoneKit.box(0.07, 0.05, L + 0.8), p: [w / 2 - 0.05, 0.03, 0] }
+      ]), sm));
+      g.add(span);
+      /* 予告（まだ成否が決まっていない）: 架かるはずの橋の輪郭 */
+      const gm = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.26,
+                                               depthWrite: false, fog: true });
+      own.push(gm);
+      const ghost = new THREE.Mesh(new THREE.BoxGeometry(w * 0.94, 0.05, L + 0.8), gm);
+      ghost.position.y = 0.02;
+      ghost.renderOrder = 3;
+      g.add(ghost);
+      g.userData.sync = { span: span, ghost: ghost, wreck: wreck, ghostMat: gm };
+      g.userData.syncMats = own;
+    };
+    /* 落ちる天井: 予告のひび → 落ちるブロック → 天井に開いた穴 */
+    const dropKit = (mats) => {
+      mats = mats || {};
+      const stone = mats.stone || Obstacles._material('dcStone', C.body);
+      const TOP = t.y1;                              // 1.60（判定どおり）
+      /* ブロック（下端 y=0 で作る。place() が天井から床まで動かす） */
+      const block = new THREE.Group();
+      block.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, TOP - 0.26, D * 0.9), p: [0, (TOP - 0.26) / 2, 0] },
+        { g: ZoneKit.box(w, 0.20, D), p: [0, TOP - 0.10, 0] },
+        { g: ZoneKit.box(w * 0.92, 0.14, D * 0.96), p: [0, 0.07, 0] },
+        { g: ZoneKit.box(w * 0.30, 0.30, 0.30), p: [-(w * 0.26), TOP * 0.42, D * 0.32], r: [0.4, 0.2, 0.3] },
+        { g: ZoneKit.box(w * 0.24, 0.24, 0.24), p: [w * 0.28, TOP * 0.70, -D * 0.30], r: [0.2, 0.5, 0.1] }
+      ]), stone));
+      const bm = mats.warn || Obstacles._emissive('dcWarn', C.warn);
+      block.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.10, D + 0.04), p: [0, TOP - 0.24, 0] },
+        { g: ZoneKit.box(w * 0.86, 0.07, D * 0.4), p: [0, 0.16, 0] }
+      ]), bm));
+      g.add(block);
+      /* 天井の穴（抜けた先の闇）＋欠けた縁 */
+      const own = [];
+      const hm = new THREE.MeshBasicMaterial({ color: C.pit, transparent: true, opacity: 0,
+                                               depthWrite: false, side: THREE.DoubleSide, fog: true });
+      own.push(hm);
+      const hole = new THREE.Mesh(new THREE.PlaneGeometry(w, D), hm);
+      hole.rotation.x = Math.PI / 2;
+      hole.position.y = CFG.H - 0.02;
+      hole.renderOrder = 2;
+      g.add(hole);
+      const rim = new THREE.Group();
+      rim.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.14, 0.12), p: [0, CFG.H - 0.07, -(D / 2)] },
+        { g: ZoneKit.box(w, 0.14, 0.12), p: [0, CFG.H - 0.07, D / 2] },
+        { g: ZoneKit.box(0.10, 0.14, D), p: [-(w / 2 - 0.05), CFG.H - 0.07, 0] },
+        { g: ZoneKit.box(0.10, 0.14, D), p: [w / 2 - 0.05, CFG.H - 0.07, 0] }
+      ]), stone));
+      /* 穴の縁を光らせる（天井側は「ここが抜けている＝跳べ」の合図） */
+      rim.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.06, 0.06), p: [0, CFG.H - 0.17, -(D / 2)] },
+        { g: ZoneKit.box(w, 0.06, 0.06), p: [0, CFG.H - 0.17, D / 2] },
+        { g: ZoneKit.box(0.06, 0.06, D), p: [-(w / 2 - 0.04), CFG.H - 0.17, 0] },
+        { g: ZoneKit.box(0.06, 0.06, D), p: [w / 2 - 0.04, CFG.H - 0.17, 0] }
+      ]), mats.warn || Obstacles._emissive('dcRim', C.warn)));
+      g.add(rim);
+      /* 予告のひび（落ちる前の天井）と、落ちる砂／着地後の土煙の筋。
+         どちらも1メッシュずつに抑える（ドローコール / 契約§3 の300以下） */
+      const cm = new THREE.MeshBasicMaterial({ color: C.warn, transparent: true, opacity: 0.85,
+                                               depthWrite: false, side: THREE.DoubleSide, fog: true });
+      own.push(cm);
+      const crack = new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w * 0.9, 0.02, 0.05), p: [0, 0, 0] },
+        { g: ZoneKit.box(0.05, 0.02, D * 0.7), p: [-w * 0.2, 0, 0.1] },
+        { g: ZoneKit.box(0.05, 0.02, D * 0.6), p: [w * 0.24, 0, -0.1] }
+      ]), cm);
+      crack.position.y = CFG.H - 0.05;
+      g.add(crack);
+      const sm2 = new THREE.MeshBasicMaterial({ color: mats.dust || C.warn, transparent: true, opacity: 0,
+                                                depthWrite: false, fog: true });
+      own.push(sm2);
+      const sand = new THREE.Mesh(new THREE.BoxGeometry(w * 0.86, 1.4, D * 0.62), sm2);
+      sand.renderOrder = 3;
+      g.add(sand);
+      g.userData.drop = { block: block, hole: hole, rim: rim, crack: crack, sand: sand };
+      g.userData.dropMats = own;
+    };
+
+    /* 倒れた柱（神殿崩壊）: 3レーンを横断する低い梁。判定どおりの寸法で置く */
+    const columnKit = (mats) => {
+      mats = mats || {};
+      const stone = mats.stone || Obstacles._material('coStone', C.body);
+      const r = t.y1 / 2;                            // 0.31（高さ・奥行きとも判定どおり）
+      solid(new THREE.CylinderGeometry(r, r, w * 0.86, 12), stone, 0, r, 0, [0, 0, Math.PI / 2]);
+      for (let i = 0; i < 5; i++) {                  // 柱の溝（節）
+        box(0.05, r * 1.9, r * 1.9, mats.rib || Obstacles._material('coRib', C.dark),
+            -w * 0.34 + w * 0.68 * i / 4, r, 0);
+      }
+      [-1, 1].forEach((s) => {                       // 折れた柱頭
+        box(0.26, 0.58, 0.58, stone, s * (w * 0.45), r, 0);
+        box(0.14, 0.50, 0.50, mats.rib || Obstacles._material('coRib', C.dark), s * (w * 0.49), r, 0);
+      });
+      box(w, 0.10, D + 0.04, mats.warn || Obstacles._emissive('coWarn', C.warn), 0, t.y1 - 0.05, 0);
+      box(w * 0.98, 0.07, D * 0.5, mats.hot || Obstacles._emissive('coHot', C.red), 0, 0.05, 0);
+      g.userData.column = true;
+    };
+
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
-                lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts };
+                lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
+                padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit };
+    const childs0 = g.children.length, blink0 = g.userData.blink.length, parts0 = parts.length;
+    const lamps0 = lampParts.length;
     skin.build(type, x);
+    /* スキンが S4 の新ギミック（P3b）を知らないゾーンでも必ず動く形にする。
+       汎用の当て板を捨ててから共通の骨組みを建てる＝見た目と判定がずれない。 */
+    const needKit = (t.pad && !g.userData.pad) || (type === 'SYNCGAP' && !g.userData.sync) ||
+                    (type === 'DROPCEIL' && !g.userData.drop) || (type === 'COLUMN' && !g.userData.column);
+    if (needKit) {
+      for (let i = g.children.length - 1; i >= childs0; i--) { const c = g.children[i]; g.remove(c); ZoneKit.free(c); }
+      g.userData.blink.length = blink0;
+      lampParts.length = lamps0;
+      for (let i = parts.length - 1; i >= parts0; i--) if (parts[i].g.dispose) parts[i].g.dispose();
+      parts.length = parts0;
+      if (t.pad) padKit(null);
+      else if (type === 'SYNCGAP') syncKit(null);
+      else if (type === 'DROPCEIL') dropKit(null);
+      else columnKit(null);
+    }
+    buildLamps();
 
     /* 材質ごとに融合して1メッシュにする（点滅灯だけは個別マテリアルなので別メッシュのまま） */
     const byMat = [];
@@ -601,7 +1021,68 @@ const Obstacles = {
     /* ローカル座標への変換（天井側は Z 180度ぶん x が反転する） */
     const lx = (wx) => (ceil ? (xc - wx) : (wx - xc));
 
-    if (mot === 'bridge' && ud.bridge) {
+    if (OBS[o.type].pad && ud.pad) {
+      /* スイッチのパッド: 長さは z窓（＝0.36秒ぶん）と同じにする。
+         未踏＝点滅、踏んだ＝点灯、失敗が確定＝赤。相方の状態も縁の色で見せる。 */
+      const gp = o.grp, unit = Sync.unitOf(o);
+      const L = unit * CFG.SYNC.PAD_T;
+      ud.pad.scale.z = L / (ud.padLen || 1);
+      const mine = gp ? gp[o.surface] : null;
+      const both = gp ? (gp.floor !== null && gp.ceil !== null) : false;
+      const col = (gp && gp.ok === false && !both) ? 0xff4a14
+                : (mine !== null ? (gp && gp.ok === false ? 0xff7a2a : 0x8fe6c8) : 0xffc14a);
+      const blink = (mine !== null) ? 1 : (Math.sin(dist * 0.9 + (t || 0) * 7) > -0.2 ? 1 : 0.28);
+      if (ud.padMats) ud.padMats.forEach((m) => { m.color.setHex(col).multiplyScalar(blink); });
+    }
+
+    if (mot === 'sync' && ud.sync) {
+      /* 同時スイッチの橋: 成否が決まると「橋が架かる／崩れ落ちる」。
+         見た目の進み具合も **距離の関数**（成否が決まった距離 okM から SHOW_T 秒） */
+      const gp = o.grp, unit = Sync.unitOf(o);
+      const k = (gp && gp.ok !== null)
+        ? U.clamp((dist - gp.okM) / Math.max(1e-6, unit * CFG.SYNC.SHOW_T), 0, 1) : 0;
+      const built = !!(gp && gp.ok === true);
+      const s = ud.sync;
+      /* 成功: 橋が下からせり上がって架かる。失敗/未確定: 折れた橋脚の谷のまま */
+      s.span.visible = built;
+      s.span.position.y = built ? U.lerp(-1.5, 0, U.smooth(k)) : -1.5;
+      s.wreck.visible = !built;
+      /* 未確定のあいだは「ここに架かるはず」の輪郭を薄く出す（予告）。
+         失敗が決まったら消える＝橋が崩れたことが目で分かる。 */
+      s.ghost.visible = !built && (gp === undefined || !gp || gp.ok === null || k < 1);
+      if (s.ghostMat) {
+        s.ghostMat.opacity = (!gp || gp.ok === null)
+          ? 0.16 + 0.14 * (Math.sin(dist * 0.55) > 0 ? 1 : 0)
+          : 0.26 * (1 - k);
+        s.ghostMat.color.setHex((gp && gp.ok === false) ? 0xff4a14 : 0x8fe6c8);
+      }
+
+    } else if (mot === 'drop' && ud.drop) {
+      /* 落ちる天井: 予告（ひび・砂）→ 落下(0.5秒) → 着地。すべて MOT の距離規則から引く */
+      const f = MOT.dropFall(o, dist), wr = MOT.dropWarn(o, dist);
+      const d = ud.drop;
+      const topY = CFG.H - OBS.DROPCEIL.y1;              // 天井にはまっているときのブロック下端
+      const e = f * f;                                    // 落下は加速する
+      d.block.position.y = U.lerp(topY, 0, e);
+      d.block.position.x = (f > 0 && f < 1) ? Math.sin(f * 9) * 0.05 : 0;
+      d.block.rotation.z = (f >= 1) ? 0.012 : (f * 0.06);
+      d.hole.visible = (f > 0);                           // 抜けた天井（穴）
+      d.hole.material.opacity = 0.9 * U.clamp(f * 3, 0, 1);
+      if (d.crack) { d.crack.visible = (f <= 0 && wr > 0); d.crack.scale.setScalar(0.4 + 0.6 * wr); }
+      if (d.rim) d.rim.visible = (f > 0);
+      if (d.sand) {
+        /* 落ちる砂＝**天井の穴から落ちたブロックまでを結ぶ土煙の筋**。
+           落下中は濃く、着地後も薄く残る。40m 先でも「天井が落ちた」と分かる合図。 */
+        d.sand.visible = (wr > 0);
+        const top = CFG.H - 0.05;
+        const bot = (f < 1) ? (d.block.position.y + OBS.DROPCEIL.y1) : OBS.DROPCEIL.y1;
+        const hh = Math.max(0.25, top - bot);
+        d.sand.position.y = (top + bot) / 2;
+        d.sand.scale.y = hh / 1.4;
+        d.sand.material.opacity = (f <= 0) ? 0.30 * wr : (f < 1 ? 0.55 : 0.18);
+      }
+
+    } else if (mot === 'bridge' && ud.bridge) {
       /* 崩れる橋（契約§4.4 S3）: 板は判定の外（乗っている間は無害）。
          「踏んだ時刻+0.4秒」＝ MOT.bridgeFallAt(o) を越えた瞬間から、
          板が1枚ずつ傾いて落ちていく＝ bands() が穴を返し始めるのと同じ距離。 */
@@ -616,16 +1097,24 @@ const Obstacles = {
       }
       const fallAt = MOT.bridgeFallAt(o);
       const slabLen = L / b.n;
+      const dm = b.dummy;
       for (let i = 0; i < b.n; i++) {
-        const h = b.planks[i];
         const hz = ZoneKit.hash(i, 17);
         const f = U.clamp((dist - fallAt - hz * 1.1) / 2.6, 0, 1);
         const sgn = (i % 2) ? 1 : -1;
-        h.scale.set(1, 1, slabLen * 0.92);
-        h.position.set(sgn * f * 0.5, -f * f * 5.5, zFar + (i + 0.5) * slabLen + f * 1.1);
-        h.rotation.set(sgn * f * 0.9, f * 0.35, sgn * f * 1.1);
-        h.visible = (f < 1);
+        if (f >= 1) {                                   // 落ちきった板は畳んで消す
+          dm.position.set(0, -9999, 0);
+          dm.rotation.set(0, 0, 0);
+          dm.scale.set(0.0001, 0.0001, 0.0001);
+        } else {
+          dm.scale.set(1, 1, slabLen * 0.92);
+          dm.position.set(sgn * f * 0.5, -f * f * 5.5, zFar + (i + 0.5) * slabLen + f * 1.1);
+          dm.rotation.set(sgn * f * 0.9, f * 0.35, sgn * f * 1.1);
+        }
+        dm.updateMatrix();
+        for (let k = 0; k < b.ims.length; k++) b.ims[k].setMatrixAt(i, dm.matrix);
       }
+      for (let k = 0; k < b.ims.length; k++) b.ims[k].instanceMatrix.needsUpdate = true;
 
     } else if (mot === 'scan' && ud.mark) {
       /* 予告: 到達した瞬間の位置に床/天井のマーカーを出す */

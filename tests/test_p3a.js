@@ -123,7 +123,9 @@
          GAP/WALLHOLE/LASER_SCAN/LASER_ROT … ネオンと同じ理由
          BRIDGE … 板（判定の外＝乗っている間は無害）と谷が前後・下へ伸びる */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
-                     LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'] };
+                     LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
+                     /* P3b の新ギミック（理由は tests/test_p2a.js の同じ表と同じ） */
+                     SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);

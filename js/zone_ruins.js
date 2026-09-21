@@ -53,9 +53,24 @@ const ZoneRuins = {
   },
   fog: { color: 0x2a1d0e, near: 18, far: 82 },
 
-  /* ---- 区間パターン（壁のある区間と開放区間を交互に / 契約§5） ------------ */
+  /* ---- 区間パターン（壁のある区間と開放区間を交互に / 契約§5） ------------
+     S3「外周」は開放区間を長く取る（峡谷・夕日・遠景が主役）。
+     S4「内部」は **壁区間が主体**（契約§4.4「内部＝壁区間主体・天窓と松明・
+     地下水路・祭壇の間」）＝ 同じ小物のまま、区間パターンだけ切り替える。 */
+  MODE: {
+    outer: { period: 110, len: 70 },
+    inner: { period: 132, len: 118 }
+  },
   WALL_PERIOD: 110,
   WALL_LEN: 70,
+  mode: 'outer',
+  setMode(id) {
+    const m = ZoneRuins.MODE[id] || ZoneRuins.MODE.outer;
+    ZoneRuins.mode = ZoneRuins.MODE[id] ? id : 'outer';
+    ZoneRuins.WALL_PERIOD = m.period;
+    ZoneRuins.WALL_LEN = m.len;
+    return ZoneRuins.mode;
+  },
   isWall(m) {
     const p = ((m % ZoneRuins.WALL_PERIOD) + ZoneRuins.WALL_PERIOD) % ZoneRuins.WALL_PERIOD;
     return p < ZoneRuins.WALL_LEN;
@@ -1346,19 +1361,19 @@ ZoneRuins.obstacleSkin = {
       const fillMat = Obstacles._material('gpFill', 0x7a6742);
       [-1, 1].forEach((s2) => {
         [-0.20, -0.52, -0.86].forEach((y, i) => {
-          box(w * 0.92, 0.07, 0.06, Obstacles._emissive(i ? 'gpIn2' : 'gpIn', i ? C.red : C.warn),
+          box(w * 0.92, 0.07, 0.06, Obstacles._emissive(i ? 'gpRed' : 'gpWarn', i ? C.red : C.warn),
               0, y, s2 * (half - 0.05));
         });
-        box(0.06, 0.9, D * 0.85, Obstacles._emissive('gpIn2', C.red), s2 * (w / 2 - 0.04), -0.6, 0);
+        box(0.06, 0.9, D * 0.85, Obstacles._emissive('gpRed', C.red), s2 * (w / 2 - 0.04), -0.6, 0);
       });
       [-1, 1].forEach((s) => box(CFG.LANE_W - 0.07, 0.14, 3.0, fillMat, 0, -0.075, s * 2.3));
       /* 縁の警告（遠くからでも「抜けている」と分かるように） */
       [-1, 1].forEach((s2) => {
         [0.22, 0.48, 0.74].forEach((dz, i) => {
-          box(w * (0.96 - i * 0.12), 0.03, 0.16, Obstacles._emissive(i % 2 ? 'gpMark2' : 'gpMark', i % 2 ? C.red : C.warn),
+          box(w * (0.96 - i * 0.12), 0.03, 0.16, Obstacles._emissive(i % 2 ? 'gpRed' : 'gpWarn', i % 2 ? C.red : C.warn),
               0, 0.02, s2 * (half + dz));
         });
-        box(w, 0.13, 0.17, Obstacles._emissive('gpRim', C.warn), 0, 0.06, s2 * (half - 0.08));
+        box(w, 0.13, 0.17, Obstacles._emissive('gpWarn', C.warn), 0, 0.06, s2 * (half - 0.08));
         chips(w, 0.14, s2 * (half - 0.04), 5, Obstacles._material('gpChip', C.body));
         /* 四隅の小さな篝火（高さ0.34。ジャンプの軌道には干渉しない） */
         [-1, 1].forEach((sx) => {
@@ -1437,6 +1452,28 @@ ZoneRuins.obstacleSkin = {
         post: Obstacles._material('bgPost', C.steel),
         mark: Obstacles._emissive('bgMark', C.warn)
       });
+
+    } else if (type === 'SYNCPAD') {
+      /* 同時スイッチの踏み板（契約§4.5 / S4）: 石の敷板に嵌った金の紋様。
+         踏んだ・未踏・失敗は place() が色で見せる（材質はビューごと） */
+      x.padKit({ stone: Obstacles._material('spStone', C.dark) });
+
+    } else if (type === 'SYNCGAP') {
+      /* 同時スイッチの橋: 成功なら石橋が架かり、失敗なら折れた橋脚の谷になる */
+      x.syncKit({ stone: Obstacles._material('sgStone', C.body),
+                  pit: Obstacles._material('sgPit', C.pit) });
+
+    } else if (type === 'DROPCEIL') {
+      /* 落ちる天井: 天井の石ブロックが落ちて床の障害物になり、天井に穴が開く */
+      x.dropKit({ stone: Obstacles._material('dcStone', C.body),
+                  warn: Obstacles._emissive('dcWarn', C.warn) });
+
+    } else if (type === 'COLUMN') {
+      /* 倒れた柱（神殿崩壊）: 3レーンを横断する石柱 */
+      x.columnKit({ stone: Obstacles._material('coStone', C.body),
+                    rib: Obstacles._material('coRib', C.dark),
+                    warn: Obstacles._emissive('coWarn', C.warn),
+                    hot: Obstacles._emissive('coHot', C.fire) });
 
     } else if (type === 'SLOWBAND') {
       /* 減速帯（瓦礫の山）: 死なないが越えないと速度が落ちる。

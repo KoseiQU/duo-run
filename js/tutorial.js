@@ -24,7 +24,11 @@ const Tutorial = {
     both:   { ph: ['同時に来る！', '<b class="k">下</b>と<b class="k2">上</b>を', '別々に'] },
     /* S3 の新ギミック（契約§4.4）。初出のときだけ短く出す */
     bridge: { ph: ['<span class="finger">👆</span>崩れる橋は', '踏んだら<b>すぐ横へ</b>', 'または跳び越す'] },
-    pendulum: { ph: ['<span class="finger">👈</span>振り子の刃は', '<b>空いたレーン</b>へ'] }
+    pendulum: { ph: ['<span class="finger">👈</span>振り子の刃は', '<b>空いたレーン</b>へ'] },
+    /* S4 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
+    sync: { ph: ['<span class="finger">👆</span>光る踏み板を', '<b class="k">下</b>と<b class="k2">上</b>で<b>同時に</b>',
+                 '踏むと橋が架かる'] },
+    dropceil: { ph: ['<span class="finger">👇</span>天井が落ちる', '<b class="k">下</b>は<b>横へ</b>、<b class="k2">上</b>は<b>跳ぶ</b>'] }
   },
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },

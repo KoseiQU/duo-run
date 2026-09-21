@@ -257,8 +257,10 @@ const World = {
     /* 路面に穴が空く障害物（ギャップ・崩れる橋）。区間は Obstacles.holeSpan が唯一の出所 */
     const gaps = [];
     for (let i = 0; i < obstacles.length; i++) {
-      const sp = Obstacles.holeSpan(obstacles[i]);
-      if (sp) gaps.push({ o: obstacles[i], from: sp.from, to: sp.to });
+      /* 穴の区間は Obstacles.holeSpan が唯一の出所。
+         side を返す型（落ちる天井＝天井側だけ抜ける / P3b）はそちらを優先する。 */
+      const sp = Obstacles.holeSpan(obstacles[i], dist);
+      if (sp) gaps.push({ o: obstacles[i], from: sp.from, to: sp.to, side: sp.side || obstacles[i].surface });
     }
     ['floor', 'ceil'].forEach((surface) => {
       const im = World.tileMesh[surface];
@@ -270,8 +272,7 @@ const World = {
           const lane = CFG.LANES[li];
           let hide = false;
           for (let k = 0; k < gaps.length; k++) {
-            const o = gaps[k].o;
-            if (o.surface !== surface || o.lane !== lane) continue;
+            if (gaps[k].side !== surface || gaps[k].o.lane !== lane) continue;
             if (atM > gaps[k].from - T / 2 && atM < gaps[k].to + T / 2) { hide = true; break; }
           }
           const fall = Setpieces.tileFall(atM, surface, lane);
@@ -311,13 +312,18 @@ const World = {
     const camZ = World.camera.position.z - 2.2;
     /* 振り返りカットの間は後ろを見ているので、通り過ぎた障害物も描く */
     const back = Setpieces.lookBack(dist) > 0.02;
+    /* 霧に完全に沈む距離より先は**建てない・描かない**（見えないものにドローコールを払わない）。
+       フォグの far のすこし手前で切る。§4.7 の視認距離（speed × 1.4秒 ＝ 最大62m）より
+       ずっと遠いので、判定・反応には影響しない。 */
+    const fogFar = (World.scene.fog ? World.scene.fog.far : CFG.VIEW_FAR);
+    const far = Math.min(CFG.VIEW_FAR, Math.max(70, fogFar * 0.92));
     for (let i = 0; i < obstacles.length; i++) {
       const o = obstacles[i];
-      const near = (o.at - dist) < CFG.VIEW_FAR;
-      if (near && !o.view) { o.view = Obstacles.acquire(o.type); World.obsRoot.add(o.view); }
+      const rel = o.at - dist;
+      if (rel < far && !o.view) { o.view = Obstacles.acquire(o.type); World.obsRoot.add(o.view); }
       if (o.view) {
         Obstacles.place(o, dist, World._t);
-        o.view.visible = back || (-(o.at - dist) < camZ);
+        o.view.visible = (rel < far) && (back || (-rel < camZ));
       }
     }
   },

@@ -62,6 +62,8 @@ const FF = {
   /* ---- 光の輪＝加速アイテム（契約§4.5 2026-09-22 改訂） ------------------ */
   BOOST_K: 0.20,        // くぐると +20%
   BOOST_T: 2.00,        // 効いている長さ（秒）
+  /* ブーストは Game.speed に乗る（core.js）。true にすると旧来の「距離を上乗せ」に戻る */
+  BOOST_DIST_FALLBACK: false,
   RING_CATCH: 0.85,     // 輪の中心からこの距離以内を通れば取得（HOLE 相当）
   RING_VIEW: 1.00,      // 輪の見た目の半径（判定より少し大きく見せる）
   RING_N0: 1, RING_N1: 2,   // 壁と壁の間に置く個数
@@ -267,7 +269,9 @@ const FF = {
     if (FF.boostT <= 0) { FF._fxSync(); return; }
     const used = Math.min(dt, FF.boostT);
     FF.boostT = Math.max(0, FF.boostT - dt);
-    if (typeof Game !== 'undefined' && Game.status === 'playing') {
+    /* 【2026-09-22 P3b】速度経路（core.js の Game.speed）に FF.boostK() を掛けたので、
+       ここでの距離の上乗せは**二重加速**になる。既定で止める（歴史のため残す）。 */
+    if (FF.BOOST_DIST_FALLBACK && typeof Game !== 'undefined' && Game.status === 'playing') {
       Game.dist += Game.speed * used * FF.BOOST_K;
     }
     FF._fxSync();

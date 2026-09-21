@@ -262,6 +262,13 @@ const Zones = {
   },
 
   /* ---- 毎フレーム・問い合わせの窓口（World / Setpieces はここだけを呼ぶ） ---- */
+  /* ゾーンの中の区間パターンを切り替える（例: 古代遺跡の「外周」と「内部」/ 契約§4.4）。
+     ゾーンを持たない指定・持たないモジュールでは何もしない。 */
+  mode(id) {
+    const z = Zones.active();
+    if (!z || !z.setMode) return null;
+    return z.setMode(id || 'outer');
+  },
   sync(dist, t, speed) { const z = Zones.active(); if (z && z.sync) z.sync(dist, t, speed); },
   setGlide(k) { const z = Zones.active(); if (z && z.setGlide) z.setGlide(k); },
   propsAhead() { const z = Zones.active(); return (z && z.propsAhead) ? z.propsAhead() : 0; },

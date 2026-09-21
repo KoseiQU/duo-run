@@ -149,6 +149,20 @@
     text-shadow:0 0 18px rgba(255,190,90,.85),0 0 48px rgba(255,140,40,.55);}
   #cue-sub{font-size:clamp(11px,2vw,14px); letter-spacing:.14em; color:#dfe6ff; opacity:.85; margin-top:2px;}
   @keyframes cuePulse{from{filter:brightness(.82);} to{filter:brightness(1.25);}}
+
+  /* ---------- 同時スイッチの予告と成否（§4.5 / S4・P3b） ----------
+     2体は床（下）と天井（上）を走るので、帯は分割線のすぐ下に置いて被らせない。 */
+  #sync{position:absolute; left:50%; top:58%; transform:translate(-50%,-50%) scale(.86);
+    text-align:center; opacity:0; pointer-events:none; transition:opacity .16s, transform .16s;}
+  #sync.on{opacity:1; transform:translate(-50%,-50%) scale(1);}
+  #sync-main{font-size:clamp(20px,min(6.4vw,9vh),40px); font-weight:800; letter-spacing:.24em; color:#ffe6b0;
+    text-shadow:0 0 16px rgba(255,190,90,.9),0 0 40px rgba(255,140,40,.5),0 2px 8px rgba(0,0,0,.6);}
+  #sync-sub{font-size:clamp(10px,1.9vw,13px); letter-spacing:.12em; color:#dfe6ff; opacity:.9; margin-top:1px;}
+  #sync.on #sync-main{animation:cuePulse .5s ease-in-out infinite alternate;}
+  #sync.ok #sync-main{color:#a8f4d8; text-shadow:0 0 16px rgba(120,240,200,.9),0 0 40px rgba(60,200,160,.5);
+    animation:none;}
+  #sync.miss #sync-main{color:#ffb4a0; text-shadow:0 0 16px rgba(255,110,60,.9),0 0 40px rgba(255,70,20,.5);
+    animation:none;}
 </style>
 </head>
 <body>
@@ -175,6 +189,7 @@
     </div>
     <div id="tip" data-ui="tip"></div>
     <div id="cue" data-ui="cue"><div id="cue-main">JUMP!</div><div id="cue-sub"></div></div>
+    <div id="sync" data-ui="sync"><div id="sync-main">SYNC!</div><div id="sync-sub"></div></div>
     <div class="hands">
       <div class="hand" id="hand-left" data-char="lumen">
         <b id="hand-left-name">LUMEN</b><span id="hand-left-keys">下半分</span>
@@ -275,6 +290,7 @@
 <script src="tests/test_p2b.js"></script>
 <script src="tests/test_p3a.js"></script>
 <script src="tests/test_p2c.js"></script>
+<script src="tests/test_p3b.js"></script>
 
 <script>
   (function boot(){

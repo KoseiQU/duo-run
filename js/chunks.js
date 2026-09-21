@@ -350,7 +350,123 @@ const CHUNK_DEFS = [
     floor: [{ at: 12, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0 } } },
             { at: 34, lane: 0, type: 'ROVER' },
             { at: 52, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0 } } }],
-    ceil:  [{ at: 23, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'GAP' }], events: [] }
+    ceil:  [{ at: 23, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'GAP' }], events: [] },
+
+  /* ==========================================================================
+     S4「古代遺跡・内部」（契約§4.4 / §4.5 / P3b）
+     ------------------------------------------------------------------------
+     新ギミック:
+       SYNCSW   同時スイッチ。床と天井の対のパッドを **同じ0.3秒窓内** に踏むと
+                gapT 秒先に橋が架かる。踏み損ねると谷（＝迂回の1レーンだけが残る）。
+                params.sync = { cl:天井パッドのレーン, safe:床の迂回レーン,
+                                csafe:天井の迂回レーン, gapT:橋までの秒 }
+                **パッドのレーン＝迂回レーン** にそろえる（踏んだ者はそのまま渡れる）。
+       DROPCEIL 落ちる天井。1つの事象が **床＝レーン移動／天井＝ジャンプ** に割れる。
+     密度は S3 よりさらに高い（6→10回/100m）。both 型（柱・火柱・落ちる天井・同時スイッチ）を
+     厚く敷いて、間隔を詰めずに密度を稼ぐ。
+     ========================================================================== */
+  /* --- 落ちる天井を1つずつ覚える（rank3） -------------------------------- */
+  { id: 'r4_drop_a', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, dense: 1,
+    floor: [{ at: 12, lane: 0, type: 'DROPCEIL' }, { at: 30, lane: -1, type: 'PILLAR' },
+            { at: 46, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 46, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r4_drop_b', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, dense: 1,
+    floor: [{ at: 14, lane: 1, type: 'GAP' }, { at: 30, lane: 0, type: 'DROPCEIL' },
+            { at: 48, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 14, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r4_drop_c', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, bridge: 1, dense: 1,
+    floor: [{ at: 12, lane: -1, type: 'ROVER' }, { at: 26, lane: 1, type: 'DROPCEIL' },
+            { at: 44, lane: 0, type: 'BRIDGE' }],
+    ceil:  [{ at: 12, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: 1, type: 'ROVER' }], events: [] },
+  /* 落ちる天井の連鎖（rank4）: 床は縫い、天井は跳び継ぎ＝1本で2体に別の譜面を配る */
+  { id: 'r4_drop_chain', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, dense: 2,
+    floor: [{ at: 9, lane: 0, type: 'DROPCEIL' }, { at: 17, lane: 1, type: 'DROPCEIL' },
+            { at: 27, lane: -1, type: 'PILLAR' }, { at: 35, lane: 0, type: 'DROPCEIL' },
+            { at: 45, lane: 1, type: 'LASER_V' }, { at: 53, lane: -1, type: 'DROPCEIL' }],
+    ceil: [], events: [] },
+
+  /* --- 同時スイッチ（rank3〜4） ------------------------------------------ */
+  { id: 'r4_sync_a', zone: 'ruins', lengthM: 60, difficulty: 3, minSpeed: 0, s4: 1, sync: 1, dense: 1,
+    /* 入門: 対のパッドは同じレーン＝2人が同じ側で踏む。迂回も同じレーン */
+    floor: [{ at: 8, lane: 0, type: 'SYNCSW', params: { sync: { cl: 0, safe: 0, csafe: 0 } } },
+            { at: 32, lane: -1, type: 'ROVER' }, { at: 46, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 32, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 'r4_sync_b', zone: 'ruins', lengthM: 62, difficulty: 3, minSpeed: 0, s4: 1, sync: 1, dense: 2,
+    /* 対のパッドが別レーン＝2人が別々の位置取りをそろえる（本題） */
+    floor: [{ at: 8, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
+            { at: 30, lane: 0, type: 'ROVER' }, { at: 40, lane: 1, type: 'PILLAR' },
+            { at: 50, lane: -1, type: 'LASER_LOW' }],
+    ceil:  [{ at: 30, lane: -1, type: 'ROVER' }, { at: 50, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 'r4_sync_drop', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, drop: 1, dense: 2,
+    floor: [{ at: 8, lane: 1, type: 'SYNCSW', params: { sync: { cl: -1, safe: 1, csafe: -1 } } },
+            { at: 30, lane: 0, type: 'DROPCEIL' }, { at: 40, lane: -1, type: 'DROPCEIL' },
+            { at: 52, lane: 1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 'r4_sync_weave', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
+    floor: [{ at: 6, lane: 0, type: 'SYNCSW', params: { sync: { cl: 0, safe: 0, csafe: 0 } } },
+            { at: 26, lane: -1, type: 'PILLAR' }, { at: 33, lane: 1, type: 'LASER_V' },
+            { at: 40, lane: 0, type: 'PILLAR' }, { at: 47, lane: -1, type: 'LASER_V' },
+            { at: 54, lane: 1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 'r4_sync_leap', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
+    floor: [{ at: 8, lane: 1, type: 'SYNCSW', params: { sync: { cl: -1, safe: 1, csafe: -1 } } },
+            { at: 30, lane: 0, type: 'ROVER' }, { at: 38, lane: -1, type: 'GAP' },
+            { at: 48, lane: 1, type: 'PILLAR' }, { at: 55, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 30, lane: -1, type: 'ROVER' }, { at: 38, lane: 1, type: 'LASER_LOW' }], events: [] },
+
+  /* --- 内部の回廊（列柱の縫い・跳び継ぎ・壁の穴） ------------------------ */
+  { id: 'r4_weave', zone: 'ruins', lengthM: 60, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 15, lane: -1, type: 'LASER_V' },
+            { at: 22, lane: 1, type: 'PILLAR' }, { at: 31, lane: 0, type: 'DROPCEIL' },
+            { at: 41, lane: -1, type: 'PILLAR' }, { at: 48, lane: 1, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 'r4_leap', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, dense: 2,
+    floor: [{ at: 9, lane: 0, type: 'ROVER' }, { at: 17, lane: -1, type: 'GAP' },
+            { at: 25, lane: 1, type: 'LASER_LOW' }, { at: 33, lane: 0, type: 'ROVER' },
+            { at: 41, lane: -1, type: 'GAP' }, { at: 49, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 9, lane: 1, type: 'ROVER' }, { at: 17, lane: 0, type: 'LASER_LOW' },
+            { at: 25, lane: -1, type: 'GAP' }, { at: 33, lane: 1, type: 'ROVER' },
+            { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 49, lane: -1, type: 'GAP' }], events: [] },
+  { id: 'r4_wallhole', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, wallhole: 1, drop: 1, dense: 1,
+    floor: [{ at: 12, lane: 1, type: 'WALLHOLE' }, { at: 30, lane: 0, type: 'DROPCEIL' },
+            { at: 46, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 12, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r4_duo', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
+    floor: [{ at: 9, lane: 1, type: 'GAP' }, { at: 19, lane: 0, type: 'PILLAR' },
+            { at: 27, lane: -1, type: 'ROVER' }, { at: 37, lane: 1, type: 'LASER_V' },
+            { at: 45, lane: 0, type: 'ROVER' }, { at: 55, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 9, lane: -1, type: 'ROVER' }, { at: 27, lane: 1, type: 'ROVER' },
+            { at: 45, lane: -1, type: 'GAP' }], events: [] },
+  /* 内部の最奥（rank4・最も密）: 列柱の縫いに落ちる天井を挟む／両者とも跳び継ぐ */
+  { id: 'r4_gauntlet', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 15, lane: 1, type: 'LASER_V' },
+            { at: 22, lane: -1, type: 'PILLAR' }, { at: 32, lane: 0, type: 'DROPCEIL' },
+            { at: 42, lane: 1, type: 'PILLAR' }, { at: 49, lane: -1, type: 'LASER_V' },
+            { at: 56, lane: 0, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 'r4_leap2', zone: 'ruins', lengthM: 56, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
+    /* 両者が 0.72秒おきに跳び継ぐ（§4.7 ジャンプ連続 0.70秒の下限ぎりぎり） */
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: -1, type: 'GAP' },
+            { at: 22.4, lane: 1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'ROVER' },
+            { at: 36.8, lane: -1, type: 'GAP' }, { at: 44, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
+            { at: 22.4, lane: -1, type: 'GAP' }, { at: 29.6, lane: 1, type: 'ROVER' },
+            { at: 36.8, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'GAP' }], events: [] },
+  /* 短い密集（つなぎ）: 大演出の手前に残る半端な距離にも入る長さにしておく。
+     これが無いと終盤に 80m 級の空白ができて、契約§4.7 の密度が落ちる。 */
+  { id: 'r4_fill_a', zone: 'ruins', lengthM: 26, difficulty: 3, minSpeed: 0, s4: 1, dense: 2, fill: 1,
+    floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 12, lane: 1, type: 'LASER_V' },
+            { at: 19, lane: -1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 'r4_fill_b', zone: 'ruins', lengthM: 30, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, dense: 2, fill: 1,
+    floor: [{ at: 5, lane: 0, type: 'DROPCEIL' }, { at: 15, lane: 1, type: 'PILLAR' },
+            { at: 23, lane: -1, type: 'ROVER' }],
+    ceil:  [{ at: 23, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 'r4_drop_duo', zone: 'ruins', lengthM: 66, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, sync: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'DROPCEIL' },
+            { at: 20, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
+            { at: 44, lane: 1, type: 'DROPCEIL' }, { at: 54, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 54, lane: -1, type: 'ROVER' }], events: [] }
 ];
 
 /* ---------------------------------------------------------------- 導入区間（S1）
@@ -452,6 +568,25 @@ const STAGE_DEFS = {
                'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
                'c3_rot_lean', 'c3_rot_ceil', 'c3_rot_pair', 'c3_scan_rot'])
   },
+  /* S4 古代遺跡・内部（契約 §4.4）: 1200m / 24→28 / チェックポイント 400・800 /
+     新ギミック＝同時スイッチ・落ちる天井。終盤200mは「神殿崩壊」。
+     ゾーンは遺跡のまま、区間パターンだけ **内部（壁区間主体）** に替える（zoneMode）。 */
+  S4: {
+    id: 'S4', name: 'S4 古代遺跡・内部', zone: 'ruins', zoneMode: 'inner', lengthM: 1200,
+    speedFrom: 24, speedTo: 28, minRank: 3, maxRank: 4, setpiece: 'templefall',
+    density: [6, 10],
+    reactBoth: CFG.FAIR.REACT_BOTH_LATE,
+    tipOnce: { sync: 'sync', drop: 'dropceil' },
+    /* 顔ぶれ: S4 の新チャンクを主役に、S3 で覚えた遺跡の形（崩れる橋・振り子・列柱）を混ぜる */
+    chunkPool: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id)
+      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.drop).map((c) => c.id))
+      .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
+               'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole'])
+  },
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
@@ -465,8 +600,9 @@ const STAGE_DEFS = {
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
   S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
-  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3).map((c) => c.id),
-  S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id)        // 崩れる橋・振り子の刃
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4).map((c) => c.id),
+  S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id),       // 崩れる橋・振り子の刃
+  S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id)        // 同時スイッチ・落ちる天井
 };
 function endlessPool(cleared) {
   let pool = STAGE_DEFS.endless.chunkPool.slice();
@@ -769,15 +905,33 @@ function scaleParams(p, scale) {
 
 /* チャンク定義の素性（必須動作の回数と、最初〜最後の障害物の広がり）。
    密度（契約§4.7）を見ながらチャンクを選ぶために使う。1定義につき1回だけ測る。 */
+/* 譜面の1エントリ → 実体。**展開の規則はここだけ**（生成器・素性の計測・大演出が共用する）。
+     WALLHOLE … 穴のレーン + 残り2レーンの壁（＝全幅の壁に穴が1つ）
+     SYNCSW   … 床と天井の対のパッド + その先の橋（失敗なら谷になる2レーン） / 契約§4.5
+   syncs に展開したグループを積む（Sync がそこを見て 0.3秒窓を判定する）。 */
+function expandEntry(items, e, surface, at, nowDist, scale, syncs) {
+  const params = scaleParams(normParams(e.type, e.params), scale === undefined ? 1 : scale);
+  if (e.type === 'WALLHOLE') {
+    CFG.LANES.forEach((l) => {
+      items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, at, nowDist, params));
+    });
+    return;
+  }
+  if (e.type === 'SYNCSW') { Sync.expand(items, e, surface, at, nowDist, scale, syncs); return; }
+  if (e.type === 'DROPCEIL') {
+    /* 落ちる天井の時刻規則（予告→落下→着地）は「その地点の1秒ぶんの距離」で持つ */
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    items.push(Obstacles.make(e.type, surface, e.lane, at, nowDist,
+                              Object.assign({}, params || {}, { drop: { unitM: unit } })));
+    return;
+  }
+  items.push(Obstacles.make(e.type, surface, e.lane, at, nowDist, params));
+}
+
 function chunkStats(def) {
   if (def._stats) return def._stats;
   const items = [];
-  const push = (e, surface) => {
-    const pr = scaleParams(normParams(e.type, e.params), 1);
-    if (e.type === 'WALLHOLE') {
-      CFG.LANES.forEach((l) => items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, e.at, 0, pr)));
-    } else items.push(Obstacles.make(e.type, surface, e.lane, e.at, 0, pr));
-  };
+  const push = (e, surface) => expandEntry(items, e, surface, e.at, 0, 1, null);
   (def.floor || []).forEach((e) => push(e, 'floor'));
   (def.ceil || []).forEach((e) => push(e, 'ceil'));
   items.sort((a, b) => a.at - b.at);
@@ -799,6 +953,7 @@ function createGenerator(stage, seed) {
   const spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
     ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
   const out = [];               // 生成済み障害物（at 昇順）
+  const syncs = [];             // 同時スイッチのグループ（Sync が 0.3秒窓を判定する / P3b）
   const events = [];            // チャンクの events（P2以降のフック）
   const log = [];               // {id, startM, lengthM}
   let seedMix = null;           // 大演出が持ち込む必須動作の内訳（比率の是正に使う）
@@ -842,7 +997,7 @@ function createGenerator(stage, seed) {
   const got = { lane: 0, jump: 0, slide: 0, total: 0 };
   const placed = { total: 0 };          // ランダム区間だけの実測（密度の制御に使う）
   if (stage.setpiece && Setpieces.DEFS[stage.setpiece]) {
-    const sp0 = Setpieces.build(stage.setpiece, spStart, 0);
+    const sp0 = Setpieces.build(stage.setpiece, spStart, 0, stage.speedAt(spStart) / CFG.REF_SPEED, null);
     if (sp0) { seedMix = Fair.countDemands(sp0.items, stage.speedAt);
                got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total; }
   }
@@ -887,14 +1042,7 @@ function createGenerator(stage, seed) {
   /* 定義 → 実体（基準速度からの伸縮つき）
      WALLHOLE は「穴のレーン + 残り2レーンの壁」へ展開する（＝全幅の壁に穴が1つ）。 */
   function put(items, e, surface, at, nowDist, scale) {
-    const params = scaleParams(normParams(e.type, e.params), scale === undefined ? 1 : scale);
-    if (e.type === 'WALLHOLE') {
-      CFG.LANES.forEach((l) => {
-        items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, at, nowDist, params));
-      });
-    } else {
-      items.push(Obstacles.make(e.type, surface, e.lane, at, nowDist, params));
-    }
+    expandEntry(items, e, surface, at, nowDist, scale, syncs);
   }
   function instantiate(def, startM, nowDist) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
@@ -930,7 +1078,7 @@ function createGenerator(stage, seed) {
   /* 終盤の大演出（実寸・固定。§4.7 は通常どおり検査する） */
   function appendSetpiece(nowDist) {
     if (setpieceDone) return false;             // 二度置かない（置いたら二度と戻らない）
-    const inst = Setpieces.build(stage.setpiece, spStart, nowDist);
+    const inst = Setpieces.build(stage.setpiece, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, syncs);
     if (!inst) { setpieceDone = true; return false; }
     const tail = out.slice(-8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any', reactBoth: stage.reactBoth });
@@ -1027,6 +1175,7 @@ function createGenerator(stage, seed) {
     seed: seed,
     get cursor() { return cursor; },
     obstacles: out,
+    syncs: syncs,
     events: events,
     log: log,
     /* untilM まで生成しておく。nowDist は視認距離の記録用 */
