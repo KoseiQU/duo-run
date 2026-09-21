@@ -109,6 +109,12 @@
 
   DUO.__suites.push({
     name: 'S1: チュートリアル表示（DOMオーバーレイの可視性）',
+    /* 見ているのは **DOM オーバーレイ**（class / computed style / 文言）だけなので、
+       走行は描画なしの DUO.__step で進める（DUO.pump だと 1フレームずつ WebGL を描き、
+       この1本だけで runQuick の上限 20秒（契約§7）の半分を食っていた / 2026-09-22 P4a-0）。
+       Tutorial の表示・消灯は Game.step の中（イベント発火と Tutorial.update）で起きるので、
+       描画を省いてもこのテストの意味は変わらない。描画経路の確認は
+       「S1: 大演出」「P2b-0: tip の位置」など pump を使う他のテストが受け持つ。 */
     quick: true,
     run(t) {
       const In = I();
@@ -119,7 +125,7 @@
       /* 最初の tip は 30m 手前で出る（= 60-30 = 30m 付近） */
       let shown = null, guard = 0;
       while (Game.dist < 70 && guard++ < 4000) {
-        DUO.pump(1 / 60);
+        DUO.__step(1 / 60);
         if (el.classList.contains('on') && !shown) shown = { dist: Game.dist, text: el.textContent };
       }
       t.ok(!!shown, 'ローバーの手前でチュートリアルが表示される');
@@ -130,13 +136,13 @@
       /* 表示中は computed style で見えている */
       DUO.reset(); DUO.start('S1', 3);
       guard = 0;
-      while (!el.classList.contains('on') && guard++ < 4000) DUO.pump(1 / 60);
+      while (!el.classList.contains('on') && guard++ < 4000) DUO.__step(1 / 60);
       const cs = getComputedStyle(el);
       t.ok(parseFloat(cs.opacity) > 0.5 || el.classList.contains('on'), '表示中は opacity が上がる（' + cs.opacity + '）');
       t.ok(cs.display !== 'none' && cs.visibility !== 'hidden', 'display/visibility が隠れていない');
       t.eq(DUO.state().tip !== null, true, 'DUO.state().tip に出ている合図が入る');
       /* 2.6秒後には消える */
-      for (let i = 0; i < 200; i++) DUO.pump(1 / 60);
+      for (let i = 0; i < 200; i++) DUO.__step(1 / 60);
       t.eq(el.classList.contains('on'), false, '一定時間で自動的に消える');
       /* 文言はタッチ前提（指アイコン＋フリックの言い方） */
       In.Tutorial.show('jump_l');
