@@ -21,7 +21,10 @@ const Tutorial = {
     gap:    { ph: ['<span class="finger">👆</span>穴はジャンプ', '（下半分を上へ）'] },
     laser:  { ph: ['<span class="finger">👇</span>赤い光線もジャンプ', '（上半分は下へ）'] },
     wide:   { ph: ['<span class="finger">👉</span>2レーンをふさぐ梁は', '空いたレーンへ'] },
-    both:   { ph: ['同時に来る！', '<b class="k">下</b>と<b class="k2">上</b>を', '別々に'] }
+    both:   { ph: ['同時に来る！', '<b class="k">下</b>と<b class="k2">上</b>を', '別々に'] },
+    /* S3 の新ギミック（契約§4.4）。初出のときだけ短く出す */
+    bridge: { ph: ['<span class="finger">👆</span>崩れる橋は', '踏んだら<b>すぐ横へ</b>', 'または跳び越す'] },
+    pendulum: { ph: ['<span class="finger">👈</span>振り子の刃は', '<b>空いたレーン</b>へ'] }
   },
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },

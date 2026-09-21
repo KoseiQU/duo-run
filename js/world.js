@@ -309,13 +309,15 @@ const World = {
     /* カメラより手前（＝通り過ぎた直後）の障害物は消す。
        大演出でカメラを引くと、通過した全高の障害物が目の前に居座って視界を塞ぐため。 */
     const camZ = World.camera.position.z - 2.2;
+    /* 振り返りカットの間は後ろを見ているので、通り過ぎた障害物も描く */
+    const back = Setpieces.lookBack(dist) > 0.02;
     for (let i = 0; i < obstacles.length; i++) {
       const o = obstacles[i];
       const near = (o.at - dist) < CFG.VIEW_FAR;
       if (near && !o.view) { o.view = Obstacles.acquire(o.type); World.obsRoot.add(o.view); }
       if (o.view) {
         Obstacles.place(o, dist, World._t);
-        o.view.visible = (-(o.at - dist) < camZ);
+        o.view.visible = back || (-(o.at - dist) < camZ);
       }
     }
   },
@@ -489,8 +491,19 @@ const World = {
     } else if (World._shake) {
       World.clearSetpieceFx();
     }
-    World.camera.position.set(avgX * 0.16 + sx, CFG.CAM.Y + sy + camUp, CFG.CAM.Z - push + back);
-    World.camera.lookAt(avgX * 0.09 + sx * 0.5, CFG.CAM.LOOK_Y + sy * 0.5 + lookUp, CFG.CAM.LOOK_Z);
+    /* 振り返りカット（§4.4 S3「巨岩の追跡」）: その場で 180度 首を振り、
+       少し前へ出て高さを上げる。迫る巨岩（2体の後ろ＝+z）が正面に来る。
+       演出の中でも障害物を置かない区間だけで起きる（§4.7 は崩さない）。 */
+    const lb = (fx && fx.lookBack) ? fx.lookBack : 0;
+    if (lb > 0.001) {
+      const k = U.smooth(lb);
+      World.camera.position.set(avgX * 0.10 + sx, CFG.CAM.Y + 0.9 * k + sy + camUp, CFG.CAM.Z - 6.4 * k - push);
+      World.camera.lookAt(sx * 0.5, CFG.CAM.LOOK_Y + 0.45 * k + sy * 0.5 + lookUp,
+                          U.lerp(CFG.CAM.LOOK_Z, 26, k));
+    } else {
+      World.camera.position.set(avgX * 0.16 + sx, CFG.CAM.Y + sy + camUp, CFG.CAM.Z - push + back);
+      World.camera.lookAt(avgX * 0.09 + sx * 0.5, CFG.CAM.LOOK_Y + sy * 0.5 + lookUp, CFG.CAM.LOOK_Z);
+    }
     /* 路面の縁（厚み・発光ライン）は大演出で一緒に持ち上げ、滑空中は消す */
     if (World.trim) {
       World.trim.position.y = Setpieces.viewLift(World._dist);
@@ -625,6 +638,33 @@ const World = {
     return { left: x0, right: x1, top: y0, bottom: y1 };
   },
   runnerRect(r) { return World.projectRect(Runners.boxOf(r.surface, r.laneVal, r.act, r.actT)); },
+
+  /* 箱が画面をどれだけ覆っているか（0〜1）。**カメラの後ろにあるものは 0**。
+     （projectRect は視線の後ろだと符号が反転して巨大な矩形になるので、監査には使えない）
+     巨岩の追跡（§4.4 S3）で「迫っているのが画面で分かる」ことを測るのに使う。 */
+  projectCoverage(box) {
+    if (!World.ready || !box) return 0;
+    const cam = World.camera;
+    cam.updateMatrixWorld();
+    const v = World._v3 || (World._v3 = new THREE.Vector3());
+    const size = new THREE.Vector2();
+    World.renderer.getSize(size);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, n = 0;
+    for (let i = 0; i < 8; i++) {
+      v.set((i & 1) ? box.x1 : box.x0, (i & 2) ? box.y1 : box.y0, (i & 4) ? box.z1 : box.z0);
+      v.applyMatrix4(cam.matrixWorldInverse);
+      if (v.z > -cam.near) continue;                 // カメラの後ろ（映らない）
+      v.applyMatrix4(cam.projectionMatrix);
+      const px = (v.x * 0.5 + 0.5) * size.x, py = (-v.y * 0.5 + 0.5) * size.y;
+      if (px < x0) x0 = px; if (px > x1) x1 = px;
+      if (py < y0) y0 = py; if (py > y1) y1 = py;
+      n++;
+    }
+    if (!n) return 0;
+    const w = Math.max(0, Math.min(size.x, x1) - Math.max(0, x0));
+    const h = Math.max(0, Math.min(size.y, y1) - Math.max(0, y0));
+    return (w * h) / (size.x * size.y);
+  },
 
   camSym() {
     if (!World.ready) return null;

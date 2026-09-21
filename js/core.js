@@ -23,6 +23,7 @@ const Game = {
   genPtr: 0,
   eventLog: [],
   goalT: 0,              // ゴール演出の経過（§4.8 ゴールゲート→ポーズ→リザルト）
+  slowT: 0,              // 減速帯（§4.4 S3）の残り時間。速度が一時的に落ちる
   bestUpdated: false,    // 直近のリザルトでベスト更新したか
   stats: { frames: 0 },
   GOAL_T: 1.3,           // ゴール演出の長さ（秒）
@@ -113,6 +114,7 @@ const Game = {
     Game.t = 0;
     Game.dyingT = 0;
     Game.killer = null;
+    Game.slowT = 0;
     Game.speed = Game.stage.speedAt(fromM);
     Game.runners.forEach((r) => Runners.reset(r));
     Input.clear();
@@ -158,7 +160,10 @@ const Game = {
         Input.drain();                                  // 死亡演出中の入力は捨てる
       }
 
-      Game.speed = Game.stage.speedAt(Game.dist);
+      /* 減速帯（§4.4 S3「瓦礫の山」）: 越えそこねると速度が一時的に -20%。
+         遅くなるぶんには §4.7 の不変条件（時間基準）は緩む方向なので公平性は壊れない。 */
+      if (Game.slowT > 0) Game.slowT = Math.max(0, Game.slowT - d);
+      Game.speed = Game.stage.speedAt(Game.dist) * (1 - CFG.SLOW.MUL * U.clamp(Game.slowT / CFG.SLOW.T, 0, 1));
       Game.dist += Game.speed * d;
 
       /* 生成と取り込み・寿命 */
@@ -240,9 +245,26 @@ const Game = {
         const r = Game.runners[k];
         if (!Obstacles.affects(o, r.surface)) continue;
         /* 当たり判定は Obstacles.hits だけを通す（動く／点滅する障害物も同じ道） */
-        if (Obstacles.hits(o, Runners.box(r), Game.dist)) { Game.onHit(r, o); return; }
+        if (!Obstacles.hits(o, Runners.box(r), Game.dist)) continue;
+        /* 無害な障害物（減速帯）は死なせず、速度だけ落とす（1個につき1回） */
+        if (OBS[o.type].harmless) { Game.onSlow(r, o); continue; }
+        Game.onHit(r, o);
+        return;
       }
     }
+  },
+
+  /* 減速帯に触れた（§4.4 S3）。死なない。同じ障害物では1回だけ効く */
+  onSlow(runner, o) {
+    if (o._slowed) return false;
+    o._slowed = true;
+    Game.slowT = CFG.SLOW.T;
+    return true;
+  },
+  /* 巨岩に追いつかれた（§4.4 S3）。通常の死と同じ扱い */
+  onCrush() {
+    if (Game.status !== 'playing') return;
+    Game.onHit(Game.runners[0], { type: 'BOULDER', lane: 0, at: Game.dist });
   },
 
   onHit(runner, obstacle) {
@@ -356,6 +378,9 @@ const Game = {
       runners: rs,
       chunk: Game.gen ? (Game.gen.log.filter((c) => c.startM <= Game.dist).pop() || null) : null,
       obstacles: Game.active.length,
+      slowT: +Game.slowT.toFixed(3),
+      rockGap: Setpieces.rockGap(),
+      lookBack: +Setpieces.lookBack(Game.dist).toFixed(3),
       setpiece: Setpieces.id(),
       phase: Setpieces.state ? (Setpieces.state.phase || null) : null,
       glide: Setpieces.glideActive(),

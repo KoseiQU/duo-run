@@ -66,7 +66,7 @@ const UI = {
   STAGES: [
     { id: 'S1', name: 'ネオン都市・入門', ready: true },
     { id: 'S2', name: 'ネオン都市・夜', ready: true },
-    { id: 'S3', name: '古代遺跡・外周', ready: false },
+    { id: 'S3', name: '古代遺跡・外周', ready: true },
     { id: 'S4', name: '古代遺跡・内部', ready: false },
     { id: 'S5', name: '深海', ready: false },
     { id: 'S6', name: '宇宙ステーション', ready: false },

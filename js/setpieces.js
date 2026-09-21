@@ -81,7 +81,57 @@ const Setpieces = {
         { at: 192, type: 'bigjump.land' },
         { at: 200, type: 'bigjump.end' }
       ]
+    },
+
+    /* ====================================================================
+       S3「巨岩の追跡」（契約§4.4）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0     予告（HUD「BOULDER!」）＋ 背後の遺跡が砕けて巨岩が転がり出す
+         6〜26 **振り返りカット1**（カメラが振り返り、迫る巨岩が画面いっぱいに映る）
+               ※ この区間には障害物を置かない。カット明け後も視認距離ぶん空ける
+         64〜152 瓦礫の山（SLOWBAND＝死なないが越えないと -20%）と通常の障害物
+         168〜186 **振り返りカット2**（巨岩はもっと近い）
+         200   通過してゴールへ
+       ミスの代わりに「減速」で詰められ、詰まりきると押し潰される（= 死）。
+       完璧反応／0.25秒遅延のどちらのボットも跳び越すので、演出を跨いで完走できる。
+       ==================================================================== */
+    rockchase: {
+      id: 'rockchase',
+      lengthM: 200,
+      /* 譜面の置ける窓は「振り返りカットの後、視認距離ぶん空けてから」＝ 62〜168m。
+         倒れた石柱（PILLAR）・火柱（LASER_V）は both 型なので1本で2体に要求が出る＝
+         §4.7 の密度（S3 は 6→10回/100m）を演出区間でも落とさない。 */
+      floor: [
+        { at: 64,  lane: 0,  type: 'SLOWBAND' },
+        { at: 90,  lane: 0,  type: 'PILLAR' },
+        { at: 104, lane: -1, type: 'LASER_V' },
+        { at: 118, lane: 1,  type: 'SLOWBAND' },
+        { at: 144, lane: 1,  type: 'PILLAR' },
+        { at: 158, lane: -1, type: 'SLOWBAND' }
+      ],
+      ceil: [
+        { at: 64,  lane: 1,  type: 'ROVER' },
+        { at: 118, lane: 0,  type: 'SLOWBAND' },
+        { at: 158, lane: 0,  type: 'ROVER' }
+      ],
+      events: [
+        { at: 0,   type: 'rock.start' },
+        { at: 34,  type: 'rock.cue' },       // 予告を引っ込める（振り返りカット1のあと）
+        { at: 200, type: 'rock.end' }
+      ]
     }
+  },
+
+  /* ---- 巨岩の追跡のキーフレーム（距離 m。すべてここから引く） ------------- */
+  ROCK: {
+    R: 6.4,               // 巨岩の半径（コリドー 3.6×4.0 より大きい＝遺跡ごと砕いて来る）
+    GAP0: 21,             // 追跡開始時の距離
+    GAP1: 11,             // 迫りきったときの距離
+    CLOSE_M: 70,          // この距離をかけて GAP0 → GAP1 まで詰める
+    SWAY: 1.1,            // 距離のゆらぎ（生き物らしさ）
+    DEATH: 1.7,           // ここまで詰まると押し潰される（＝死）
+    RECOVER: 0.55,        // 遅れの回復（m/秒）。1回の被弾（約8m）は取り返せない
+    LOOKBACK: [[6, 26], [168, 186]]   // 振り返りカットの区間（障害物を置かない）
   },
 
   /* ---- 大ジャンプのキーフレーム（距離 m。すべてここから引く） ------------- */
@@ -100,8 +150,9 @@ const Setpieces = {
     const d = Setpieces.DEFS[id];
     if (!d) return null;
     const items = [];
-    (d.floor || []).forEach((e) => items.push(Obstacles.make(e.type, 'floor', e.lane, startM + e.at, nowDist, e.params)));
-    (d.ceil || []).forEach((e) => items.push(Obstacles.make(e.type, 'ceil', e.lane, startM + e.at, nowDist, e.params)));
+    const pr = (e) => scaleParams(normParams(e.type, e.params), 1);
+    (d.floor || []).forEach((e) => items.push(Obstacles.make(e.type, 'floor', e.lane, startM + e.at, nowDist, pr(e))));
+    (d.ceil || []).forEach((e) => items.push(Obstacles.make(e.type, 'ceil', e.lane, startM + e.at, nowDist, pr(e))));
     items.sort((a, b) => a.at - b.at);
     const events = (d.events || []).map((e) => ({ at: startM + e.at, type: e.type, params: e.params || null, done: false }));
     return { id: id, items: items, events: events, lengthM: d.lengthM, startM: startM };
@@ -136,7 +187,40 @@ const Setpieces = {
       if (Setpieces.state) { Setpieces.state.phase = 'land'; Setpieces.state.land = 0; }
     } else if (e.type === 'bigjump.end') {
       if (Setpieces.state) Setpieces.state.phase = 'done';
+    } else if (e.type === 'rock.start') {
+      Setpieces.state = { id: 'rockchase', startM: e.at, t: 0, penalty: 0,
+                          gap: Setpieces.ROCK.GAP0, rockM: e.at - Setpieces.ROCK.GAP0, caught: false };
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('BOULDER!', '巨岩が来る ／ 瓦礫は跳び越えろ');
+    } else if (e.type === 'rock.cue') {
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'rock.end') {
+      if (Setpieces.state) Setpieces.state.ending = true;
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     }
+  },
+
+  /* ---- 巨岩の追跡（距離の関数。フレームに依存しない） --------------------- */
+  rockActive() { const s = Setpieces.state; return !!(s && s.id === 'rockchase'); },
+  /* 振り返りカットの強さ 0..1（0→1→0 で振り返って戻る）。World.syncCamera が読む */
+  lookBack(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'rockchase') return 0;
+    const rel = m - s.startM;
+    let k = 0;
+    for (let i = 0; i < Setpieces.ROCK.LOOKBACK.length; i++) {
+      const w = Setpieces.ROCK.LOOKBACK[i];
+      if (rel > w[0] && rel < w[1]) k = Math.max(k, Math.sin(Math.PI * (rel - w[0]) / (w[1] - w[0])));
+    }
+    return k;
+  },
+  /* 巨岩との距離（m）。詰まりきると押し潰される */
+  rockGap() { const s = Setpieces.state; return (s && s.id === 'rockchase') ? s.gap : Infinity; },
+  /* 迫られている度合い 0..1（カメラ揺れ・影・霧に使う） */
+  rockProx() {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'rockchase') return 0;
+    const R = Setpieces.ROCK;
+    return U.clamp(1 - (s.gap - R.DEATH) / (R.GAP0 - R.DEATH), 0, 1);
   },
 
   /* ---- 大ジャンプの状態（距離の関数。フレームに依存しない） --------------- */
@@ -200,6 +284,24 @@ const Setpieces = {
       if (s.phase === 'land') s.land = rel - Setpieces.BJ.LAND;
       return;
     }
+    if (s.id === 'rockchase') {
+      const R = Setpieces.ROCK;
+      const rel = game.dist - s.startM;
+      /* 基本の距離（近づいてくる）＋ゆらぎ */
+      const base = U.lerp(R.GAP0, R.GAP1, U.smooth(U.clamp(rel / R.CLOSE_M, 0, 1)))
+                 + R.SWAY * Math.sin(s.t * 1.25);
+      /* 減速帯で失った距離を「遅れ」として貯める（ゆっくりだけ回復する） */
+      const nominal = game.stage.speedAt(game.dist);
+      s.penalty += Math.max(0, nominal - game.speed) * dt;
+      s.penalty = Math.max(0, s.penalty - R.RECOVER * dt);
+      s.gap = Math.max(0, base - s.penalty);
+      s.rockM = game.dist - s.gap;                 // 巨岩の位置（走行距離の座標系）
+      if (s.gap <= R.DEATH && !s.caught) {
+        s.caught = true;
+        if (game.onCrush) game.onCrush();
+      }
+      return;
+    }
     /* 崩落前線はプレイヤーの後ろを上下しながら追う（演出＝絶対に追いつかない） */
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
@@ -219,6 +321,13 @@ const Setpieces = {
         return 0.09 * (1 - s.land / B.SETTLE) * Math.sin(s.t * 42 + atM * 2.4);
       }
       return 0;
+    }
+    if (s && s.id === 'rockchase') {
+      /* 巨岩が近いほど前方の石畳まで震える（落とさないので公平性には影響しない） */
+      const p = Setpieces.rockProx();
+      const ahead = atM - dist;
+      if (ahead < -4 || ahead > 40) return 0;
+      return (0.012 + 0.05 * p) * (1 - U.clamp(ahead / 40, 0, 1)) * Math.sin(s.t * 31 + atM * 2.1);
     }
     if (!s || s.id !== 'collapse' || atM < s.front) return 0;
     const ahead = atM - dist;
@@ -263,6 +372,23 @@ const Setpieces = {
         glide: g
       };
     }
+    if (s.id === 'rockchase') {
+      const p = Setpieces.rockProx();
+      const lb = Setpieces.lookBack(s.dist || s.startM);
+      return {
+        shake: 0.018 + 0.075 * p * (0.7 + 0.3 * Math.sin(s.t * 27)),
+        fovAdd: 3 + 5 * p,
+        camBack: 0,
+        /* 前寄り・やや俯角（遺跡の奥行きを見せつつ、振り返りで巨岩を正面に入れる） */
+        camUp: 0.35 + 0.25 * p,
+        lookUp: -0.25 - 0.2 * p,
+        fogFar: U.lerp(92, 70, p),
+        fogColor: 0x6a4a22,                               // 舞い上がる土煙
+        glide: 0,
+        lookBack: lb,
+        prox: p
+      };
+    }
     const ramp = U.clamp(s.t / 1.2, 0, 1);              // 立ち上がり
     return {
       shake: 0.055 * ramp * (0.7 + 0.3 * Math.sin(s.t * 23.3)),
@@ -292,7 +418,87 @@ const Setpieces = {
     im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     im.renderOrder = 6;
     scene.add(im);
-    Setpieces.dust = { mesh: im, mat: mat, count: N, dummy: new THREE.Object3D() };
+    Setpieces.dust = { mesh: im, mat: mat, count: N, dummy: new THREE.Object3D(),
+                       base: new THREE.Color(0x9b86c8) };
+    Setpieces._buildRock(scene);
+  },
+
+  /* ---- 巨岩（S3「巨岩の追跡」）の造形 ------------------------------------
+     ・コリドーより大きい石球。遺跡ごと砕きながら転がって来る。
+     ・普段は画面の後ろにいるので描画コストはほぼ0（視錐台の外）。
+       **振り返りカット**のあいだだけ画面に入る（契約§4.4 の合格条件）。
+     ・前方の床と天井には「巨岩の影」が落ちる＝振り返らなくても迫っているのが分かる。 */
+  _buildRock(scene) {
+    const R = Setpieces.ROCK.R;
+    const g = new THREE.Group();
+    g.visible = false;
+    /* 岩肌: 正20面体を砕いて凹凸をつける（テクスチャ画像は使わない / 契約§3） */
+    const geo = new THREE.IcosahedronGeometry(R, 2);
+    const pos = geo.attributes.position;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const h = Math.abs(Math.sin(v.x * 3.1 + v.y * 5.7 + v.z * 2.3)) % 1;
+      v.multiplyScalar(0.86 + h * 0.2);
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    geo.computeVertexNormals();
+    /* 転がるのは岩体だけ（破片は別の群にしておく） */
+    const spin = new THREE.Group();
+    g.add(spin);
+    const body = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6b5734, flatShading: true }));
+    spin.add(body);
+    /* 抉れた面（色違いの岩）と、転がるのが分かる帯 */
+    const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.92, R * 0.10, 5, 12),
+                                new THREE.MeshLambertMaterial({ color: 0x6d5836, flatShading: true }));
+    band.rotation.y = Math.PI / 2;
+    spin.add(band);
+    [[0.6, 0.5, 0.4], [-0.5, -0.4, 0.6], [0.2, -0.7, -0.5]].forEach((q, i) => {
+      const c = new THREE.Mesh(new THREE.BoxGeometry(R * 0.6, R * 0.5, R * 0.55),
+                               new THREE.MeshLambertMaterial({ color: i ? 0xa38c5e : 0x76613c, flatShading: true }));
+      c.position.set(q[0] * R * 0.8, q[1] * R * 0.8, q[2] * R * 0.8);
+      c.rotation.set(q[0] * 2, q[1] * 2, q[2] * 2);
+      spin.add(c);
+    });
+    /* 砕けた石が周りに舞う（巨岩と一緒に転がってくる破片） */
+    const deb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
+                                        new THREE.MeshLambertMaterial({ color: 0x6d5a3a, flatShading: true }), 26);
+    deb.frustumCulled = false;
+    deb.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    g.add(deb);
+    scene.add(g);
+    /* 巨岩の影（前方の床と天井を覆う暗い帯。近づくほど濃く・手前まで伸びる） */
+    const shadows = [];
+    [['floor', 0.03, -Math.PI / 2], ['ceil', CFG.H - 0.03, Math.PI / 2]].forEach((c) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2 + 1.2, 30),
+                               new THREE.MeshBasicMaterial({ color: 0x120c04, transparent: true,
+                                                             opacity: 0, depthWrite: false, fog: true }));
+      m.rotation.x = c[2];
+      m.position.set(0, c[1], 0);
+      m.renderOrder = 2;
+      m.visible = false;
+      scene.add(m);
+      shadows.push(m);
+    });
+    Setpieces.rock = { group: g, spin: spin, body: body, deb: deb, dummy: new THREE.Object3D(),
+                       shadows: shadows, n: 26 };
+  },
+
+  /* 巨岩が画面をどれだけ覆っているか 0..1（描いていないときは 0）。
+     契約§4.4 S3「巨岩が迫っている恐怖が画面で分かる」の合格条件を測る窓口。 */
+  rockOnScreen() {
+    const r = Setpieces.rock;
+    if (!r || !r.spin.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    return World.projectCoverage(Setpieces.rockBox());
+  },
+
+  /* 巨岩の判定用ボックス（監査: 画面内に映っているかを測る） */
+  rockBox() {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'rockchase') return null;
+    const R = Setpieces.ROCK.R, z = s.gap;
+    return { x0: -R, x1: R, y0: CFG.H / 2 - R, y1: CFG.H / 2 + R, z0: z - R, z1: z + R };
   },
 
   /* 粉塵と「落ちていく瓦礫板」の更新（World.render から） */
@@ -305,6 +511,8 @@ const Setpieces = {
       const fx = Setpieces.camFx();
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
     }
+    if (s && s.id === 'rockchase') { Setpieces._syncRock(dist, t); return; }
+    Setpieces._hideRock();
     if (s && s.id === 'bigjump') {
       if (d.mat.opacity !== 0) d.mat.opacity = 0;
       if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
@@ -315,6 +523,7 @@ const Setpieces = {
       if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
       return;
     }
+    d.mat.color.copy(d.base);
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 26 * (0.75 + 0.25 * Math.sin(s.t * 7.3));
       Setpieces.emberLight.position.z = 10;
@@ -342,11 +551,86 @@ const Setpieces = {
     d.mesh.instanceMatrix.needsUpdate = true;
   },
 
+  _hideRock() {
+    const r = Setpieces.rock;
+    if (!r || !r.group.visible) return;
+    r.group.visible = false;
+    r.shadows.forEach((m) => { m.visible = false; m.material.opacity = 0; });
+  },
+  /* 巨岩・その影・舞う破片の更新（距離の関数。フレームに依存しない） */
+  _syncRock(dist, t) {
+    const s = Setpieces.state, r = Setpieces.rock, d = Setpieces.dust;
+    if (!r) return;
+    const R = Setpieces.ROCK;
+    const p = Setpieces.rockProx();
+    /* 巨岩は 2体の **後ろ** gap m。転がりは走行距離に比例（フレームに依存しない）。
+       ■ 岩体を描くのは「振り返りカットの間」と「押し潰される瞬間」だけ。
+         前向きのカメラ（z=+8）より手前に岩の前面が来るので、ふだん描くと
+         画面を岩で塞いでしまう（後ろにいるものは前向きのカメラには映らない）。
+         ふだんは **影・地響き・飛んでくる破片・土煙** で迫っているのを見せる。 */
+    r.group.visible = true;
+    r.spin.visible = (Setpieces.lookBack(dist) > 0.02) || !!s.caught;
+    r.group.position.set(0, CFG.H / 2 - 0.35, s.gap);
+    r.spin.rotation.x = -(s.rockM || 0) / R.R;      // 走行距離に比例して転がる
+    /* 周りに舞う破片 */
+    const o = r.dummy;
+    for (let i = 0; i < r.n; i++) {
+      const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+      const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+      const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+      const u = (h1 + t * 0.4 + i * 0.017) % 1;
+      /* 破片は巨岩から前へ飛び出して2体を追い越す（ローカル座標＝群の原点から見た位置） */
+      const zz = -R.R * 0.6 - u * (s.gap + 6);
+      o.position.set((h2 - 0.5) * 6.4, (h3 < 0.5 ? 0.4 : CFG.H - 0.4) + (h3 - 0.5) * 2.2, zz);
+      o.rotation.set(t * (1.2 + h1) + i, t * 0.8 + i, t * (0.6 + h2));
+      o.scale.setScalar((0.5 + h3 * 1.5) * (1 - u * 0.5));
+      o.updateMatrix();
+      r.deb.setMatrixAt(i, o.matrix);
+    }
+    r.deb.instanceMatrix.needsUpdate = true;
+    /* 影: 巨岩の手前から前方へ伸びる。近いほど濃く、遠くまで届く */
+    r.shadows.forEach((m) => {
+      m.visible = true;
+      m.material.opacity = 0.10 + 0.42 * p;
+      m.position.z = s.gap - 15 - 14 * (1 - p);
+    });
+    /* 土煙（既存の粉塵を茶色に染めて使い回す） */
+    if (d) {
+      d.mat.color.setHex(0xc9a878);
+      d.mat.opacity = 0.16 + 0.22 * p;
+      const o2 = d.dummy;
+      for (let i = 0; i < d.count; i++) {
+        const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+        const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+        const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+        const u = (h1 + (t * 0.3 + i * 0.013)) % 1;
+        const zM = s.gap - u * (s.gap + 30);
+        o2.position.set((h2 - 0.5) * 6.6, (h3 < 0.5 ? 0.3 : CFG.H - 0.3) + (h3 - 0.5) * 2.8, zM);
+        o2.rotation.set(t * (0.6 + h1) + i, t * 0.4 + i, t * (0.3 + h2));
+        o2.scale.setScalar((0.4 + h3 * 1.4) * (1 - u * 0.3));
+        o2.updateMatrix();
+        d.mesh.setMatrixAt(i, o2.matrix);
+      }
+      d.mesh.instanceMatrix.needsUpdate = true;
+    }
+    /* 巨岩を照らす明かり（岩の手前に置いて面を起こす＝振り返ったときに形が読める） */
+    if (Setpieces.emberLight) {
+      Setpieces.emberLight.color.setHex(0xffb066);
+      Setpieces.emberLight.intensity = 60 * (0.85 + 0.15 * Math.sin(s.t * 9.1));
+      Setpieces.emberLight.position.set(0, CFG.H / 2, s.gap - Setpieces.ROCK.R - 3.2);
+    }
+  },
+
   /* ---- 後始末（リトライ・タイトル・テストの復帰で必ず呼ぶ） -------------- */
   reset() {
     Setpieces.state = null;
-    if (Setpieces.dust) Setpieces.dust.mat.opacity = 0;
-    if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
+    Setpieces._hideRock();
+    if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
+    if (Setpieces.emberLight) {
+      Setpieces.emberLight.intensity = 0;
+      Setpieces.emberLight.color.setHex(0xff5a2a);
+      Setpieces.emberLight.position.set(0, CFG.H / 2, 14);
+    }
     Zones.setGlide(0);
     if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     if (typeof World !== 'undefined' && World.ready) World.clearSetpieceFx();

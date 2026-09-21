@@ -224,7 +224,133 @@ const CHUNK_DEFS = [
     floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.25 } } },
             { at: 34, lane: 1, type: 'ROVER' },
             { at: 52, lane: 1, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0 } } }],
-    ceil:  [{ at: 34, lane: -1, type: 'ROVER' }], events: [] }
+    ceil:  [{ at: 34, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* ==========================================================================
+     S3「古代遺跡・外周」（契約§4.4）
+     ------------------------------------------------------------------------
+     新ギミック:
+       BRIDGE      崩れる橋。踏んで 0.4秒後にそのレーンの床が落ちる。
+                   抜け方は「レーン移動」か「跳び越す」（判定は occ が jump のみ安全と出す）。
+       LASER_SCAN  遺跡スキンでは **振り子の刃**（大型化）。動きの定義はネオンと同じ。
+     密度は S2 より高い（6→10回/100m）ので、両者同時要求のウォールを厚く敷く。
+     §4.7 の「両者同時要求の余白」は S3 以降 0.45秒（stage.reactBoth）。
+     ========================================================================== */
+  /* --- rank2: 新ギミックを1つずつ覚える ---------------------------------- */
+  { id: 'r2_bridge_f', zone: 'ruins', lengthM: 56, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    floor: [{ at: 14, lane: 0, type: 'BRIDGE' }, { at: 34, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 24, lane: -1, type: 'ROVER' }, { at: 44, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r2_bridge_c', zone: 'ruins', lengthM: 56, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    floor: [{ at: 24, lane: 1, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 14, lane: -1, type: 'BRIDGE' }, { at: 34, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 'r2_bridge_x', zone: 'ruins', lengthM: 60, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    /* 床と天井で別のレーンの橋が落ちる（2体が別々に抜ける） */
+    floor: [{ at: 14, lane: -1, type: 'BRIDGE' }, { at: 38, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 14, lane: 1, type: 'BRIDGE' }, { at: 50, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r2_pend_a', zone: 'ruins', lengthM: 58, difficulty: 2, minSpeed: 0, s3: 1, moving: 1, pend: 1,
+    /* 振り子の刃: 到達時は端で溜まっている（＝空いているレーンが読める） */
+    floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 44, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 30, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 'r2_pend_b', zone: 'ruins', lengthM: 58, difficulty: 2, minSpeed: 0, s3: 1, moving: 1, pend: 1,
+    floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0.5 } } },
+            { at: 44, lane: -1, type: 'GAP' }],
+    ceil:  [{ at: 30, lane: 1, type: 'LASER_LOW' }], events: [] },
+  { id: 'r2_fire', zone: 'ruins', lengthM: 54, difficulty: 2, minSpeed: 0, s3: 1, moving: 1,
+    /* 噴き出す炎（点滅）: 到達時に消えている方はそのまま走り抜ける */
+    floor: [{ at: 14, lane: 1, type: 'LASER_V', params: { blink: { onAtArrival: true } } },
+            { at: 32, lane: 0, type: 'LASER_LOW', params: { blink: { onAtArrival: false } } },
+            { at: 46, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 32, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* --- rank3: 密（両者同時要求を厚く。契約§4.7 の 6→10回/100m を作る） ---- */
+  { id: 'r3_duo_a', zone: 'ruins', lengthM: 52, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1,
+    floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 21, lane: 1, type: 'LASER_V' },
+            { at: 31, lane: -1, type: 'BRIDGE' }, { at: 45, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: -1, type: 'GAP' },
+            { at: 45, lane: 1, type: 'LASER_LOW' }], events: [] },
+  { id: 'r3_duo_b', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, moving: 1, pend: 1,
+    floor: [{ at: 10, lane: 1, type: 'GAP' },
+            { at: 21, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.25 } } },
+            { at: 31, lane: 0, type: 'LASER_LOW' }, { at: 45, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 31, lane: 1, type: 'ROVER' },
+            { at: 45, lane: 0, type: 'GAP' }], events: [] },
+  { id: 'r3_duo_c', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, moving: 1,
+    floor: [{ at: 10, lane: -1, type: 'LASER_ROT', params: { rot: { phase: 0.5 } } },
+            { at: 21, lane: 1, type: 'PILLAR' }, { at: 32, lane: 0, type: 'ROVER' },
+            { at: 46, lane: 0, type: 'LASER_ROT', params: { rot: { phase: 0.25 } } }],
+    ceil:  [{ at: 10, lane: 0, type: 'ROVER' }, { at: 21, lane: -1, type: 'LASER_LOW' },
+            { at: 32, lane: 1, type: 'GAP' }], events: [] },
+  { id: 'r3_duo_d', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1, pend: 1, moving: 1,
+    floor: [{ at: 10, lane: 0, type: 'BRIDGE' }, { at: 26, lane: 1, type: 'PILLAR' },
+            { at: 37, lane: -1, type: 'ROVER' },
+            { at: 48, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.5 } } }],
+    ceil:  [{ at: 26, lane: -1, type: 'ROVER' }, { at: 37, lane: 0, type: 'LASER_LOW' },
+            { at: 48, lane: 1, type: 'GAP' }], events: [] },
+  { id: 'r3_duo_e', zone: 'ruins', lengthM: 60, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
+    floor: [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: 0, type: 'PILLAR' },
+            { at: 32, lane: -1, type: 'GAP' }, { at: 43, lane: 1, type: 'LASER_V' },
+            { at: 54, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 10, lane: -1, type: 'LASER_LOW' }, { at: 32, lane: 1, type: 'ROVER' },
+            { at: 54, lane: -1, type: 'GAP' }], events: [] },
+  { id: 'r3_wallhole', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, wallhole: 1, dense: 1,
+    floor: [{ at: 14, lane: 0, type: 'WALLHOLE' }, { at: 30, lane: -1, type: 'ROVER' },
+            { at: 44, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'GAP' }], events: [] },
+  { id: 'r3_bridge_duo', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, bridge: 1,
+    /* 崩れる橋を跳び越した直後に、逆側でレーン移動を要求する（§4.7 の 0.92秒を使い切る） */
+    floor: [{ at: 12, lane: 1, type: 'BRIDGE' }, { at: 34, lane: 0, type: 'LASER_V' },
+            { at: 48, lane: -1, type: 'ROVER' }],
+    ceil:  [{ at: 12, lane: -1, type: 'GAP' }, { at: 34, lane: 1, type: 'ROVER' },
+            { at: 48, lane: 0, type: 'LASER_LOW' }], events: [] },
+  /* --- 列柱の縫い（両者にレーン移動を要求するウォールを連ねる） ------------
+     PILLAR / LASER_V / LASER_SCAN は both 型＝1本で床と天井の両方に要求が出る。
+     ウォール間隔 6〜8 基準m（0.6〜0.8秒）で §4.7（反応窓0.45・同時要求0.45）を満たしつつ、
+     契約§4.7 の密度（S3 は 6→10回/100m）と §4.3 の比率（レーン50%前後）を作る主役。 */
+  { id: 'r2_weave', zone: 'ruins', lengthM: 56, difficulty: 2, minSpeed: 0, s3: 1, dense: 1,
+    floor: [{ at: 10, lane: -1, type: 'PILLAR' }, { at: 18, lane: 1, type: 'LASER_V' },
+            { at: 26, lane: 0, type: 'PILLAR' }, { at: 34, lane: -1, type: 'LASER_V' },
+            { at: 42, lane: 1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 'r3_weave_a', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 14, lane: -1, type: 'LASER_V' },
+            { at: 20, lane: 1, type: 'PILLAR' }, { at: 26, lane: 0, type: 'LASER_V' },
+            { at: 32, lane: -1, type: 'PILLAR' }, { at: 38, lane: 1, type: 'LASER_V' },
+            { at: 44, lane: 0, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 'r3_weave_b', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, moving: 1, pend: 1,
+    floor: [{ at: 8, lane: 1, type: 'LASER_V' },
+            { at: 15, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0.5 } } },
+            { at: 22, lane: -1, type: 'PILLAR' }, { at: 29, lane: 1, type: 'LASER_V' },
+            { at: 36, lane: 0, type: 'PILLAR' },
+            { at: 43, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0 } } }],
+    ceil: [], events: [] },
+  { id: 'r3_weave_c', zone: 'ruins', lengthM: 60, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
+    /* 縫いのあいだに跳ぶ要求を1つだけ挟む（ジャンプ→レーン移動は 0.92秒空ける） */
+    floor: [{ at: 8, lane: -1, type: 'PILLAR' }, { at: 15, lane: 1, type: 'LASER_V' },
+            { at: 22, lane: 0, type: 'PILLAR' }, { at: 32, lane: 1, type: 'ROVER' },
+            { at: 42, lane: -1, type: 'LASER_V' }, { at: 49, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 32, lane: -1, type: 'ROVER' }], events: [] },
+  /* --- 跳び継ぎ（両者が同時に跳ぶウォールを連ねる） ----------------------
+     ジャンプ連続の下限（着地+0.15秒＝0.70秒）を守った 8基準m 間隔。
+     列柱の縫い（レーン移動）と釣り合わせて §4.3 の比率を作る。 */
+  { id: 'r3_leap_a', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
+    floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 18, lane: -1, type: 'GAP' },
+            { at: 26, lane: 1, type: 'LASER_LOW' }, { at: 34, lane: 0, type: 'ROVER' },
+            { at: 42, lane: -1, type: 'GAP' }],
+    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 18, lane: 0, type: 'LASER_LOW' },
+            { at: 26, lane: -1, type: 'GAP' }, { at: 34, lane: 1, type: 'ROVER' },
+            { at: 42, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r3_leap_b', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1,
+    floor: [{ at: 10, lane: 1, type: 'LASER_LOW' }, { at: 18, lane: 0, type: 'ROVER' },
+            { at: 28, lane: -1, type: 'BRIDGE' }, { at: 44, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 10, lane: -1, type: 'GAP' }, { at: 18, lane: 1, type: 'ROVER' },
+            { at: 28, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'GAP' }], events: [] },
+  { id: 'r3_pend_pair', zone: 'ruins', lengthM: 62, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, moving: 1, pend: 1,
+    floor: [{ at: 12, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0 } } },
+            { at: 34, lane: 0, type: 'ROVER' },
+            { at: 52, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0 } } }],
+    ceil:  [{ at: 23, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'GAP' }], events: [] }
 ];
 
 /* ---------------------------------------------------------------- 導入区間（S1）
@@ -251,7 +377,7 @@ const STAGE_DEFS = {
   S0: {
     id: 'S0', name: '仮ステージ S0', zone: 'neon', lengthM: 900,
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
-    chunkPool: CHUNK_DEFS.filter((c) => !c.moving).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3).map((c) => c.id)
   },
   /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
      冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
@@ -263,7 +389,7 @@ const STAGE_DEFS = {
     /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
        「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
        ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3).map((c) => c.id)
       .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
       .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b'])
   },
@@ -288,17 +414,41 @@ const STAGE_DEFS = {
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
-      .concat(CHUNK_DEFS.filter((c) => c.moving).map((c) => c.id))            // 動くレーザーを厚く
-      .concat(CHUNK_DEFS.filter((c) => c.moving).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.moving && c.difficulty <= 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense).map((c) => c.id))             // 密集チャンク
-      .concat(CHUNK_DEFS.filter((c) => c.dense).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense).map((c) => c.id))
+      /* S3 の顔ぶれ（!c.s3）は混ぜない。ゾーンが変わればギミックも変わる（契約§4.4） */
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3).map((c) => c.id))     // 動くレーザーを厚く
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && c.difficulty <= 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))      // 密集チャンク
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))
+  },
+  /* S3 古代遺跡・外周（契約 §4.4）: 1200m / 22→26 / チェックポイント 400・800 /
+     新ギミック＝崩れる橋・振り子の刃。終盤200mは「巨岩の追跡」。
+     §4.7 の「両者同時要求の余白」は S3 以降 0.45秒。密度は 6→10回/100m。 */
+  S3: {
+    id: 'S3', name: 'S3 古代遺跡・外周', zone: 'ruins', lengthM: 1200,
+    speedFrom: 22, speedTo: 26, minRank: 2, maxRank: 3, setpiece: 'rockchase',
+    density: [6, 10],
+    reactBoth: CFG.FAIR.REACT_BOTH_LATE,
+    /* 新ギミックの初出で短い指示を出す（契約§4.8 チュートリアル） */
+    tipOnce: { bridge: 'bridge', pend: 'pendulum' },
+    /* 顔ぶれ: 遺跡の新チャンクを主役に、ネオンで覚えた基本形（密集・動くレーザー）を混ぜる。
+       遺跡スキンでは動くレーザー＝振り子の刃・火の輪・噴き出す炎に見える（判定は共通）。 */
+    chunkPool: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id)
+      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.bridge).map((c) => c.id))
+      .concat(['c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
+               'd3_duo_a', 'd3_duo_c', 'd3_duo_e', 'd3_duo_f',
+               'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
+               'c3_rot_lean', 'c3_rot_ceil', 'c3_rot_pair', 'c3_scan_rot'])
   },
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving).map((c) => c.id)
+    /* 最初から入っているのは S1 の顔ぶれ（基本セット）だけ。
+       遺跡の新ギミックは S3 をクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3).map((c) => c.id)
   }
 };
 
@@ -306,7 +456,8 @@ const STAGE_DEFS = {
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
   S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
-  S2: CHUNK_DEFS.filter((c) => c.moving || c.wallhole || c.dense).map((c) => c.id)
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3).map((c) => c.id),
+  S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id)        // 崩れる橋・振り子の刃
 };
 function endlessPool(cleared) {
   let pool = STAGE_DEFS.endless.chunkPool.slice();
@@ -423,8 +574,10 @@ const Fair = {
       if (gap < sp * CFG.FAIR.REACT - 1e-6) {
         errs.push('反応窓: ウォール間 ' + gap.toFixed(2) + 'm < ' + (sp * CFG.FAIR.REACT).toFixed(2) + 'm @' + b.at.toFixed(1));
       }
-      if ((a.both || b.both) && gap < sp * CFG.FAIR.REACT_BOTH - 1e-6) {
-        errs.push('同時要求の余白: ' + gap.toFixed(2) + 'm < ' + (sp * CFG.FAIR.REACT_BOTH).toFixed(2) + 'm @' + b.at.toFixed(1));
+      /* 両者同時要求の前後の余白。S1〜S2 は 0.6秒、S3 以降は 0.45秒（契約§4.7） */
+      const rb = (opt.reactBoth === undefined) ? CFG.FAIR.REACT_BOTH : opt.reactBoth;
+      if ((a.both || b.both) && gap < sp * rb - 1e-6) {
+        errs.push('同時要求の余白: ' + gap.toFixed(2) + 'm < ' + (sp * rb).toFixed(2) + 'm @' + b.at.toFixed(1));
       }
     }
 
@@ -511,16 +664,32 @@ const Fair = {
 /* 動くレーザーの周期は「基準速度 REF_SPEED での距離」で書く。チャンクを速度で
    伸縮するのと同じ倍率をかけて、**1往復にかかる秒数を速度によらず一定**にする
    （§4.7 の不変条件が時間基準なのと同じ考え方）。 */
-const MOTION_DEFAULT_PERIOD = { scan: 'SCAN_PERIOD', rot: 'ROT_PERIOD', blink: 'BLINK_PERIOD' };
+/* 速度で伸縮するパラメータ（キー → その中で伸縮する項目と既定値）。
+   崩れる橋の leadM（踏んでから落ちるまでの距離）も同じ仕組みに乗せる＝
+   「0.4秒後に落ちる」が速度によらず一定になる（§4.4 S3 / §4.7）。 */
+const MOTION_SCALE = {
+  scan:   { key: 'periodM', def() { return CFG.LASER.SCAN_PERIOD; } },
+  rot:    { key: 'periodM', def() { return CFG.LASER.ROT_PERIOD; } },
+  blink:  { key: 'periodM', def() { return CFG.LASER.BLINK_PERIOD; } },
+  bridge: { key: 'leadM',   def() { return CFG.REF_SPEED * CFG.BRIDGE.LEAD_T; } }
+};
+/* 崩れる橋は必ず bridge パラメータを持つ（leadM＝踏んでから落ちるまでの距離）。
+   書き忘れても生成時に既定値が入るようにしておく。 */
+function normParams(type, p) {
+  if (type !== 'BRIDGE') return p;
+  if (p && p.bridge) return p;
+  return Object.assign({}, p || {}, { bridge: {} });
+}
 function scaleParams(p, scale) {
   if (!p) return null;
   const out = {};
   Object.keys(p).forEach((k) => {
     const v = p[k];
-    if (v && typeof v === 'object' && MOTION_DEFAULT_PERIOD[k]) {
+    const sc = MOTION_SCALE[k];
+    if (v && typeof v === 'object' && sc) {
       const c = {};
       Object.keys(v).forEach((k2) => { c[k2] = v[k2]; });
-      c.periodM = +(((v.periodM || CFG.LASER[MOTION_DEFAULT_PERIOD[k]]) * scale).toFixed(3));
+      c[sc.key] = +(((v[sc.key] || sc.def()) * scale).toFixed(3));
       out[k] = c;
     } else out[k] = v;
   });
@@ -533,9 +702,10 @@ function chunkStats(def) {
   if (def._stats) return def._stats;
   const items = [];
   const push = (e, surface) => {
+    const pr = scaleParams(normParams(e.type, e.params), 1);
     if (e.type === 'WALLHOLE') {
-      CFG.LANES.forEach((l) => items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, e.at, 0, scaleParams(e.params, 1))));
-    } else items.push(Obstacles.make(e.type, surface, e.lane, e.at, 0, scaleParams(e.params, 1)));
+      CFG.LANES.forEach((l) => items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, e.at, 0, pr)));
+    } else items.push(Obstacles.make(e.type, surface, e.lane, e.at, 0, pr));
   };
   (def.floor || []).forEach((e) => push(e, 'floor'));
   (def.ceil || []).forEach((e) => push(e, 'ceil'));
@@ -553,6 +723,7 @@ function createGenerator(stage, seed) {
   let cursor = CFG.LEAD_IN;     // 次のチャンクを置く距離
   let lastWallhole = false;     // 直前のチャンクが「壁の穴」を含んでいたか（連続禁止）
   let introPtr = 0;             // 導入区間の何番目まで置いたか
+  const tipDone = {};           // 新ギミックの初出 tip を出したか（契約§4.8）
   let setpieceDone = false;     // 終盤の大演出を置いたか
   const spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
     ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
@@ -645,7 +816,7 @@ function createGenerator(stage, seed) {
   /* 定義 → 実体（基準速度からの伸縮つき）
      WALLHOLE は「穴のレーン + 残り2レーンの壁」へ展開する（＝全幅の壁に穴が1つ）。 */
   function put(items, e, surface, at, nowDist, scale) {
-    const params = scaleParams(e.params, scale === undefined ? 1 : scale);
+    const params = scaleParams(normParams(e.type, e.params), scale === undefined ? 1 : scale);
     if (e.type === 'WALLHOLE') {
       CFG.LANES.forEach((l) => {
         items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, at, nowDist, params));
@@ -691,7 +862,7 @@ function createGenerator(stage, seed) {
     const inst = Setpieces.build(stage.setpiece, spStart, nowDist);
     if (!inst) { setpieceDone = true; return false; }
     const tail = out.slice(-8);
-    const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any' });
+    const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any', reactBoth: stage.reactBoth });
     if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
     inst.items.forEach((o) => out.push(o));
     noteItems(inst.items);
@@ -736,12 +907,22 @@ function createGenerator(stage, seed) {
       for (let pad = 0; pad <= 40; pad += 3) {
         const startM = Math.max(cursor - st.firstAt * scale, wantFirst + pad - st.firstAt * scale);
         const inst = instantiate(def, startM, nowDist);
-        const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any' });
+        const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any', reactBoth: stage.reactBoth });
         if (!errs.length) {
           inst.items.forEach((o) => out.push(o));
           noteItems(inst.items);
           noteDemands(inst.items);
           inst.events.forEach((e) => events.push(e));
+          /* 新ギミックの初出に短い指示（契約§4.8）。最初の障害物の 1.8秒手前に出す */
+          if (stage.tipOnce) {
+            Object.keys(stage.tipOnce).forEach((flag) => {
+              if (!def[flag] || tipDone[flag]) return;
+              tipDone[flag] = true;
+              const firstAt = inst.startM + st.firstAt * scale;
+              events.push({ at: Math.max(2, firstAt - stage.speedAt(firstAt) * 1.8),
+                            type: 'tip', params: { id: stage.tipOnce[flag] }, done: false });
+            });
+          }
           log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM,
                      firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
           cursor = Math.max(cursor, inst.startM + st.lastAt * scale);

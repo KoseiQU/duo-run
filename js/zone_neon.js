@@ -1188,6 +1188,28 @@ ZoneNeon.obstacleSkin = {
       box(w * 0.7, 0.06, D * 0.5, Obstacles._emissive('panelWarn', C.warn), 0, 0.04, 0);
       lamp(0.05, C.red, 0, TOP - 0.04, D * 0.2);
 
+    } else if (type === 'BRIDGE') {
+      /* 崩れる橋（S3の顔。ネオン都市では工事用の仮設鉄板橋として彫る）。
+         板は判定の外（踏んでいる間は無害）なので、落ちる様子は place() が動かす。 */
+      x.bridge({
+        pit: Obstacles._material('brgPit', C.pit),
+        deep: Obstacles._emissive('brgDeep', C.red),
+        slab: Obstacles._material('brgSlab', C.body),
+        beam: Obstacles._material('brgBeam', C.steel),
+        edge: Obstacles._emissive('brgEdge', C.warn),
+        post: Obstacles._material('brgPost', C.steel),
+        mark: Obstacles._emissive('brgMark', C.warn)
+      });
+
+    } else if (type === 'SLOWBAND') {
+      /* 減速帯（瓦礫の山）: 死なないが越えないと減速する。危険物と違う色で示す */
+      const TOP = t.y1;
+      box(w, TOP * 0.5, D * 0.8, Obstacles._material('slowPile', C.dark), 0, TOP * 0.25, 0);
+      box(w * 0.72, TOP * 0.86, D * 0.6, Obstacles._material('slowPile2', C.body), 0, TOP * 0.43, 0);
+      [-1, 1].forEach((s) => box(0.22, 0.22, 0.22, Obstacles._material('slowRock', C.steel),
+                                 s * w * 0.3, TOP * 0.8, 0, [0.4, 0.6, 0.3]));
+      box(w, 0.07, D + 0.05, Obstacles._emissive('slowMark', C.cyan), 0, 0.03, 0);
+      box(w * 0.9, 0.06, 0.06, Obstacles._emissive('slowTop', C.cyan), 0, TOP - 0.03, 0);
     }
   },
 
