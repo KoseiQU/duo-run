@@ -25,7 +25,8 @@ const Input = {
   /* --- 自由飛行モード（大ジャンプの滑空 / 契約§4.5 2026-09-21 改訂） --------
      上下分割・1スワイプ1レーンの規則は**滑空中は無効**。画面のどこを触ってもよく、
      ドラッグ量に比例して DUO体が断面を連続的に動く（先に触れた指だけが有効）。
-     感度: 画面幅の 1/3 のドラッグ＝断面の端から端（y も画面高さ基準で同じ比率）。 */
+     感度: 画面幅の **1/4** のドラッグ＝断面の端から端（y は画面高さの 1/4 ＝断面の上下）。
+     2026-09-22 実機評「操作性が悪い」で 1/3 → 1/4（最大速度も 4.0→10 m/s）。 */
   mode: 'lanes',        // 'lanes' | 'free'
   free: { tx: 0, ty: 2, src: null, owner: null, ox: 0, oy: 0, bx: 0, by: 0 },
   /* 自由飛行のキー割当（開発・機械テスト用。どちらの手のキーでも上下左右） */
@@ -138,9 +139,9 @@ const Input = {
   touchMove(id, x, y, tMs, height, width) {
     if (Input.mode === 'free') {
       if (Input.free.owner !== id) return null;
-      /* 画面幅の 1/3 のドラッグ＝断面の端から端（y も画面高さ基準で同じ比率） */
+      /* 画面幅の 1/4 のドラッグ＝断面の端から端（y は画面高さの 1/4 ＝断面の上下） */
       const w = Input._w(width), h = height || (typeof window !== 'undefined' ? window.innerHeight : 812);
-      const sx = (FF.X1 - FF.X0) / (w / 3), sy = (FF.Y1 - FF.Y0) / (h / 3);
+      const sx = (FF.X1 - FF.X0) / (w / 4), sy = (FF.Y1 - FF.Y0) / (h / 4);
       Input.freeAim(U.clamp(Input.free.bx + (x - Input.free.ox) * sx, FF.X0, FF.X1),
                     U.clamp(Input.free.by - (y - Input.free.oy) * sy, FF.Y0, FF.Y1), 'touch');
       return 'free';

@@ -1,9 +1,10 @@
 /* ============================================================================
-   tests/test_p2c.js — P2c（大ジャンプ＝DUO体の自由飛行 ／ エンドレスの加速）
+   tests/test_p2c.js — P2c/P2d（大ジャンプ＝DUO体の自由飛行 ／ エンドレスの加速）
 
-     ・自由飛行の入力: ドラッグ量に比例・最大4.0m/s・断面でクランプ・先の指だけ有効
+     ・自由飛行の入力: ドラッグ量に比例・最大10m/s・感度1/4画面・断面でクランプ
      ・空中の隙間保証（S2の空中配置 50シード）＝ Fair.validateAir
-     ・当たり判定 円 vs 矩形（輪の中は生存・輪の縁は死）
+     ・当たり判定 円 vs 矩形（障害物4種 drones/wires/sign/debris）
+     ・光の輪＝加速アイテム（当たり判定なし・中心通過で2秒 +20%・外しても無害）
      ・合体0.4秒 → 自由飛行 → 着地の強制分離（最寄りレーン）0.3秒
      ・着地後 2.0秒（speed×2.0m）は障害物なし（生成器と Fair の両方で）
      ・中断（リトライ／タイトル）で合体・入力モード・HUD・カメラが完全復元
@@ -50,7 +51,7 @@
      1. 自由飛行の入力 → 位置
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P2c: 自由飛行の入力（ドラッグ比例・最大4.0m/s・断面クランプ・先の指だけ）',
+    name: 'P2d: 自由飛行の入力（ドラッグ比例1/4画面・最大10m/s・断面クランプ・先の指だけ）',
     quick: true,
     run(t) {
       const In = I(), FF = In.FF, Inp = In.Input;
@@ -64,18 +65,23 @@
       const h = app().clientHeight || window.innerHeight;
       t.info('画面 ' + w + '×' + h);
 
+      t.eq(FF.V, 10, '最大速度は 10 m/s（契約§4.5 2026-09-22 改訂）');
+
       if (canSynth) {
-        /* ドラッグ量に比例: 画面幅の 1/3 ＝ 断面の端から端（3.6m） */
+        /* ドラッグ量に比例: 画面幅の 1/4 ＝ 断面の端から端（3.6m） */
         const x0 = FF.body.x, y0 = FF.body.y;
         fire('touchstart', [mk(11, w / 2, h / 2)]);
-        fire('touchmove', [mk(11, w / 2 + w / 6, h / 2)]);
+        fire('touchmove', [mk(11, w / 2 + w / 8, h / 2)]);
         t.near(Inp.free.tx, In.U.clamp(x0 + (FF.X1 - FF.X0) / 2, FF.X0, FF.X1), 1e-6,
-               '画面幅 1/6 のドラッグ＝断面の半分（1.8m）だけ目標が動く');
+               '画面幅 1/8 のドラッグ＝断面の半分（1.8m）だけ目標が動く');
         t.near(Inp.free.ty, y0, 1e-6, '横だけ動かしたら y の目標は変わらない');
         /* 上へドラッグ＝断面では上（画面の y は下向き） */
-        fire('touchmove', [mk(11, w / 2 + w / 6, h / 2 - h / 6)]);
+        fire('touchmove', [mk(11, w / 2 + w / 8, h / 2 - h / 8)]);
         t.near(Inp.free.ty, In.U.clamp(y0 + (FF.Y1 - FF.Y0) / 2, FF.Y0, FF.Y1), 1e-6,
-               '画面高さ 1/6 の上ドラッグ＝断面の半分（1.4m）上がる');
+               '画面高さ 1/8 の上ドラッグ＝断面の半分（1.4m）上がる');
+        /* 画面幅 1/4 ＝ 端から端（中央から振り切れば必ず端に届く） */
+        fire('touchmove', [mk(11, w / 2 + w / 4, h / 2 - h / 8)]);
+        t.near(Inp.free.tx, FF.X1, 1e-6, '画面幅 1/4 のドラッグで断面の端（+1.8）まで届く');
 
         /* 2本目の指は無視（先に触れた指だけが有効） */
         const tx = Inp.free.tx;
@@ -84,14 +90,16 @@
         t.near(Inp.free.tx, tx, 1e-6, '2本目の指の動きは無視される');
         fire('touchend', [mk(12, w * 0.2, h * 0.8)]);
 
-        /* 最大速度 4.0 m/s（各軸・慣性なし） */
+        /* 最大速度 10 m/s（各軸・慣性なし） */
+        fire('touchmove', [mk(11, w / 2 + w / 8, h / 2 - h / 8)]);
         let maxStep = 0, prev = { x: FF.body.x, y: FF.body.y };
         for (let i = 0; i < 40; i++) {
           DUO.__step(1 / 60);
           maxStep = Math.max(maxStep, Math.abs(FF.body.x - prev.x) * 60, Math.abs(FF.body.y - prev.y) * 60);
           prev = { x: FF.body.x, y: FF.body.y };
         }
-        t.ok(maxStep <= FF.V + 1e-6, '1フレームあたりの速さ ' + maxStep.toFixed(3) + ' m/s ≤ 4.0');
+        t.ok(maxStep <= FF.V + 1e-6, '1フレームあたりの速さ ' + maxStep.toFixed(3) + ' m/s ≤ 10');
+        t.ok(maxStep > 4.0 + 1e-6, '旧仕様(4.0)より速い＝改訂が効いている（' + maxStep.toFixed(2) + ' m/s）');
         t.near(FF.body.x, Inp.free.tx, 1e-6, '指の位置に追いついている（慣性なし）');
         t.near(FF.body.y, Inp.free.ty, 1e-6, '縦も指の位置に追いつく');
 
@@ -151,12 +159,13 @@
      2. 空中の隙間保証（S2 の空中配置・シード固定・50シード）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P2c: 空中の隙間が必ず存在し最大速度で届く（S2 50シード / Fair.validateAir）',
+    name: 'P2d: 空中の隙間が必ず存在し10m/sで届く／壁は4種・輪は保証と無関係（S2 50シード）',
     quick: true,
     run(t) {
       const In = I(), FF = In.FF, Sp = In.Setpieces;
       const st = In.makeStage('S2');
       let bad = 0, walls = 0, minWalls = 99, firstErr = '';
+      let rings = 0, minRings = 99, ringBad = 0, segBad = 0;
       const kinds = {};
       for (let seed = 1; seed <= 50; seed++) {
         const c = Sp.buildAir(seed, 1000, st.speedAt);
@@ -170,26 +179,52 @@
         c.items.forEach((it) => {
           if (it.at <= c.launchM || it.at >= c.landM) bad++;
         });
+        /* 光の輪: 壁と壁の間に 1〜2個・断面の中・発射〜着地の間 */
+        rings += c.rings.length;
+        minRings = Math.min(minRings, c.rings.length);
+        c.rings.forEach((r) => {
+          if (r.at <= c.launchM || r.at >= c.landM) ringBad++;
+          if (r.x < FF.X0 || r.x > FF.X1 || r.y < FF.Y0 || r.y > FF.Y1) ringBad++;
+          if (r.taken || r.missed) ringBad++;
+        });
+        for (let i = 1; i < c.items.length; i++) {
+          const n = c.rings.filter((r) => r.at > c.items[i - 1].at && r.at < c.items[i].at).length;
+          if (n < FF.RING_N0 || n > FF.RING_N1) segBad++;
+        }
       }
       t.eq(bad, 0, '50シードとも空中の不変条件を満たす（' + firstErr + '）');
-      t.ok(minWalls >= 3, '1回の滑空に空中の壁が ' + minWalls + '本以上（平均 ' + (walls / 50).toFixed(1) + '本）');
-      t.ok(Object.keys(kinds).length === 4,
-           '4種類すべてが出る（' + Object.keys(kinds).map((k) => k + ':' + kinds[k]).join(' ') + '）');
-      t.ok((kinds.ring || 0) >= 25, '光の輪が十分な頻度で出る（' + (kinds.ring || 0) + '個/50シード）');
+      const avg = walls / 50;
+      t.ok(minWalls >= 5, '1回の滑空に空中の壁が ' + minWalls + '本以上');
+      t.ok(avg >= 6.8 && avg <= 8.2, '壁の本数は平均 ' + avg.toFixed(1) + '本（速度10に合わせて7〜8本）');
+      t.eq(Object.keys(kinds).length, 4,
+           '障害物は4種類（' + Object.keys(kinds).map((k) => k + ':' + kinds[k]).join(' ') + '）');
+      t.eq(FF.KINDS.indexOf('ring'), -1, '光の輪は障害物の種類から外れている（契約§4.5 2026-09-22）');
+      t.eq((kinds.ring || 0), 0, '輪が壁として生成されることはない');
+      t.ok(!!kinds.debris, '新しい「瓦礫の塊」が出る（' + (kinds.debris || 0) + '本/50シード）');
+      t.eq(ringBad, 0, '輪はすべて断面の中・発射〜着地の間にある');
+      t.eq(segBad, 0, '輪は壁と壁の間に 1〜2個ずつ置かれる');
+      t.ok(minRings >= 1, '輪が1個も無い滑空は無い（平均 ' + (rings / 50).toFixed(1) + '個）');
+      /* 輪は隙間の保証に一切関与しない（外しても増やしても検査は同じ） */
+      const cc = Sp.buildAir(17, 1000, st.speedAt);
+      const e0 = In.Fair.validateAir(cc, st.speedAt, { margin: true }).length;
+      cc.rings = [];
+      t.eq(In.Fair.validateAir(cc, st.speedAt, { margin: true }).length, e0,
+           '輪を全部外しても隙間保証の結果は変わらない（＝輪は避けなくてよい）');
 
       /* 同じシードなら同じ譜面（シード固定） */
       const a = Sp.buildAir(7, 1000, st.speedAt), b = Sp.buildAir(7, 1000, st.speedAt);
       t.eq(JSON.stringify(a.items.map((x) => [x.at, x.kind, x.gap.x, x.gap.y])),
            JSON.stringify(b.items.map((x) => [x.at, x.kind, x.gap.x, x.gap.y])), '同じシードなら同じ空中配置');
 
-      /* 検査そのものが働くか（わざと届かない隙間を作る） */
+      /* 検査そのものが働くか（10m/s でも届かない間隔で対角へ飛ばす） */
+      const wall = (at, x, y) => {
+        const g = { x: x, y: y, hw: FF.HOLE, hh: FF.HOLE, openX: false, openY: false };
+        return { at: at, kind: 'sign', gap: g, rects: FF.rects(g), view: null };
+      };
       const bad2 = Sp.buildAir(3, 1000, st.speedAt);
-      bad2.items[0].gap.x = FF.X1;
-      bad2.items[0].gap.y = FF.Y1;
-      bad2.items[1].gap.x = FF.X0;
-      bad2.items[1].gap.y = FF.Y0;
-      bad2.items[1].gap.openX = false; bad2.items[1].gap.openY = false;
-      bad2.items[1].rects = FF.rects(bad2.items[1].gap);
+      bad2.items = [wall(bad2.launchM + 2, FF.X1 - FF.EDGE, FF.Y1 - FF.EDGE),
+                    wall(bad2.launchM + 4, FF.X0 + FF.EDGE, FF.Y0 + FF.EDGE)];
+      bad2.rings = [];
       t.ok(In.Fair.validateAir(bad2, st.speedAt).length > 0, '届かない隙間は検査で弾ける');
 
       /* ゾーン非依存（S8・エンドレスのミニ版でもそのまま使える）。
@@ -211,17 +246,17 @@
      3. 当たり判定（円 vs 矩形）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P2c: 空中の当たり判定は円 vs 矩形（輪の中は生存・輪の縁は死）',
+    name: 'P2d: 空中の当たり判定は円 vs 矩形（障害物4種・穴の中は生存・縁は死）',
     quick: true,
     run(t) {
       const In = I(), FF = In.FF;
-      const ring = (x, y) => {
+      const hole = (kind, x, y) => {
         const gap = { x: x, y: y, hw: FF.HOLE, hh: FF.HOLE, openX: false, openY: false };
-        return { at: 100, kind: 'ring', gap: gap, rects: FF.rects(gap) };
+        return { at: 100, kind: kind, gap: gap, rects: FF.rects(gap) };
       };
-      const it = ring(0, 2);
-      t.eq(it.rects.length, 4, '輪は上下左右の4枚で断面を塞ぐ（通れるのは輪の中だけ）');
-      t.eq(FF.passable(0, 2, it), true, '輪の中心は通れる');
+      const it = hole('sign', 0, 2);
+      t.eq(it.rects.length, 4, '穴あきの壁は上下左右の4枚で断面を塞ぐ');
+      t.eq(FF.passable(0, 2, it), true, '穴の中心は通れる');
       const edge = FF.HOLE - FF.R;             // ここまでが通れる（円がちょうど縁に触れる）
       t.eq(FF.passable(edge - 0.02, 2, it), true, '縁の内側（' + (edge - 0.02).toFixed(2) + '）は通れる');
       t.eq(FF.passable(edge + 0.05, 2, it), false, '縁に掛かると死ぬ（' + (edge + 0.05).toFixed(2) + '）');
@@ -237,24 +272,107 @@
       t.eq(slot.rects.length, 2, '電線の束は上下2枚（横帯が空く）');
       t.eq(FF.passable(FF.X0, 2, slot), true, '横帯は端まで通れる');
       t.eq(FF.passable(0, 2 + FF.SLOT - FF.R + 0.06, slot), false, '帯の外に出ると死ぬ');
+      /* 瓦礫の塊（新種）も同じ規則で判定される */
+      const deb = hole('debris', 0.4, 2.2);
+      t.eq(deb.rects.length, 4, '瓦礫の塊も4枚で塞ぐ');
+      t.eq(FF.passable(0.4, 2.2, deb), true, '瓦礫の穴の中心は通れる');
+      t.eq(FF.passable(0.4 + FF.HOLE, 2.2, deb), false, '瓦礫の縁に掛かると死ぬ');
 
-      /* 実際の走行で「輪の中なら生存・縁なら死」になるか（実ステップで跨ぐ） */
-      const run = (dx) => {
+      /* 実際の走行で「穴の中なら生存・縁なら死」になるか（実ステップで跨ぐ） */
+      const run = (dx, kind) => {
         toGlide(5, false);
         DUO.bot(null);
         const at = Game.dist + Game.speed * 1.2;
         const g = { x: 0, y: 2, hw: FF.HOLE, hh: FF.HOLE, openX: false, openY: false };
-        FF.setItems([{ at: at, kind: 'ring', gap: g, rects: FF.rects(g), view: null }]);
+        FF.setItems([{ at: at, kind: kind || 'sign', gap: g, rects: FF.rects(g), view: null }]);
         FF.body.x = dx; FF.body.y = 2;
         In.Input.freeAim(dx, 2, 'test');
         let guard = 0;
         while (Game.dist < at + 2 && guard++ < 600) DUO.__step(1 / 60);
         return Game.status;
       };
-      t.eq(run(0), 'playing', '輪の中を通れば生き残る');
-      t.ok(run(FF.HOLE + 0.2) !== 'playing', '輪の縁にぶつかると死ぬ');
-      t.eq(Game.killer && Game.killer.obstacle, 'AIR_ring', '死因は空中の輪（' + (Game.killer && Game.killer.obstacle) + '）');
+      t.eq(run(0), 'playing', '穴の中を通れば生き残る');
+      t.ok(run(FF.HOLE + 0.2) !== 'playing', '穴の縁にぶつかると死ぬ');
+      t.eq(Game.killer && Game.killer.obstacle, 'AIR_sign', '死因は空中の看板（' + (Game.killer && Game.killer.obstacle) + '）');
+      t.ok(run(FF.HOLE + 0.2, 'debris') !== 'playing', '瓦礫の塊でも死ぬ');
+      t.eq(Game.killer && Game.killer.obstacle, 'AIR_debris', '死因は空中の瓦礫（' + (Game.killer && Game.killer.obstacle) + '）');
       DUO.reset();
+    }
+  });
+
+  /* ==========================================================================
+     3.5 光の輪＝加速アイテム（契約§4.5 2026-09-22 / P2d）
+     ========================================================================== */
+  DUO.__suites.push({
+    name: 'P2d: 光の輪は当たり判定なし・中心通過で2秒 +20%・外すと何も起きない',
+    quick: true,
+    run(t) {
+      const In = I(), FF = In.FF;
+      const ring = (at, x, y) => ({ at: at, x: x, y: y, kind: '_ring',
+                                    taken: false, missed: false, view: null });
+      /* 輪を1個だけ置いて、x をずらしながらくぐる */
+      const pass = (dx) => {
+        toGlide(5, true);
+        DUO.bot(null);
+        const at = Game.dist + Game.speed * 1.0;
+        FF.setItems([], [ring(at, 0, 2)]);
+        FF.body.x = dx; FF.body.y = 2;
+        In.Input.freeAim(dx, 2, 'test');
+        let guard = 0;
+        while (Game.dist < at + 1.5 && guard++ < 600) DUO.__step(1 / 60);
+        return { status: Game.status, boost: FF.boostT, n: FF.boostN,
+                 taken: FF.course.rings[0].taken, missed: FF.course.rings[0].missed };
+      };
+      const hit = pass(0);
+      t.eq(hit.status, 'playing', '輪の中心を通っても死なない');
+      t.eq(hit.taken, true, '中心を通ると輪を取る');
+      t.eq(hit.n, 1, 'ブーストが1回発生する');
+      t.ok(hit.boost > FF.BOOST_T - 0.5, 'ブーストの残りは約2秒（' + hit.boost.toFixed(2) + '秒）');
+
+      const edge = pass(FF.RING_CATCH - 0.05);
+      t.eq(edge.taken, true, '判定の内側（' + (FF.RING_CATCH - 0.05).toFixed(2) + 'm）なら取れる');
+
+      const miss = pass(FF.RING_CATCH + 0.35);
+      t.eq(miss.status, 'playing', '輪を外しても死なない（当たり判定が無い）');
+      t.eq(miss.taken, false, '外した輪は取れていない');
+      t.eq(miss.missed, true, '外した輪は「外した」として閉じる');
+      t.eq(miss.n, 0, '外すと何も起きない（ブーストなし）');
+
+      /* 2秒で解除される */
+      pass(0);
+      let g = 0;
+      while (FF.boostT > 0 && g++ < 600) DUO.__step(1 / 60);
+      t.eq(FF.boostT, 0, 'ブーストは時間で解除される');
+      t.ok(g / 60 < FF.BOOST_T + 0.2, '解除までおよそ2秒（' + (g / 60).toFixed(2) + '秒）');
+
+      /* 効果: 滑空中の前進距離が +20%（既知の妥協点: Game.speed 自体には乗せていない） */
+      toGlide(5, true);
+      DUO.bot(null);
+      FF.setItems([], []);
+      const d0 = Game.dist;
+      for (let i = 0; i < 30; i++) DUO.__step(1 / 60);
+      const plain = Game.dist - d0;
+      FF.boost();
+      const d1 = Game.dist;
+      for (let i = 0; i < 30; i++) DUO.__step(1 / 60);
+      const fast = Game.dist - d1;
+      const k = fast / plain;
+      t.ok(k > 1.17 && k < 1.23, 'ブースト中は前進が ' + ((k - 1) * 100).toFixed(1) + '% 速い（+20%）');
+      t.near(FF.boostK(), 1 + FF.BOOST_K, 1e-9, 'FF.boostK() が倍率を返す（速度経路が読む窓口）');
+
+      /* 演出の DOM は freeflight.js が作って壊す（hud.js / index.html には無い） */
+      toGlide(5, true);
+      DUO.bot(null);
+      t.ok(!!document.getElementById('ff-boost'), '滑空に入るとブーストの器ができる');
+      FF.boost();
+      DUO.__step(1 / 60);
+      t.ok(parseFloat(document.getElementById('ff-boost').style.opacity) > 0.5,
+           'ブースト中は画面端のフラッシュが出る');
+      t.ok(document.getElementById('ff-boost').textContent.indexOf('BOOST!') >= 0, '「BOOST!」が出る');
+      DUO.reset();
+      t.eq(document.getElementById('ff-boost'), null, '滑空が終わると演出の DOM は残らない');
+      t.eq(document.getElementById('ff-boost-style'), null, '注入した CSS も残らない');
+      t.eq(FF.boostT, 0, 'ブーストも残らない');
     }
   });
 
@@ -354,7 +472,11 @@
       toGlide(9, false, true);
       t.eq(DUO.state().duo.on, true, '滑空に入った');
       t.eq(FF.view.root.visible, true, '空中の障害物が描かれている');
+      FF.boost();
+      t.ok(!!document.getElementById('ff-boost'), 'ブーストの演出 DOM が出ている');
       Game.retry();
+      t.eq(document.getElementById('ff-boost'), null, 'リトライでブーストの DOM が片付く');
+      t.eq(FF.boostT, 0, 'リトライでブーストが切れる');
       t.eq(DUO.state().duo.on, false, 'リトライで自由飛行が解除される');
       t.eq(DUO.state().inputMode, 'lanes', 'リトライで入力モードが戻る');
       t.eq(DUO.state().duoK, 0, 'リトライで合体が解ける');

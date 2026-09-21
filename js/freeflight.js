@@ -1,6 +1,6 @@
 /* ============================================================================
    DUO RUN — freeflight.js  大ジャンプの自由飛行（契約 §4.5「大ジャンプ共通仕様」
-   2026-09-21 全面改訂 / P2c）
+   2026-09-21 全面改訂 / P2c、2026-09-22 操作性改訂 / P2d）
 
    ■ 何をするモジュールか
    - 発射台で2人が手を繋いで1体になった **DUO体**（半径 R=0.45）の、
@@ -17,9 +17,16 @@
      ＝ 帯状のスリットも「中心へ向かえば必ず通れる」規則1つで扱える。
 
    ■ 公平性（契約§4.5 の断面2D版）
-     隙間の中心までの距離 ≤ V(4.0 m/s) × 到達までの秒数。
+     隙間の中心までの距離 ≤ V(10 m/s) × 到達までの秒数。
      生成時はさらに REACT(0.35秒) の余裕を引いた予算で隙間を置く
      （0.25秒遅れのボット＝ delay250 でも間に合う）。
+     さらに **ブースト中（+20%）でも間に合う**ように、予算の秒数を 1/(1+BOOST_K)
+     に縮めてから引く（加速は任意＝取った人が損をしないための安全側）。
+
+   ■ 光の輪＝加速アイテム（契約§4.5 2026-09-22 改訂 / P2d）
+   - 輪は**障害物ではない**（当たり判定なし）。中心から RING_CATCH 以内で
+     くぐると BOOST_T(2.0秒) のあいだ +BOOST_K(20%)。外しても何も起きない。
+   - 壁（items）とは別の配列 course.rings に持つ。隙間保証には一切関与しない。
    ============================================================================ */
 'use strict';
 
@@ -27,7 +34,7 @@ const FF = {
   /* ---- 断面と体（契約§4.5） --------------------------------------------- */
   X0: -1.8, X1: 1.8, Y0: 0.6, Y1: 3.4,
   R: 0.45,              // DUO体の半径
-  V: 4.0,               // 最大速度（x,y 各軸 m/s）慣性なし
+  V: 10.0,              // 最大速度（x,y 各軸 m/s）慣性なし（2026-09-22 実機評で 4.0→10）
   DEPTH: 0.6,           // 空中の障害物の奥行き（m）
   HOLE: 0.85,           // 輪・看板の「穴」の半径（R + 0.40 の余裕）
   SLOT: 0.95,           // 帯状スリットの半幅（R + 0.50 の余裕）
@@ -39,7 +46,9 @@ const FF = {
   /* ---- 譜面の間合い（秒。速度で伸縮する＝§4.7 と同じ考え方） ------------- */
   FIRST_T: 0.90,        // 発射から最初の壁まで
   LAST_T: 0.70,         // 最後の壁から着地まで
-  GAP_T0: 0.78, GAP_T1: 0.98,   // 壁と壁の間
+  /* 壁と壁の間（秒）。速度が 4→10 になったぶん詰めて、同じ密度感（1回の滑空で
+     平均5.6本 → 7本）にする。これ以上詰めると REACT(0.35秒) が効いて予算が枯れる。 */
+  GAP_T0: 0.58, GAP_T1: 0.75,
 
   /* ---- 演出の長さ（契約§4.5） ------------------------------------------- */
   MERGE_T: 0.40,        // 合体演出（秒）
@@ -47,19 +56,36 @@ const FF = {
   GRACE_T: 2.00,        // 着地後 障害物なし（秒）
   PAIR_DX: 0.36,        // DUO体の2人の間隔（手が中央で触れる）
 
-  KINDS: ['ring', 'drones', 'wires', 'sign'],
+  /* 空中の障害物は4種（契約§4.5 2026-09-22: 光の輪は障害物から外れた） */
+  KINDS: ['drones', 'wires', 'sign', 'debris'],
+
+  /* ---- 光の輪＝加速アイテム（契約§4.5 2026-09-22 改訂） ------------------ */
+  BOOST_K: 0.20,        // くぐると +20%
+  BOOST_T: 2.00,        // 効いている長さ（秒）
+  RING_CATCH: 0.85,     // 輪の中心からこの距離以内を通れば取得（HOLE 相当）
+  RING_VIEW: 1.00,      // 輪の見た目の半径（判定より少し大きく見せる）
+  RING_N0: 1, RING_N1: 2,   // 壁と壁の間に置く個数
+  RING_OFF0: 0.70, RING_OFF1: 1.60,  // 通り道からどれだけ外すか（寄り道させる）
 
   /* ---- ランタイム -------------------------------------------------------- */
-  course: null,         // { items:[...], launchM, landM, entry:{x,y} }
+  course: null,         // { items:[...], rings:[...], launchM, landM, entry:{x,y} }
   on: false,            // 自由飛行中か
   body: { x: 0, y: 2.0 },
   hit: null,            // 直近に当たった壁（テスト用）
+  boostT: 0,            // ブーストの残り（秒）
+  boostN: 0,            // この滑空で取った輪の数（テスト・演出用）
+  fx: null,             // ブーストの DOM（滑空中だけ存在する）
 
   cxDefault() { return 0; },
   cyDefault() { return (FF.Y0 + FF.Y1) / 2; },
   clampX(v) { return U.clamp(v, FF.X0, FF.X1); },
   clampY(v) { return U.clamp(v, FF.Y0, FF.Y1); },
   active() { return FF.on; },
+  /* ブーストの倍率（1.0 / 1.2）。速度経路を持つ側が読むための唯一の窓口。 */
+  boostK() { return FF.boostT > 0 ? (1 + FF.BOOST_K) : 1; },
+  boosting() { return FF.boostT > 0; },
+  /* 見た目だけの決定論的な擬似乱数（瓦礫の散らし方などに使う。状態を持たない） */
+  _h(i, s) { const v = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return v - Math.floor(v); },
 
   /* ==========================================================================
      生成（シード固定）
@@ -111,7 +137,8 @@ const FF = {
     let guard = 0;
     while (at <= last && guard++ < 40) {
       const s = sp(at);
-      const dt = (at - prevAt) / s;
+      /* ブースト（+20%）を取っていても間に合う秒数で予算を組む（安全側 / P2d） */
+      const dt = (at - prevAt) / (s * (1 + FF.BOOST_K));
       const budget = Math.max(0.25, FF.V * (dt - FF.REACT));
       const kind = FF.KINDS[(rng() * FF.KINDS.length) | 0];
       const openX = (kind === 'wires');     // 横帯＝上下だけ動く
@@ -129,7 +156,35 @@ const FF = {
       prevAt = at;
       at += s * (FF.GAP_T0 + rng() * (FF.GAP_T1 - FF.GAP_T0));
     }
-    return { items: items, launchM: launchM, landM: landM, entry: entry, seed: seed };
+    const rings = FF._rings(rng, items, entry);
+    return { items: items, rings: rings, launchM: launchM, landM: landM, entry: entry, seed: seed };
+  },
+
+  /* 光の輪（加速アイテム）を壁と壁の間に 1〜2個。
+     隙間の保証とは無関係（避ける必要がない＝当たり判定を持たない）。
+     通り道（前の隙間→次の隙間）から少し外して置く＝寄り道すると速くなる。 */
+  _rings(rng, items, entry) {
+    const out = [];
+    const rx0 = FF.X0 + FF.EDGE, rx1 = FF.X1 - FF.EDGE;
+    const ry0 = FF.Y0 + FF.EDGE, ry1 = FF.Y1 - FF.EDGE;
+    for (let i = 1; i < items.length; i++) {
+      const a = items[i - 1], b = items[i];
+      const ax = a.gap.openX ? entry.x : a.gap.x, ay = a.gap.openY ? entry.y : a.gap.y;
+      const bx = b.gap.openX ? ax : b.gap.x, by = b.gap.openY ? ay : b.gap.y;
+      const n = FF.RING_N0 + ((rng() < 0.5) ? 0 : (FF.RING_N1 - FF.RING_N0));
+      for (let k = 0; k < n; k++) {
+        const u = (k + 1) / (n + 1);
+        const ang = rng() * Math.PI * 2;
+        const off = FF.RING_OFF0 + rng() * (FF.RING_OFF1 - FF.RING_OFF0);
+        out.push({
+          at: a.at + (b.at - a.at) * u,
+          x: U.clamp(ax + (bx - ax) * u + Math.cos(ang) * off, rx0, rx1),
+          y: U.clamp(ay + (by - ay) * u + Math.sin(ang) * off, ry0, ry1),
+          kind: '_ring', taken: false, missed: false, view: null
+        });
+      }
+    }
+    return out;
   },
 
   /* ==========================================================================
@@ -158,13 +213,18 @@ const FF = {
     FF.course = course;
     FF.on = true;
     FF.hit = null;
+    FF.boostT = 0;
+    FF.boostN = 0;
     FF.body.x = (x === undefined) ? FF.cxDefault() : FF.clampX(x);
     FF.body.y = (y === undefined) ? FF.cyDefault() : FF.clampY(y);
+    FF._fxEnsure();
     Input.setMode('free', FF.body.x, FF.body.y);
     return true;
   },
   end() {
     FF.on = false;
+    FF.boostT = 0;
+    FF._fxDestroy();                // ブーストの DOM は滑空中だけ存在する
     Input.setMode('lanes');
     return true;
   },
@@ -173,6 +233,9 @@ const FF = {
     FF._hideView();                 // 先に見た目をプールへ返す（course を参照するため）
     FF.course = null;
     FF.hit = null;
+    FF.boostT = 0;
+    FF.boostN = 0;
+    FF._fxDestroy();
     FF.body.x = FF.cxDefault();
     FF.body.y = FF.cyDefault();
     if (typeof Input !== 'undefined') Input.setMode('lanes');
@@ -191,11 +254,53 @@ const FF = {
     const m = FF.V * dt;
     FF.body.x = FF.clampX(FF.body.x + U.clamp(Input.free.tx - FF.body.x, -m, m));
     FF.body.y = FF.clampY(FF.body.y + U.clamp(Input.free.ty - FF.body.y, -m, m));
+    FF._boostStep(dt);
+  },
+
+  /* ---- ブースト（光の輪をくぐった 2秒間 +20% / 契約§4.5 2026-09-22） -------
+     【既知の妥協点】core.js / setpieces.js は並行レーンの担当で触れないため、
+     Game.speed そのものには乗せていない。効果は「滑空中の前進距離を +20%」＝
+     この関数が Game.dist を上乗せする形で出している（見た目・体感は同じ。
+     HUD の m/s 表示とボットの判断は素の速度のまま）。速度経路を持つ側が
+     `FF.boostK()` を 1行掛けるだけで本来の形へ寄せられる。 */
+  _boostStep(dt) {
+    if (FF.boostT <= 0) { FF._fxSync(); return; }
+    const used = Math.min(dt, FF.boostT);
+    FF.boostT = Math.max(0, FF.boostT - dt);
+    if (typeof Game !== 'undefined' && Game.status === 'playing') {
+      Game.dist += Game.speed * used * FF.BOOST_K;
+    }
+    FF._fxSync();
+  },
+  boost() {
+    FF.boostT = FF.BOOST_T;
+    FF.boostN++;
+    FF._fxPop();
+    return FF.boostT;
+  },
+  /* prevDist〜dist の間に跨いだ輪を取る（当たり判定は持たない＝外しても何も起きない） */
+  catchRings(prevDist, dist) {
+    const rs = FF.course && FF.course.rings;
+    if (!rs || !rs.length) return null;
+    let got = null;
+    for (let i = 0; i < rs.length; i++) {
+      const r = rs[i];
+      if (r.taken || r.missed) continue;
+      if (dist < r.at || prevDist > r.at) continue;      // まだ／もう跨いだ
+      const dx = FF.body.x - r.x, dy = FF.body.y - r.y;
+      if (dx * dx + dy * dy <= FF.RING_CATCH * FF.RING_CATCH) {
+        r.taken = true; got = r; FF.boost();
+      } else {
+        r.missed = true;                                  // 外した＝何も起きない
+      }
+    }
+    return got;
   },
 
   /* prevDist〜dist の間に跨いだ壁だけを見る（高速でも擦り抜けない） */
   collide(prevDist, dist) {
     if (!FF.on || !FF.course) return null;
+    FF.catchRings(prevDist, dist);
     const D = FF.DEPTH / 2;
     const items = FF.course.items;
     for (let i = 0; i < items.length; i++) {
@@ -238,8 +343,71 @@ const FF = {
       on: FF.on,
       x: +FF.body.x.toFixed(3), y: +FF.body.y.toFixed(3),
       tx: +Input.free.tx.toFixed(3), ty: +Input.free.ty.toFixed(3),
-      walls: FF.course ? FF.course.items.length : 0
+      walls: FF.course ? FF.course.items.length : 0,
+      rings: FF.course && FF.course.rings ? FF.course.rings.length : 0,
+      boost: +FF.boostT.toFixed(3), boostN: FF.boostN
     };
+  },
+
+  /* ==========================================================================
+     ブーストの画面演出（このファイルだけで作って壊す＝hud.js / index.html に触れない）
+     ========================================================================== */
+  FX_CSS:
+    '#ff-boost{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;' +
+      'opacity:0;z-index:9;}' +   /* 濃さは毎フレーム JS で決める（transition は使わない） */
+    '#ff-boost i{position:absolute;display:block;}' +
+    '#ff-boost .l{left:0;top:0;bottom:0;width:22%;' +
+      'background:linear-gradient(90deg,rgba(255,206,110,.42),rgba(255,206,110,0));}' +
+    '#ff-boost .r{right:0;top:0;bottom:0;width:22%;' +
+      'background:linear-gradient(270deg,rgba(255,206,110,.42),rgba(255,206,110,0));}' +
+    '#ff-boost .t{left:0;right:0;top:0;height:14%;' +
+      'background:linear-gradient(180deg,rgba(120,228,255,.32),rgba(120,228,255,0));}' +
+    '#ff-boost .b{left:0;right:0;bottom:0;height:14%;' +
+      'background:linear-gradient(0deg,rgba(120,228,255,.32),rgba(120,228,255,0));}' +
+    '#ff-boost .w{position:absolute;left:50%;top:70%;transform:translate(-50%,-50%);' +
+      'font-size:clamp(24px,min(8vw,10vh),52px);font-weight:900;letter-spacing:.22em;' +
+      'color:#ffeec4;text-shadow:0 0 18px rgba(255,190,90,.9),0 0 48px rgba(255,140,40,.6);}' +
+    '#ff-boost.pop .w{animation:ffbPop .55s ease-out;}' +
+    '@keyframes ffbPop{from{transform:translate(-50%,-50%) scale(.55);opacity:0;}' +
+      '35%{opacity:1;}to{transform:translate(-50%,-50%) scale(1.14);opacity:1;}}',
+
+  _fxEnsure() {
+    if (FF.fx || typeof document === 'undefined' || !document.body) return FF.fx;
+    const host = document.getElementById('app') || document.body;
+    const style = document.createElement('style');
+    style.id = 'ff-boost-style';
+    style.textContent = FF.FX_CSS;
+    document.head.appendChild(style);
+    const root = document.createElement('div');
+    root.id = 'ff-boost';
+    root.innerHTML = '<i class="l"></i><i class="r"></i><i class="t"></i><i class="b"></i>' +
+                     '<div class="w">BOOST!</div>';
+    host.appendChild(root);
+    FF.fx = { root: root, style: style };
+    return FF.fx;
+  },
+  _fxDestroy() {
+    if (!FF.fx) return false;
+    if (FF.fx.root.parentNode) FF.fx.root.parentNode.removeChild(FF.fx.root);
+    if (FF.fx.style.parentNode) FF.fx.style.parentNode.removeChild(FF.fx.style);
+    FF.fx = null;
+    return true;
+  },
+  _fxPop() {
+    const fx = FF._fxEnsure();
+    if (!fx) return;
+    fx.root.classList.remove('pop');
+    void fx.root.offsetWidth;          // アニメを取り直す
+    fx.root.classList.add('pop');
+  },
+  _fxSync() {
+    const fx = FF.fx;
+    if (!fx) return;
+    /* 残り時間で濃さを決める（切れる 0.35秒前から抜ける）＋軽い明滅 */
+    const u = U.clamp(FF.boostT / 0.35, 0, 1);
+    const flick = 0.86 + 0.14 * Math.sin(FF.boostT * 26);
+    fx.root.style.opacity = (u * flick).toFixed(3);
+    if (FF.boostT <= 0) fx.root.classList.remove('pop');
   },
 
   /* ==========================================================================
@@ -253,7 +421,8 @@ const FF = {
   SKIN: {
     id: 'default',
     COL: { field: 0x6f8cff, ring: 0xffd479, ring2: 0x38e2ff, board: 0x2a3060,
-           edge: 0xff8a1e, cable: 0x4a5490, spark: 0x38e2ff, drone: 0xb9c2e4, ad: 0xff3ad0 }
+           edge: 0xff8a1e, cable: 0x4a5490, spark: 0x38e2ff, drone: 0xb9c2e4, ad: 0xff3ad0,
+           rock: 0x6e74a0 }
   },
 
   initView(scene) {
@@ -272,7 +441,12 @@ const FF = {
       spark: new THREE.MeshBasicMaterial({ color: C.spark, fog: true }),
       drone: new THREE.MeshLambertMaterial({ color: C.drone, fog: true }),
       ad: new THREE.MeshBasicMaterial({ color: C.ad, transparent: true, opacity: 0.45,
-                                        depthWrite: false, fog: true })
+                                        depthWrite: false, fog: true }),
+      /* 瓦礫の塊（debris）と、光の輪の内側の薄い光 */
+      rock: new THREE.MeshLambertMaterial({ color: (C.rock === undefined) ? 0x6e74a0 : C.rock, fog: true }),
+      ringFill: new THREE.MeshBasicMaterial({ color: C.ring, transparent: true, opacity: 0.13,
+                                              depthWrite: false, blending: THREE.AdditiveBlending,
+                                              side: THREE.DoubleSide, fog: true })
     };
     const root = new THREE.Group();
     root.visible = false;
@@ -313,24 +487,26 @@ const FF = {
     const g = new THREE.Group();
     const ud = { blocks: [], props: [], cables: null, ring: null, kind: kind };
     /* 塞いでいる所を示す薄い光の膜（どの種類にも付ける＝「通れない」が一目で分かる） */
+    const solid = (kind === 'sign') ? M.board : (kind === 'debris') ? M.rock : M.field;
     for (let i = 0; i < 4; i++) {
-      const m = FF._mesh(new THREE.BoxGeometry(1, 1, 1), (kind === 'sign') ? M.board : M.field);
+      const m = FF._mesh(new THREE.BoxGeometry(1, 1, 1), solid);
       m.visible = false;
-      if (kind !== 'sign') m.renderOrder = 4;
+      if (kind !== 'sign' && kind !== 'debris') m.renderOrder = 4;
       g.add(m);
       ud.blocks.push(m);
     }
-    if (kind === 'ring') {
-      const r = FF._mesh(new THREE.TorusGeometry(1, 0.085, 8, 26), M.ring);
-      g.add(r);
-      const r2 = FF._mesh(new THREE.TorusGeometry(1, 0.20, 6, 22), M.ring2);
-      r2.renderOrder = 5;
-      g.add(r2);
-      ud.ring = [r, r2];
-      [-1, 1].forEach(() => {
-        const s = FF._mesh(new THREE.BoxGeometry(1, 0.09, 0.09), M.edge);
-        g.add(s); ud.props.push(s);
-      });
+    if (kind === 'debris') {
+      /* 瓦礫の塊: 穴のまわりに割れた塊が積もっている（1種類＝1ドローコール） */
+      const rock = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), M.rock, 18);
+      rock.frustumCulled = false;
+      rock.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      g.add(rock);
+      const lip = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.07, 0.07), M.edge, 8);
+      lip.frustumCulled = false;
+      lip.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      lip.renderOrder = 5;
+      g.add(lip);
+      ud.debris = { rock: rock, n: 18, lip: lip, ln: 8, dummy: new THREE.Object3D() };
     } else if (kind === 'wires') {
       const c = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.075, 0.075), M.cable, 14);
       c.frustumCulled = false;
@@ -378,9 +554,23 @@ const FF = {
     return g;
   },
 
+  /* 光の輪（加速アイテム）。塞ぐ板は持たない＝くぐるための的。 */
+  _buildRing() {
+    const M = FF.view.mat;
+    const g = new THREE.Group();
+    const r = FF._mesh(new THREE.TorusGeometry(1, 0.080, 8, 30), M.ring);
+    const halo = FF._mesh(new THREE.TorusGeometry(1, 0.24, 6, 24), M.ring2);
+    halo.renderOrder = 5;
+    const core = FF._mesh(new THREE.CircleGeometry(1, 26), M.ringFill);
+    core.renderOrder = 3;
+    g.add(core); g.add(r); g.add(halo);
+    g.userData = { kind: '_ring', ring: r, halo: halo, core: core };
+    return g;
+  },
+
   _acquire(kind) {
     const p = FF.view.pool[kind] || (FF.view.pool[kind] = []);
-    const g = p.length ? p.pop() : FF._buildWall(kind);
+    const g = p.length ? p.pop() : ((kind === '_ring') ? FF._buildRing() : FF._buildWall(kind));
     g.visible = true;
     FF.view.root.add(g);
     return g;
@@ -394,7 +584,10 @@ const FF = {
   },
   _hideView() {
     if (!FF.view) return;
-    if (FF.course) FF.course.items.forEach((it) => FF._release(it));
+    if (FF.course) {
+      FF.course.items.forEach((it) => FF._release(it));
+      (FF.course.rings || []).forEach((r) => FF._release(r));
+    }
     /* 取りこぼし（譜面を差し替えた・途中で中断した）も必ずプールへ返す＝溜まらない */
     const root = FF.view.root;
     for (let i = root.children.length - 1; i >= 0; i--) {
@@ -407,11 +600,14 @@ const FF = {
     root.visible = false;
     FF.view.duo.visible = false;
   },
-  /* 空中の壁を入れ替える（見た目を必ず回収する）。機械テストが使う窓口。 */
-  setItems(items) {
+  /* 空中の壁と光の輪を入れ替える（見た目を必ず回収する）。機械テストが使う窓口。
+     rings を省くと輪は空になる（＝譜面まるごとの差し替え）。 */
+  setItems(items, rings) {
     if (!FF.course) return null;
     FF.course.items.forEach((it) => FF._release(it));
+    (FF.course.rings || []).forEach((r) => FF._release(r));
     FF.course.items = items || [];
+    FF.course.rings = rings || [];
     return FF.course;
   },
 
@@ -436,19 +632,40 @@ const FF = {
       m.scale.set(rc.x1 - rc.x0, rc.y1 - rc.y0, (ud.kind === 'sign') ? FF.DEPTH * 0.5 : FF.DEPTH * 0.35);
     }
     const gp = it.gap;
-    if (ud.kind === 'ring') {
-      ud.ring.forEach((r, i) => {
-        r.position.set(gp.x, gp.y, 0);
-        const s = gp.hw * (1 + (i ? 0.02 : 0));
-        r.scale.set(s, s, 1 + i * 0.4);
-        r.rotation.z = t * (i ? -0.6 : 0.6);
-      });
-      ud.props.forEach((s, i) => {
-        const sx = i ? 1 : -1;
-        const from = gp.x + sx * gp.hw, to = sx * (FF.X1 + 0.9);
-        s.position.set((from + to) / 2, gp.y, 0);
-        s.scale.set(Math.max(0.05, Math.abs(to - from)), 1, 1);
-      });
+    if (ud.kind === 'debris') {
+      /* 瓦礫の塊: 穴のまわりに割れた塊を積む＋穴の縁に光の線（通れる所が読める） */
+      const D = ud.debris, d = D.dummy;
+      const seed = it.at;
+      for (let i = 0; i < D.n; i++) {
+        const ang = (i / D.n) * Math.PI * 2 + FF._h(i, seed) * 0.5;
+        const rad = gp.hw + 0.50 + FF._h(i, seed + 1) * 1.15;
+        const px = U.clamp(gp.x + Math.cos(ang) * rad, FF.X0 - 0.9, FF.X1 + 0.9);
+        const py = U.clamp(gp.y + Math.sin(ang) * rad, FF.Y0 - 0.9, FF.Y1 + 0.9);
+        const sz = 0.34 + FF._h(i, seed + 2) * 0.52;
+        d.position.set(px, py, (FF._h(i, seed + 3) - 0.5) * FF.DEPTH * 0.6);
+        d.rotation.set(FF._h(i, seed + 4) * 3.1, FF._h(i, seed + 5) * 3.1,
+                       FF._h(i, seed + 6) * 3.1 + Math.sin(t * 0.7 + i) * 0.05);
+        d.scale.set(sz, sz * (0.62 + FF._h(i, seed + 7) * 0.7), sz * 0.8);
+        d.updateMatrix();
+        D.rock.setMatrixAt(i, d.matrix);
+      }
+      D.rock.instanceMatrix.needsUpdate = true;
+      for (let i = 0; i < D.ln; i++) {
+        const horiz = (i % 2) === 0, up = (i < 2 || (i >= 4 && i < 6));
+        const k = (i < 4) ? 1 : 1.22;      // 二重の縁（外側にもう1本）＝穴が広く読める
+        if (horiz) {
+          d.position.set(gp.x, gp.y + (up ? gp.hh : -gp.hh) * k, FF.DEPTH * 0.34);
+          d.rotation.set(0, 0, 0);
+          d.scale.set(gp.hw * 2 * k, 1, 1);
+        } else {
+          d.position.set(gp.x + (up ? gp.hw : -gp.hw) * k, gp.y, FF.DEPTH * 0.34);
+          d.rotation.set(0, 0, Math.PI / 2);
+          d.scale.set(gp.hh * 2 * k, 1, 1);
+        }
+        d.updateMatrix();
+        D.lip.setMatrixAt(i, d.matrix);
+      }
+      D.lip.instanceMatrix.needsUpdate = true;
     } else if (ud.kind === 'wires') {
       /* 電線の束: 塞いでいる帯を 0.34m 刻みのケーブルで埋める */
       const c = ud.cables, d = c.dummy;
@@ -523,6 +740,20 @@ const FF = {
     }
   },
 
+  /* 光の輪（加速アイテム）ひとつの見た目。取った輪は消える。 */
+  _placeRing(r, dist, lift, t) {
+    const g = r.view, ud = g.userData;
+    const s = FF.RING_VIEW * (r.taken ? 1.5 : 1);
+    g.position.set(r.x, r.y + lift, -(r.at - dist));
+    g.visible = !r.taken;
+    const pulse = 1 + 0.045 * Math.sin(t * 4.2 + r.at);
+    ud.ring.scale.set(s * pulse, s * pulse, 1);
+    ud.ring.rotation.z = t * 0.9;
+    ud.halo.scale.set(s * 1.05 * pulse, s * 1.05 * pulse, 1);
+    ud.halo.rotation.z = -t * 0.6;
+    ud.core.scale.set(s * 0.96, s * 0.96, 1);
+  },
+
   /* ゾーンのスキン（Zones.skin().aerial）が変わったら配色を差し替える。
      形は共通（ゾーン非依存）で、色だけゾーンに従う＝ S8・エンドレスでもそのまま使える。 */
   _applySkin() {
@@ -531,9 +762,11 @@ const FF = {
     const s = FF.skin();
     if (v.skinId === s.id) return false;
     const C = s.COL || {};
-    ['field', 'board', 'edge', 'ring', 'ring2', 'cable', 'spark', 'drone', 'ad'].forEach((k) => {
+    ['field', 'board', 'edge', 'ring', 'ring2', 'cable', 'spark', 'drone', 'ad', 'rock'].forEach((k) => {
       if (v.mat[k] && C[k] !== undefined) v.mat[k].color.setHex(C[k]);
     });
+    /* 輪の内側の光は輪と同じ色（ゾーンが ring だけ持っていれば付いてくる） */
+    if (v.mat.ringFill && C.ring !== undefined) v.mat.ringFill.color.setHex(C.ring);
     v.skinId = s.id;
     return true;
   },
@@ -555,21 +788,35 @@ const FF = {
         else if (!near && it.view) FF._release(it);
         if (it.view) FF._placeWall(it, dist, lift, t);
       }
+      /* 光の輪（加速アイテム）。取った輪・過ぎた輪は見た目をプールへ返す。 */
+      const rings = FF.course.rings || [];
+      for (let i = 0; i < rings.length; i++) {
+        const r = rings[i];
+        const rel = r.at - dist;
+        const near = rel < FF.VIEW_FAR && rel > -6 && !r.taken;
+        if (near && !r.view) r.view = FF._acquire('_ring');
+        else if (!near && r.view) FF._release(r);
+        if (r.view) FF._placeRing(r, dist, lift, t);
+      }
     } else if (v.root.visible) {
       v.root.visible = false;
     }
     /* DUO体の繭と繋いだ手 */
     const k = duoK || 0;
     if (k > 0.01) {
+      /* ブースト中は光の尾が伸びて明るくなる（契約§4.5「光の尾」） */
+      const bk = U.clamp(FF.boostT / 0.35, 0, 1);
       v.duo.visible = true;
       v.duo.position.set(FF.body.x, FF.body.y + lift, 0);
-      v.cocoon.material.opacity = 0.20 * k;
+      v.cocoon.material.opacity = (0.20 + 0.10 * bk) * k;
       v.cocoon.scale.set(1.45, 1.0 + 0.04 * Math.sin(t * 3.1), 0.9);
       v.hands.position.set(0, 0.11, -0.02);
       v.hands.material.opacity = 0.92 * k;
-      v.hands.scale.setScalar(1 + 0.12 * Math.sin(t * 7.3));
-      v.trail.material.opacity = 0.30 * k;
-      v.trail.position.set(0, 0.05, 0.85);
+      v.hands.scale.setScalar(1 + 0.12 * Math.sin(t * 7.3) + 0.18 * bk);
+      /* 光の尾: ブースト中は後ろへ長く伸ばす（太らせない＝体が潰れて見えない） */
+      v.trail.material.opacity = (0.30 + 0.32 * bk) * k;
+      v.trail.scale.set(1 + 0.35 * bk, 1, 1);
+      v.trail.position.set(0, 0.05, 0.85 + 1.6 * bk);
     } else if (v.duo.visible) {
       v.duo.visible = false;
     }
