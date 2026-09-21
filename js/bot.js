@@ -33,6 +33,45 @@ const Bot = {
   /* そのレーンで生き残れる動作（Fair.laneActs と同じ判断材料） */
   laneActs(wall, surface) { return Fair.laneActs(wall, surface); },
 
+  /* 横移動を今出して安全か（＝真横を通過中の障害物に自分から突っ込まないか）。
+     レーン補間 0.12秒ぶんの体の掃引を実寸の AABB で前進シミュレーションして確かめる。
+     人間なら「すぐ横に柱があるので少し待ってから動く」ところを、機械的に判定する。 */
+  moveIsSafe(game, r, targetLane) {
+    if (targetLane === r.laneTo) return false;
+    const sp = game.speed;
+    const span = CFG.LANE_T + CFG.BOT.MOVE_MARGIN;   // 移動しきるまで＋余裕
+    const N = CFG.BOT.MOVE_SAMPLES;
+    /* 点で見ると「掠る一瞬」を飛ばすので、サンプル間を包む掃引ボックスで判定する */
+    const at = (t) => {
+      const p = U.smooth(Math.min(1, t / CFG.LANE_T));
+      const a = Runners.actAfter(r, t);
+      return {
+        box: Runners.boxOf(r.surface, U.lerp(r.laneVal, targetLane, p), a.act, a.actT),
+        d: game.dist + sp * t
+      };
+    };
+    let prev = at(0);
+    for (let i = 1; i <= N; i++) {
+      const cur = at((i / N) * span);
+      /* 2時点の体を包む。さらに z は、その間に障害物が相対的に流れる距離ぶん前後へ広げる
+         （障害物の z は d の増加とともに +z 側へ動く。cur の一点だけ見ると掠る一瞬を落とす） */
+      const dz = cur.d - prev.d;
+      const hull = {
+        x0: Math.min(prev.box.x0, cur.box.x0), x1: Math.max(prev.box.x1, cur.box.x1),
+        y0: Math.min(prev.box.y0, cur.box.y0), y1: Math.max(prev.box.y1, cur.box.y1),
+        z0: Math.min(prev.box.z0, cur.box.z0) - dz, z1: Math.max(prev.box.z1, cur.box.z1) + dz
+      };
+      for (let k = 0; k < game.active.length; k++) {
+        const o = game.active[k];
+        if (!Obstacles.affects(o, r.surface)) continue;
+        if (Math.abs(o.at - cur.d) > 5) continue;
+        if (U.overlapBox(hull, Obstacles.box(o, cur.d))) return false;
+      }
+      prev = cur;
+    }
+    return true;
+  },
+
   decideFor(game, r, delaySec) {
     const sp = game.speed;
     const walls = Bot.wallsFor(game, r.surface);
@@ -61,6 +100,10 @@ const Bot = {
     /* 2) このフレームで出す入力 */
     if (lane !== r.laneTo) {
       const dir = (lane > r.laneTo) ? 1 : -1;
+      const step = U.clamp(r.laneTo + dir, -1, 1);
+      /* 真横を通過中の障害物へ自分から突っ込まない。危ないフレームは動かずに待つ
+         （§4.7 の反応窓があるので、通過しきってから動いても次のウォールには間に合う） */
+      if (!Bot.moveIsSafe(game, r, step)) return null;
       /* 鏡ゾーンで左右が反転していても「画面上どちらへ動きたいか」で指示を出す */
       return { act: (dir * (r.mirrored ? -1 : 1) > 0) ? 'right' : 'left' };
     }

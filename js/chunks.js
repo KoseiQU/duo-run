@@ -104,6 +104,15 @@ function makeStage(id) {
 const Fair = {
   SIDES: ['floor', 'ceil'],
 
+  /* 障害物の最大奥行き（通過に要する距離の見積りに使う） */
+  _maxDepth: 0,
+  maxDepth() {
+    if (!Fair._maxDepth) {
+      Object.keys(OBS).forEach((k) => { Fair._maxDepth = Math.max(Fair._maxDepth, OBS[k].depth); });
+    }
+    return Fair._maxDepth;
+  },
+
   /* ウォールに束ねる */
   walls(list, speedAt) {
     const sorted = list.slice().sort((a, b) => a.at - b.at);
@@ -192,7 +201,11 @@ const Fair = {
       walls.forEach((w) => {
         if (!w.demand[side]) return;
         const sp = speedAt(w.at);
-        const steps = Math.max(1, Math.floor((w.at - prevAt) / (sp * CFG.LANE_T)));
+        /* 前のウォールを「通り抜けきる」までは横に動けない（動くと真横の障害物に刺さる）。
+           その通過距離を引いた残りで何レーンぶん動けるかを数える。 */
+        const passM = Fair.maxDepth() + CFG.BODY_D;
+        const usable = Math.max(0, (w.at - prevAt) - passM);
+        const steps = Math.floor(usable / (sp * CFG.LANE_T));
         const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps));
         const ok = cand.filter((l) => Fair.laneSurvivable(w, side, l));
         const anySafe = CFG.LANES.filter((l) => Fair.laneSurvivable(w, side, l));

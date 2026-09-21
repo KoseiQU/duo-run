@@ -18,27 +18,37 @@
     return { status: Game.status, dist: Game.dist, sec: frames / 60, killer: Game.killer };
   }
 
+  /* シードをまとめて走らせる（完走できなかったものだけ詳細を残す） */
+  function sweep(mode, from, to) {
+    const bad = [];
+    for (let seed = from; seed <= to; seed++) {
+      const r = runStage('S0', seed, mode, 200);
+      if (r.status !== 'clear') {
+        bad.push('seed' + seed + ' ' + r.dist.toFixed(0) + 'm ' +
+                 (r.killer ? r.killer.obstacle + '@lane' + r.killer.lane + '/' + r.killer.runner : '?'));
+      }
+    }
+    return bad;
+  }
+
   DUO.__suites.push({
-    name: 'ボット perfect が S0 を完走する',
+    name: 'ボット perfect が S0 を完走する（seed 1〜50 全部）',
     quick: true,
     run(t) {
-      [1, 7, 2024].forEach((seed) => {
-        const r = runStage('S0', seed, 'perfect', 200);
-        t.eq(r.status, 'clear', 'perfect / seed ' + seed + ' 完走（' + r.dist.toFixed(0) + 'm, ' +
-             r.sec.toFixed(1) + '秒, 死因=' + (r.killer ? r.killer.obstacle + '@lane' + r.killer.lane : 'なし') + '）');
-      });
+      const bad = sweep('perfect', 1, 50);
+      t.eq(bad.length, 0, 'perfect 50シード全完走（未完走: ' + (bad.join(' / ') || 'なし') + '）');
+      /* 1本は距離と所要も記録しておく */
+      const r = runStage('S0', 26, 'perfect', 200);
+      t.info('seed26: ' + r.status + ' ' + r.dist.toFixed(0) + 'm / ' + r.sec.toFixed(1) + '秒ぶんの走行');
     }
   });
 
   DUO.__suites.push({
-    name: 'ボット delay250（反応0.25秒遅れ）',
-    quick: false,
+    name: 'ボット delay250（反応0.25秒遅れ）が S0 を seed 1〜50 中 45 以上完走',
+    quick: true,
     run(t) {
-      [1, 7].forEach((seed) => {
-        const r = runStage('S0', seed, 'delay250', 200);
-        t.eq(r.status, 'clear', 'delay250 / seed ' + seed + ' 完走（' + r.dist.toFixed(0) + 'm, 死因=' +
-             (r.killer ? r.killer.obstacle + '@lane' + r.killer.lane : 'なし') + '）');
-      });
+      const bad = sweep('delay250', 1, 50);
+      t.ok(bad.length <= 5, 'delay250 完走 ' + (50 - bad.length) + '/50 ≥ 45（未完走: ' + (bad.join(' / ') || 'なし') + '）');
     }
   });
 
@@ -77,6 +87,48 @@
       I().Game.runners.forEach((r) => {
         const p = new THREE.Vector3(I().Runners.x(r), I().Runners.footY(r), 0);
         t.ok(fr.containsPoint(p), r.id + ' がカメラの視界内にいる');
+      });
+    }
+  });
+
+  /* P1.1 の回帰テスト:
+     真横を通過している最中の障害物のレーンへ、自分から横移動して突っ込んでいた。
+     （§4.7 の反応窓があるので、通過しきってから動いても次のウォールには間に合う） */
+  DUO.__suites.push({
+    name: '回帰: 真横を通過中の障害物のレーンへは横移動しない',
+    quick: true,
+    run(t) {
+      const In = I(), Game = In.Game, CFG = In.CFG;
+      /* 障害物のレーンへ移りたい状況を作り、前後の様々な位置関係で
+         「安全と判断した横移動は本当に死なない」ことを確かめる */
+      const cases = [
+        { type: 'PILLAR',  surface: 'floor', obsLane: 1,  myLane: 0, dir: 1,  who: 0 },
+        { type: 'WIDEBAR', surface: 'floor', obsLane: -1, myLane: 1, dir: -1, who: 0 }, // -1,0を塞ぐ
+        { type: 'ROVER',   surface: 'ceil',  obsLane: 1,  myLane: 0, dir: 1,  who: 1 }
+      ];
+      cases.forEach((c) => {
+        let refused = 0, allowed = 0;
+        for (let k = 0; k <= 16; k++) {
+          const ahead = 0.8 - k * 0.12;                       // +0.8m 手前 〜 -1.1m 後ろ
+          DUO.reset(); DUO.start('S0', 5); In.clearObstacles();
+          Game.runners.forEach((x) => { x.laneFrom = x.laneTo = x.laneVal = c.myLane; x.laneT = CFG.LANE_T; });
+          const r = Game.runners[c.who];
+          const o = In.spawnOne(c.type, c.surface, c.obsLane, 6);
+          let guard = 0;
+          while ((o.at - Game.dist) > ahead && guard++ < 400) DUO.__step(1 / 60);
+          if (Game.status !== 'playing') { t.ok(false, c.type + ': 準備段階で死んだ'); break; }
+          if (In.Bot.moveIsSafe(Game, r, c.myLane + c.dir)) {
+            allowed++;
+            In.Runners.input(r, c.dir > 0 ? 'right' : 'left');   // 実際に動かしてみる
+            for (let i = 0; i < 45; i++) DUO.__step(1 / 60);
+            t.eq(Game.status, 'playing',
+                 c.type + '(' + c.surface + '): 相対 ' + ahead.toFixed(2) + 'm で「安全」と判断した横移動で死なない');
+          } else {
+            refused++;
+          }
+        }
+        t.ok(refused > 0, c.type + '(' + c.surface + '): 危ない瞬間は横移動を拒否している（' + refused + '/17）');
+        t.ok(allowed > 0, c.type + '(' + c.surface + '): 安全な瞬間は横移動を許可している（' + allowed + '/17）');
       });
     }
   });

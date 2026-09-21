@@ -77,19 +77,31 @@ const Runners = {
   height(r) { return r.act === 'slide' ? CFG.SLIDE_H : CFG.RUN_H; },
   x(r) { return r.laneVal * CFG.LANE_W; },
 
-  /* 当たり判定ボックス（絶対座標。2体は常に z=0） */
-  box(r) {
-    const off = Runners.footOffset(r);
-    const h = Runners.height(r);
-    const x = Runners.x(r);
+  /* 当たり判定ボックス（絶対座標。2体は常に z=0）
+     ── 実物も「未来の予測」も必ずこの1か所を通す（ボットが実寸で判断するため） */
+  boxOf(surface, laneVal, act, actT) {
+    const off = (act === 'jump')
+      ? CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * U.clamp(actT / CFG.JUMP_T, 0, 1)), CFG.JUMP_SHAPE)
+      : 0;
+    const h = (act === 'slide') ? CFG.SLIDE_H : CFG.RUN_H;
+    const x = laneVal * CFG.LANE_W;
     let y0, y1;
-    if (r.surface === 'floor') { y0 = off; y1 = off + h; }
+    if (surface === 'floor') { y0 = off; y1 = off + h; }
     else { y1 = CFG.H - off; y0 = CFG.H - off - h; }
     return {
       x0: x - CFG.BODY_W / 2, x1: x + CFG.BODY_W / 2,
       y0: y0, y1: y1,
       z0: -CFG.BODY_D / 2, z1: CFG.BODY_D / 2
     };
+  },
+  box(r) { return Runners.boxOf(r.surface, r.laneVal, r.act, r.actT); },
+
+  /* t秒後の動作状態（入力がなければどうなるか）。ボットの予測に使う */
+  actAfter(r, t) {
+    if (r.act === 'run') return { act: 'run', actT: 0 };
+    const dur = (r.act === 'jump') ? CFG.JUMP_T : CFG.SLIDE_T;
+    const tt = r.actT + t;
+    return (tt >= dur) ? { act: 'run', actT: 0 } : { act: r.act, actT: tt };
   },
 
   /* 見た目まわりで使う「足元の y」 */
