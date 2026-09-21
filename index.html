@@ -31,6 +31,9 @@
   #hud-stage{font-size:13px; opacity:.55;}
   .flag{font-size:11px; padding:2px 7px; border:1px solid currentColor; border-radius:99px; opacity:.9;}
   #flag-mirror{color:#cfd6ff;} #flag-swap{color:#ffd0a0;}
+  /* S6（宇宙ステーション）の状態表示: 重力反転中 / 無重力区間（契約§4.5） */
+  #flag-grav{color:#ffd45e; border-color:rgba(255,212,94,.85); box-shadow:0 0 12px rgba(255,200,60,.35);}
+  #flag-zero{color:#8fe4ff; border-color:rgba(143,228,255,.85); box-shadow:0 0 12px rgba(120,210,255,.35);}
 
   .hands{position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
     display:flex; justify-content:space-between; padding:0 14px;}
@@ -197,6 +200,8 @@
       <span id="hud-speed">8.0 m/s</span>
       <span class="flag" id="flag-mirror" style="display:none">MIRROR</span>
       <span class="flag" id="flag-swap" style="display:none">SWAP</span>
+      <span class="flag" id="flag-grav" style="display:none">GRAVITY</span>
+      <span class="flag" id="flag-zero" style="display:none">ZERO-G</span>
     </div>
     <div id="tip" data-ui="tip"></div>
     <div id="cue" data-ui="cue"><div id="cue-main">JUMP!</div><div id="cue-sub"></div></div>
@@ -284,6 +289,7 @@
 <script src="js/zone_neon.js"></script>
 <script src="js/zone_ruins.js"></script>
 <script src="js/zone_sea.js"></script>
+<script src="js/zone_space.js"></script>
 <script src="js/world.js"></script>
 <script src="js/input.js"></script>
 <script src="js/tutorial.js"></script>
