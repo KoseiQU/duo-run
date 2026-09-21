@@ -689,7 +689,7 @@ const STAGE_DEFS = {
   S0: {
     id: 'S0', name: '仮ステージ S0', zone: 'neon', lengthM: 900,
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
-    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s5).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s4 && !c.s5).map((c) => c.id)
   },
   /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
      冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
@@ -701,7 +701,7 @@ const STAGE_DEFS = {
     /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
        「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
        ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s5).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s4 && !c.s5).map((c) => c.id)
       .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
       .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b'])
   },
@@ -733,12 +733,12 @@ const STAGE_DEFS = {
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
       /* S3 の顔ぶれ（!c.s3）は混ぜない。ゾーンが変わればギミックも変わる（契約§4.4） */
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s5).map((c) => c.id))     // 動くレーザーを厚く
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s5).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s5 && c.difficulty <= 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s5).map((c) => c.id))      // 密集チャンク
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s5).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s5).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5).map((c) => c.id))     // 動くレーザーを厚く
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && c.difficulty <= 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5).map((c) => c.id))      // 密集チャンク
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5).map((c) => c.id))
       /* 横に避けるチャンクを厚くしたぶん、点滅レーザーが薄まらないよう補う（P2c） */
       .concat(['c2_blink_v', 'c2_blink_low', 'c3_blink_scan',
                'c2_blink_v', 'c2_blink_low', 'c3_blink_scan'])
@@ -813,7 +813,7 @@ const STAGE_DEFS = {
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
     /* 最初から入っているのは S1 の顔ぶれ（基本セット）だけ。
        遺跡の新ギミックは S3 をクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s5).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s4 && !c.s5).map((c) => c.id)
   }
 };
 
