@@ -148,8 +148,11 @@
                         光柱そのものの高さ y は判定どおりなので y だけ見る
            LASER_ROT  … 腕と光のカーテンは毎フレーム bands() から置く“動く部品”なので
                         静止した外接箱では測れない（tests/test_p2b.js が
-                        occ ⇔ hits の総当りで、判定と見た目の一致を直接検証している） */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'] };
+                        occ ⇔ hits の総当りで、判定と見た目の一致を直接検証している）
+           BRIDGE     … 板（判定の外＝踏んでいる間は無害）と谷が前後・左右・下へ伸びる。
+                        落ちる位置と判定の一致は tests/test_p3a.js が直接見ている */
+      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
+                     BRIDGE: ['x', 'y', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);

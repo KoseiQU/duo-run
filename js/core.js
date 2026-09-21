@@ -63,6 +63,10 @@ const Game = {
   /* --- 開始・再開 --------------------------------------------------------- */
   start(stageId, seed) {
     Game.stage = makeStage(stageId);
+    /* ゾーンの差し替え（契約§6 P3a）。見た目を返してから切り替える＝
+       前のゾーンのプール・マテリアルを取りこぼさずに捨てられる。同じゾーンなら何もしない。 */
+    Game.clearWorld();
+    Zones.ensure(Game.stage.zone);
     Game.seed = (seed === undefined) ? ((Math.random() * 1e9) | 0) : seed;
     Game.handSwap = false;
     Game.lastCheckpoint = 0;

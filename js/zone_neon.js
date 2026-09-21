@@ -16,8 +16,18 @@
 'use strict';
 
 const ZoneNeon = {
+  id: 'neon',
+  BEHIND: 16,                 // スロット送りでカメラ後方に残す長さ（m）
+
   /* ---- 配色（ネオン都市） -------------------------------------------------- */
   PAL: {
+    /* World が読む共通キー（road/roadRough/roadMetal/skirt/metal/amber/indigo/fog）は
+       どのゾーンも必ず持つ。amber/indigo は「床＝LUMEN／天井＝UMBRA」を示す縁の色で、
+       意味が変わらないようゾーンが変わっても同じ値にする（契約§4.8 の手アイコンと対） */
+    roadRough: 0.18,          // 濡れたアスファルト＝高光沢
+    roadMetal: 0.46,
+    skirt:    0x252e5e,       // 路面の厚み（スラブの側面）
+    metal:    0x8f99d4,       // ゴールゲート・発射台の枠
     fog:      0x1e2a5e,
     skyTop:   0x1b2456,
     skyMid:   0x3d2d80,
@@ -46,57 +56,24 @@ const ZoneNeon = {
     return p < ZoneNeon.WALL_LEN;
   },
 
-  /* ---- スロット番号 → 疑似乱数（0..1）。同じ距離なら必ず同じ景色 ---------- */
-  hash(n, salt) {
-    let x = (n * 374761393 + (salt | 0) * 668265263) | 0;
-    x = Math.imul(x ^ (x >>> 13), 1274126177);
-    x = x ^ (x >>> 16);
-    return (x >>> 0) / 4294967296;
-  },
-
-  /* ---- 形を彫るための合成（BufferGeometry を1つにまとめる） --------------- */
-  _merge(parts) {
-    const pos = [], nor = [];
-    for (let i = 0; i < parts.length; i++) {
-      const p = parts[i];
-      const g = p.g.index ? p.g.toNonIndexed() : p.g.clone();
-      const m = new THREE.Matrix4().compose(
-        new THREE.Vector3(p.p ? p.p[0] : 0, p.p ? p.p[1] : 0, p.p ? p.p[2] : 0),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(p.r ? p.r[0] : 0, p.r ? p.r[1] : 0, p.r ? p.r[2] : 0)),
-        new THREE.Vector3(p.s ? p.s[0] : 1, p.s ? p.s[1] : 1, p.s ? p.s[2] : 1));
-      g.applyMatrix4(m);
-      const a = g.attributes.position.array;
-      const b = g.attributes.normal ? g.attributes.normal.array : null;
-      for (let k = 0; k < a.length; k++) pos.push(a[k]);
-      if (b) for (let k = 0; k < b.length; k++) nor.push(b[k]);
-      g.dispose();
-      if (p.g !== g) p.g.dispose && 0;   // 呼び出し側の素材ジオメトリは使い回す
-    }
-    const out = new THREE.BufferGeometry();
-    out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    if (nor.length === pos.length) out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-    else out.computeVertexNormals();
-    return out;
-  },
-
-  box(w, h, d) { return new THREE.BoxGeometry(w, h, d); },
-  cyl(r, h, seg) { return new THREE.CylinderGeometry(r, r, h, seg || 6); },
-  lam(color, opt) { return new THREE.MeshLambertMaterial(Object.assign({ color: color }, opt || {})); },
-  bas(color, opt) { return new THREE.MeshBasicMaterial(Object.assign({ color: color }, opt || {})); },
-  add(color, op) {
-    return new THREE.MeshBasicMaterial({
-      color: color, transparent: true, opacity: op, depthWrite: false,
-      blending: THREE.AdditiveBlending, fog: true, side: THREE.DoubleSide
-    });
-  },
+  /* ---- 道具は ZoneKit（js/zones.js）が唯一の出所。名前だけ従来どおり残す ---- */
+  hash(n, salt) { return ZoneKit.hash(n, salt); },
+  _merge(parts) { return ZoneKit.merge(parts); },
+  box(w, h, d) { return ZoneKit.box(w, h, d); },
+  cyl(r, h, seg) { return ZoneKit.cyl(r, h, seg); },
+  lam(color, opt) { return ZoneKit.lam(color, opt); },
+  bas(color, opt) { return ZoneKit.bas(color, opt); },
+  add(color, op) { return ZoneKit.add(color, op); },
 
   /* ==========================================================================
      組み立て
      ========================================================================== */
+  fog: { color: 0x1e2a5e, near: 22, far: 104 },
+
   build(scene) {
     ZoneNeon.scene = scene;
-    ZoneNeon.fields = [];
-    ZoneNeon.propFields = [];
+    ZoneNeon.fields = ZoneNeon.fields || [];
+    ZoneNeon.propFields = ZoneNeon.propFields || [];
     ZoneNeon._dummy = new THREE.Object3D();
     ZoneNeon._t = 0;
     scene.fog = new THREE.Fog(ZoneNeon.PAL.fog, 22, 104);
@@ -397,20 +374,7 @@ const ZoneNeon = {
      小物（InstancedMesh のスロット送り）
      field: { spacing, geo, mat, place(slot, m, t) -> {x,y,dz,rx,ry,rz,sx,sy,sz} | null }
      ========================================================================== */
-  _field(spec) {
-    const behind = (spec.behind === undefined) ? 16 : spec.behind;
-    const count = Math.ceil((CFG.VIEW_FAR + behind) / spec.spacing) + 2;
-    const mesh = new THREE.InstancedMesh(spec.geo, spec.mat, count);
-    mesh.frustumCulled = false;
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    if (spec.order !== undefined) mesh.renderOrder = spec.order;
-    ZoneNeon.scene.add(mesh);
-    const f = { name: spec.name, mesh: mesh, count: count, spacing: spec.spacing,
-                behind: behind, place: spec.place, prop: spec.prop !== false };
-    ZoneNeon.fields.push(f);
-    if (f.prop) ZoneNeon.propFields.push(f);
-    return f;
-  },
+  _field(spec) { return ZoneKit.field(ZoneNeon, spec); },
 
   _corridorProps(scene) {
     const P = ZoneNeon.PAL;
@@ -885,35 +849,9 @@ const ZoneNeon = {
     ZoneNeon._t = t;
     ZoneNeon._speed = speed || CFG.SPEED_MIN;
     ZoneNeon._spd01 = U.clamp((ZoneNeon._speed - CFG.SPEED_MIN) / (CFG.SPEED_MAX - CFG.SPEED_MIN), 0, 1);
-    const d = ZoneNeon._dummy;
-    let ahead = 0;
-    const fs = ZoneNeon.fields;
     /* 滑空中はコリドーが存在しない（ビルとビルの間）ので、道の小物は全部しまう */
     const hideProps = (ZoneNeon._glide > 0.02);
-    for (let i = 0; i < fs.length; i++) {
-      const f = fs[i];
-      const base = Math.floor((dist - f.behind) / f.spacing);
-      for (let k = 0; k < f.count; k++) {
-        const slot = base + k;
-        const m = slot * f.spacing;
-        const o = hideProps ? null : f.place(slot, m, t, dist);
-        if (!o) {
-          d.position.set(0, -9999, 0);
-          d.rotation.set(0, 0, 0);
-          d.scale.set(0.0001, 0.0001, 0.0001);
-        } else {
-          const zz = -(m + (o.dz || 0) - dist);
-          d.position.set(o.x, o.y, zz);
-          d.rotation.set(o.rx || 0, o.ry || 0, o.rz || 0);
-          d.scale.set(o.sx === undefined ? 1 : o.sx, o.sy === undefined ? 1 : o.sy, o.sz === undefined ? 1 : o.sz);
-          if (f.prop && -zz >= -1 && -zz <= 60) ahead++;
-        }
-        d.updateMatrix();
-        f.mesh.setMatrixAt(k, d.matrix);
-      }
-      f.mesh.instanceMatrix.needsUpdate = true;
-    }
-    ZoneNeon.aheadCount = ahead;
+    ZoneNeon.aheadCount = ZoneKit.syncFields(ZoneNeon, dist, t, hideProps);
 
     /* 遠景の2層を視差で流す（インスタンスは作り直さず、層ごと動かす） */
     for (let i = 0; i < ZoneNeon.skyLayers.length; i++) {
@@ -963,3 +901,371 @@ const ZoneNeon = {
   /* 監査用: 前方60mに見えている小物の数 */
   propsAhead() { return ZoneNeon.aheadCount || 0; }
 };
+
+/* ============================================================================
+   障害物の見た目（ネオン都市のスキン / 契約§5・§6 P3a）
+   ・当たり判定 OBS は全ゾーン共通・不変。ここは「見え方」だけを受け持つ。
+   ・寸法は必ず OBS の y0/y1/depth/span から引く（見た目と判定のズレ ±10% 以内）。
+   ・組み立ての足場（箱を積む・材質ごとに融合する・プール）は Obstacles 側にあり、
+     スキンは build(type, x) / buildMoving(type, g, w, t, x) を実装するだけでよい。
+   ============================================================================ */
+ZoneNeon.obstacleSkin = {
+  id: 'neon',
+  /* ネオン都市の夜景（壁 0x475393 前後）から浮くよう、障害物の本体は明るい工事色にする。
+     ユーザー評「障害物が背景に比べて地味」への対応（2026-09-21）。 */
+  COL: {
+    body: 0xb9c2e4, dark: 0x515a94, steel: 0x8f99d4, deep: 0x3b4278,
+    warn: 0xff8a1e, warnDim: 0x6b3a08, red: 0xff3355, amber: 0xffb347,
+    cyan: 0x38e2ff, magenta: 0xff3ad0, pit: 0x151130
+  },
+
+  build(type, x) {
+    const t = x.t, C = x.C, g = x.g, w = x.w, D = x.D;
+    const box = x.box, lamp = x.lamp, stripes = x.stripes, beamMat = x.beamMat;
+    if (type === 'ROVER') {
+      /* 工事用バリケード（高さ 0.60 = 判定どおり）＋点滅灯 */
+      const matB = Obstacles._material('roverBody', C.body);
+      box(w, 0.13, D * 0.55, matB, 0, 0.53, 0);                  // 上の板
+      box(w, 0.13, D * 0.55, matB, 0, 0.30, 0);                  // 下の板
+      stripes(w - 0.02, 0.12, D * 0.30, 0.53, 5);
+      stripes(w - 0.02, 0.12, D * 0.30, 0.30, 5);
+      [-1, 1].forEach((s) => {
+        box(0.09, 0.60, 0.09, Obstacles._material('roverLeg', C.steel), s * (w / 2 - 0.08), 0.30, 0);
+        box(0.10, 0.10, D * 0.9, Obstacles._material('roverFoot', C.steel), s * (w / 2 - 0.08), 0.05, 0);
+      });
+      box(w * 0.98, 0.06, 0.06, Obstacles._emissive('roverGlow', C.red), 0, 0.575, 0);
+      lamp(0.04, C.warn, -w / 2 + 0.10, 0.60, 0);
+      lamp(0.04, C.warn, w / 2 - 0.10, 0.60, 0);
+
+    } else if (type === 'WALLHOLE' || type === 'WALLSOLID') {
+      /* 壁の穴（契約§4.3改訂）: コリドーを塞ぐ工事用の鉄板壁。WALLHOLE のレーンだけ
+         下端に高さ 0.50 の潜り穴が空く。見た目の上端は判定の上端 y1 とぴったり同じ。 */
+      const hole = (type === 'WALLHOLE');
+      const y0 = hole ? t.y0 : 0;         // 穴の高さ（= 0.50）／壁は床から
+      const TOP = t.y1;                   // 2.30 = 判定の上端そのもの
+      const matW = Obstacles._material('holeWall', C.body);
+      const matR = Obstacles._material('holeRib', C.steel);
+      box(w, TOP - y0, D * 0.55, matW, 0, (TOP + y0) / 2, 0);                  // 鉄板本体
+      for (let i = 0; i < 5; i++) {                                            // 波板の縦リブ
+        box(0.07, TOP - y0 - 0.08, D * 0.72, matR, -w / 2 + 0.12 + (w - 0.24) * i / 4, (TOP + y0) / 2, 0);
+      }
+      box(w, 0.10, D * 0.82, matR, 0, TOP - 0.05, 0);                          // 上のフレーム
+      box(w, 0.07, D * 0.88, Obstacles._emissive('wallEdge', C.warn), 0, TOP - 0.12, 0);
+      if (hole) {
+        box(w, 0.12, D * 0.86, matR, 0, y0 + 0.06, 0);                         // 穴の上の桁
+        [-1, 1].forEach((s2) => box(0.09, y0, D * 0.78, matR, s2 * (w / 2 - 0.045), y0 / 2, 0));
+        box(w, 0.07, D + 0.02, Obstacles._emissive('holeWarn', C.warn), 0, y0 + 0.015, 0);
+        /* 穴の足元を光らせて「ここを潜れ」と示す */
+        box(w * 0.86, 0.03, D + 0.02, Obstacles._emissive('holeGuide', C.cyan), 0, 0.025, 0);
+        [-1, 1].forEach((s2) => box(0.05, y0 - 0.05, 0.05, Obstacles._emissive('holeGuide', C.cyan),
+                                    s2 * (w / 2 - 0.10), (y0 - 0.05) / 2, D / 2 - 0.03));
+        stripes(w - 0.06, 0.13, D / 2 - 0.02, y0 + 0.19, 7);
+        lamp(0.05, C.warn, -w / 2 + 0.09, y0 + 0.10, D / 2 - 0.05);
+        lamp(0.05, C.warn, w / 2 - 0.09, y0 + 0.10, D / 2 - 0.05);
+      } else {
+        /* 穴のない壁: 一目で「ここは通れない」と分かる赤い×と縞 */
+        stripes(w - 0.06, 0.15, D / 2 - 0.02, 0.22, 7);
+        stripes(w - 0.06, 0.15, D / 2 - 0.02, TOP - 0.30, 7);
+        box(w * 0.78, 0.12, 0.05, Obstacles._emissive('wallX', C.red), 0, TOP * 0.45, D / 2 - 0.03, [0, 0, 0.72]);
+        box(w * 0.78, 0.12, 0.05, Obstacles._emissive('wallX', C.red), 0, TOP * 0.45, D / 2 - 0.03, [0, 0, -0.72]);
+        lamp(0.055, C.red, 0, TOP - 0.22, D / 2 - 0.04);
+      }
+
+    } else if (type === 'LASER_LOW') {
+      /* ローレーザー（契約§4.3）: 面の近くを走る水平光線。0〜0.60 を塞ぐのでジャンプで越える。
+         光線そのものは 0.45 付近に置き、下の 0〜0.45 は「光のカーテン」で判定どおり塞ぐ。 */
+      const y1 = t.y1, beam = y1 * 0.74;
+      const matDev = Obstacles._material('lowlDev', C.steel);
+      [-1, 1].forEach((s2) => {
+        box(0.14, y1, D, matDev, s2 * (w / 2 - 0.04), y1 / 2, 0);
+        box(0.16, 0.13, D, Obstacles._emissive('lowlWarn', C.warn), s2 * (w / 2 - 0.04), beam, 0);
+        box(0.16, 0.07, D, Obstacles._emissive('lowlWarn2', C.warn), s2 * (w / 2 - 0.04), y1 - 0.04, 0);
+      });
+      box(w, 0.11, 0.10, beamMat(Obstacles._emissive('laserCore', 0xffa0a8)), 0, beam, 0);
+      box(w, 0.22, 0.18, beamMat(Obstacles._material('laserHalo', C.red, 0.40)), 0, beam, 0);
+      box(w, beam, 0.04, beamMat(Obstacles._material('laserCurtain', 0xff5a4d, 0.30)), 0, beam / 2, 0);
+      box(w, 0.07, D, Obstacles._emissive('lowlFloor', C.warn), 0, 0.035, 0);
+      box(w, 0.05, D * 0.6, Obstacles._emissive('lowlFloor2', C.red), 0, y1 - 0.03, 0);
+      lamp(0.045, C.red, -w / 2 + 0.05, y1 - 0.05, D / 2 - 0.05);
+      lamp(0.045, C.red, w / 2 - 0.05, y1 - 0.05, D / 2 - 0.05);
+
+    } else if (type === 'LASER_V') {
+      /* 縦レーザー＝光柱（契約§4.3改訂）: 1レーンを全高で塞ぐ。潜れない・跳べない＝横に避ける。 */
+      const y0 = t.y0, y1 = t.y1, hh = y1 - y0, yc = (y0 + y1) / 2;
+      const matDev = Obstacles._material('laserDev', C.steel);
+      [-1, 1].forEach((s2) => {
+        box(0.11, hh, D * 0.85, matDev, s2 * (w / 2 - 0.05), yc, 0);
+        [0.16, 0.5, 0.84].forEach((u) => {
+          box(0.15, 0.10, D, Obstacles._emissive('laserWarn', C.warn), s2 * (w / 2 - 0.05), y0 + hh * u, 0);
+        });
+      });
+      box(w * 0.50, hh, D * 0.8, beamMat(Obstacles._material('laserHaloV', C.red, 0.26)), 0, yc, 0);
+      box(w * 0.34, hh, 0.05, beamMat(Obstacles._material('laserGlow', C.red, 0.55)), 0, yc, 0);
+      box(w * 0.16, hh, 0.08, beamMat(Obstacles._emissive('laserCoreV', 0xff8e98)), 0, yc, 0);
+      [[y0, 1], [y1, -1]].forEach((e) => {
+        box(w * 0.70, 0.16, D, matDev, 0, e[0] + e[1] * 0.08, 0);             // 発生装置
+        box(w * 0.54, 0.06, 0.09, Obstacles._emissive('laserWarn', C.warn), 0, e[0] + e[1] * 0.03, D / 2 - 0.06);
+      });
+      lamp(0.05, C.red, 0, y0 + 0.30, D / 2 - 0.06);
+      lamp(0.05, C.red, 0, y1 - 0.30, D / 2 - 0.06);
+
+    } else if (type === 'PILLAR') {
+      /* 支柱（全高）＋縦のネオン。床天井の両方に効くので上下対称に彫る */
+      const H = CFG.H;
+      box(w * 0.82, H, D * 0.9, Obstacles._material('pillarBody', C.body), 0, H / 2, 0);
+      [-1, 1].forEach((s) => box(0.09, H, D, Obstacles._material('pillarEdge', C.steel), s * (w / 2 - 0.05), H / 2, 0));
+      box(w * 0.16, H - 0.2, 0.05, Obstacles._emissive('pillarNeon', C.magenta), 0, H / 2, D / 2 - 0.03);
+      [0.35, 0.95, 1.55, 2.45, 3.05, 3.65].forEach((y) => {
+        box(w * 0.7, 0.10, 0.04, Obstacles._emissive('pillarWarn', C.warn), 0, y, D / 2 - 0.03, [0, 0, 0.45]);
+      });
+      lamp(0.05, C.red, 0, H - 0.18, D / 2 - 0.04);
+      lamp(0.05, C.red, 0, 0.18, D / 2 - 0.04);
+
+    } else if (type === 'GAP') {
+      /* 崩れた路面。穴の見た目の幅 = 判定の depth(1.6) ちょうど。
+         床タイルは穴の周囲ごと消えるので、判定の外側は「埋め板」で路面に戻す。 */
+      const half = D / 2;
+      const matPit = Obstacles._material('gapPit', C.pit);
+      box(w, 0.04, D, matPit, 0, -1.55, 0);                        // 底
+      box(w * 0.8, 0.05, D * 0.7, Obstacles._emissive('gapBottom', C.red), 0, -1.50, 0);
+      [-1, 1].forEach((s) => {
+        box(w, 1.6, 0.05, matPit, 0, -0.8, s * half);              // 穴の前後の内壁
+        box(0.05, 1.6, D, matPit, s * (w / 2), -0.8, 0);           // 左右の内壁
+      });
+      /* 判定の外側（タイルが消える範囲）を路面に戻す埋め板 */
+      const fillMat = Obstacles._material('gapFill', 0x232b52);
+      /* 穴の内側の非常灯（縁だけでなく「落ちる先」も光らせて存在を目立たせる） */
+      [-1, 1].forEach((s2) => {
+        [-0.18, -0.45, -0.78].forEach((y, i) => {
+          box(w * 0.92, 0.07, 0.06, Obstacles._emissive(i ? 'gapInner2' : 'gapInner', i ? C.red : C.warn),
+              0, y, s2 * (half - 0.05));
+        });
+        box(0.06, 0.9, D * 0.85, Obstacles._emissive('gapInner2', C.red), s2 * (w / 2 - 0.04), -0.6, 0);
+      });
+      [-1, 1].forEach((s) => box(CFG.LANE_W - 0.07, 0.14, 3.0, fillMat, 0, -0.075, s * 2.3));
+      /* 穴の手前・奥の路面に描いた警告帯（判定の外だが、路面標示なので体には当たらない。
+         「穴がある」と遠くからでも分かるようにするための視認性対策） */
+      [-1, 1].forEach((s2) => {
+        [0.22, 0.48, 0.74].forEach((dz, i) => {
+          box(w * (0.96 - i * 0.12), 0.03, 0.16, Obstacles._emissive(i % 2 ? 'gapMark2' : 'gapMark', i % 2 ? C.red : C.warn),
+              0, 0.02, s2 * (half + dz));
+        });
+      });
+      /* 縁の警告灯とちぎれた鉄筋 */
+      [-1, 1].forEach((s) => {
+        box(w, 0.13, 0.17, Obstacles._emissive('gapRim', C.warn), 0, 0.06, s * (half - 0.08));
+        box(0.10, 0.09, D, Obstacles._emissive('gapRim', C.warn), s * (w / 2 - 0.03), 0.05, 0);
+        /* 四隅の工事用ビーコン（高さ0.34。ジャンプの軌道（足元1.3）には干渉しない） */
+        [-1, 1].forEach((sx) => {
+          const x = sx * (w / 2 - 0.10);
+          box(0.09, 0.34, 0.09, Obstacles._material('gapPostBody', C.body), x, 0.17, s * (half - 0.09));
+          box(0.13, 0.10, 0.13, Obstacles._emissive('gapPost', C.warn), x, 0.29, s * (half - 0.09));
+          lamp(0.06, C.red, x, 0.38, s * (half - 0.09));
+        });
+        box(0.04, 0.26, 0.04, Obstacles._material('gapBar', C.steel), s * 0.22, -0.06, s * (half - 0.06), [0.5, 0, 0.3]);
+        box(0.04, 0.22, 0.04, Obstacles._material('gapBar', C.steel), -s * 0.36, -0.10, s * (half - 0.10), [-0.4, 0, -0.2]);
+      });
+
+    } else if (type === 'WIDEBAR') {
+      /* 工事用ゲート（2レーン・高さ 2.20 = 判定どおり）。空いた1レーンへ逃げる */
+      const H2 = t.y1;
+      const matF = Obstacles._material('wideFrame', C.body);
+      box(w, 0.14, D * 0.8, matF, 0, H2 - 0.07, 0);                 // 上枠
+      box(w, 0.12, D * 0.8, matF, 0, 0.06, 0);                      // 下枠
+      [-1, 1].forEach((s) => box(0.12, H2, D * 0.8, matF, s * (w / 2 - 0.06), H2 / 2, 0));
+      box(w - 0.3, H2 - 0.3, D * 0.25, Obstacles._material('wideNet', 0xffb347, 0.30), 0, H2 / 2, 0);
+      for (let i = 0; i < 8; i++) {
+        box(0.09, H2 - 0.3, 0.06, Obstacles._material('wideBarM', C.body),
+            -w / 2 + 0.2 + (w - 0.4) * i / 7, H2 / 2, D * 0.16);
+      }
+      box(w, 0.12, D * 0.82, Obstacles._emissive('wideMid', C.warn), 0, H2 * 0.52, 0);
+      stripes(w - 0.1, 0.13, D / 2 - 0.03, H2 - 0.16, 10);
+      stripes(w - 0.1, 0.13, D / 2 - 0.03, 0.14, 10);
+      box(w, 0.06, 0.06, Obstacles._emissive('wideGlow', C.warn), 0, H2 - 0.03, 0);
+      lamp(0.05, C.warn, -w / 2 + 0.14, H2 - 0.03, 0);
+      lamp(0.05, C.warn, w / 2 - 0.14, H2 - 0.03, 0);
+      lamp(0.05, C.red, 0, H2 * 0.5, D / 2 - 0.06);
+
+    } else if (type === 'LASER_SCAN') {
+      /* 横スキャン縦光柱（契約§4.4 S2）: 走査ユニットごと横へ滑る光柱。
+         見た目の寸法は判定（1レーン幅・全高）と同じ。位置は place() が MOT から引く。 */
+      const H = CFG.H;
+      const matDev = Obstacles._material('scanDev', C.steel);
+      [[0.16, 1], [H - 0.16, -1]].forEach((e) => {
+        box(w, 0.22, D * 1.5, matDev, 0, e[0], 0);                                  // 走査ユニット
+        box(w * 0.86, 0.07, D * 1.6, Obstacles._emissive('scanWarn', C.warn), 0, e[0] + e[1] * 0.13, 0);
+        box(w * 0.30, 0.10, D * 1.2, Obstacles._emissive('scanHot', 0xfff0c8), 0, e[0] - e[1] * 0.09, 0);
+        [-1, 1].forEach((s2) => box(0.10, 0.30, 0.10, matDev, s2 * (w / 2 - 0.06), e[0], 0));
+      });
+      const hh = H - 0.32, yc = H / 2;
+      box(w * 0.52, hh, D * 0.8, Obstacles._material('scanHalo', C.magenta, 0.30), 0, yc, 0);
+      box(w * 0.30, hh, 0.06, Obstacles._material('scanGlow', C.magenta, 0.60), 0, yc, 0);
+      box(w * 0.13, hh, 0.09, Obstacles._emissive('scanCore', 0xffc8f0), 0, yc, 0);
+      lamp(0.05, C.magenta, 0, 0.42, D / 2 - 0.02);
+      lamp(0.05, C.magenta, 0, H - 0.42, D / 2 - 0.02);
+    } else if (type === 'LASER_ROT') {
+      /* 回転レーザー（契約§4.4 S2）: 面に据えた発振器から腕が首を振り、腕の下に
+         光のカーテンが降りる。腕・カーテンは place() が bands() から直に置くので、
+         見た目と当たり判定は定義上ずれない。 */
+      const matDev = Obstacles._material('rotDev', C.steel);
+      box(w * 0.92, 0.26, D * 1.3, matDev, 0, 0.13, 0);                             // 台座
+      box(w * 0.54, 0.16, D * 1.1, Obstacles._material('rotHead', C.body), 0, 0.32, 0);
+      box(w * 0.34, 0.09, D * 1.15, Obstacles._emissive('rotHot', 0xffb0a0), 0, 0.40, 0);
+      box(w * 0.62, 0.06, D * 1.2, Obstacles._emissive('rotWarn', C.warn), 0, 0.28, 0);
+      stripes(w * 0.9, 0.11, D * 0.66, 0.12, 5);
+      lamp(0.05, C.red, 0, 0.44, 0);
+
+    } else if (type === 'DRONE') {
+      /* 広告ドローン（滑空区間）: 機体＋吊り下げた縦長のホログラム広告で全高を塞ぐ */
+      const H = CFG.H;
+      const matB = Obstacles._material('droneBody', C.body);
+      box(w * 0.52, 0.22, D * 0.62, matB, 0, H - 0.42, 0);                          // 機体
+      [-1, 1].forEach((sx) => [-1, 1].forEach((sz) => {
+        box(0.30, 0.05, 0.30, Obstacles._material('droneArm', C.steel), sx * w * 0.30, H - 0.30, sz * D * 0.26);
+        box(0.26, 0.03, 0.26, Obstacles._material('droneRotor', C.cyan, 0.5), sx * w * 0.30, H - 0.24, sz * D * 0.26);
+      }));
+      box(w * 0.30, 0.07, D * 0.3, Obstacles._emissive('droneWarn', C.red), 0, H - 0.55, 0);
+      box(0.05, 0.36, 0.05, Obstacles._material('droneWire', C.deep), 0, H - 0.76, 0);
+      box(w * 0.90, H - 1.05, 0.05, Obstacles._material('droneAd', C.magenta, 0.42), 0, (H - 1.05) / 2 + 0.06, 0);
+      box(w * 0.52, H - 1.35, 0.07, Obstacles._material('droneAd2', C.cyan, 0.34), 0, (H - 1.05) / 2 + 0.06, 0.03);
+      for (let i = 0; i < 5; i++) {
+        box(w * 0.80, 0.09, 0.03, Obstacles._emissive('droneLine', C.cyan), 0, 0.35 + i * 0.62, -0.02);
+      }
+      box(w * 0.86, 0.06, D * 0.5, Obstacles._emissive('droneFoot', C.warn), 0, 0.05, 0);
+      lamp(0.055, C.red, 0, H - 0.08, 0);
+
+    } else if (type === 'SIGNFRAG') {
+      /* ちぎれたネオン看板（滑空区間）: 縦長の看板の破片。全高を塞ぐ */
+      const H = CFG.H;
+      const matB = Obstacles._material('fragBody', C.dark);
+      box(w * 0.78, H - 0.2, D * 0.92, matB, 0, H / 2, 0, [0, 0, 0.06]);
+      box(w * 0.30, H - 0.5, D * 0.70, Obstacles._material('fragBody2', C.body), -w * 0.18, H / 2 + 0.1, 0.02, [0, 0, 0.06]);
+      [-1, 1].forEach((s2) => box(0.09, H - 0.3, D * 0.55, Obstacles._material('fragEdge', C.steel), s2 * w * 0.37, H / 2, 0, [0, 0, 0.06]));
+      for (let i = 0; i < 6; i++) {
+        box(w * 0.46, 0.15, 0.04, Obstacles._emissive(i % 2 ? 'fragNeon2' : 'fragNeon', i % 2 ? C.magenta : C.cyan),
+            (i % 2 ? 0.1 : -0.1) * w, 0.45 + i * 0.62, -D * 0.28, [0, 0, 0.06]);
+      }
+      box(w * 0.70, 0.10, D * 0.6, Obstacles._emissive('fragWarn', C.warn), 0, H - 0.12, 0);
+      box(w * 0.70, 0.10, D * 0.6, Obstacles._emissive('fragWarn', C.warn), 0, 0.10, 0);
+      lamp(0.05, C.red, 0, H * 0.5, -D * 0.3);
+
+    } else if (type === 'WIRE2') {
+      /* 切れた電線の束（滑空区間・2レーン幅）: ガイシと鉄塔の断片で全高を塞ぐ */
+      const H = CFG.H;
+      const matS = Obstacles._material('wireSteel', C.steel);
+      [-1, 1].forEach((s2) => {
+        box(0.16, H, D * 0.94, matS, s2 * (w / 2 - 0.10), H / 2, 0);
+        for (let i = 0; i < 4; i++) box(0.34, 0.07, 0.07, matS, s2 * (w / 2 - 0.18), 0.5 + i * 1.0, 0);
+      });
+      [0.55, 1.5, 2.5, 3.45].forEach((y, i) => {
+        box(w - 0.12, 0.075, 0.075, Obstacles._material('wireCable', C.deep), 0, y, (i % 2 ? 0.07 : -0.07), [0, 0, (i % 2 ? 0.03 : -0.03)]);
+        box(w - 0.12, 0.035, 0.035, Obstacles._emissive('wireSpark', C.cyan), 0, y + 0.05, (i % 2 ? 0.07 : -0.07), [0, 0, (i % 2 ? 0.03 : -0.03)]);
+      });
+      [-1, 1].forEach((s2) => [0.55, 2.5].forEach((y) => {
+        box(0.12, 0.18, 0.12, Obstacles._material('wireIns', C.body), s2 * w * 0.22, y + 0.12, 0);
+      }));
+      box(w * 0.9, 0.08, D * 0.5, Obstacles._emissive('wireWarn', C.warn), 0, H - 0.06, 0);
+      box(w * 0.9, 0.08, D * 0.5, Obstacles._emissive('wireWarn', C.warn), 0, 0.06, 0);
+      lamp(0.05, C.red, -w * 0.3, 1.5, 0);
+      lamp(0.05, C.red, w * 0.3, 2.5, 0);
+
+    } else if (type === 'ADPANEL') {
+      /* 片側に浮かぶ広告パネル（滑空区間）: 小型ローター＋縦型ディスプレイ */
+      const TOP = t.y1;
+      box(w * 0.86, TOP - 0.55, 0.07, Obstacles._material('panelFace', C.cyan, 0.46), 0, (TOP - 0.55) / 2 + 0.05, 0);
+      box(w * 0.86, TOP - 0.55, D * 0.90, Obstacles._material('panelBody', C.dark), 0, (TOP - 0.55) / 2 + 0.05, 0.0);
+      [-1, 1].forEach((s2) => box(0.08, TOP - 0.5, D * 0.94, Obstacles._material('panelEdge', C.steel), s2 * w * 0.43, (TOP - 0.5) / 2 + 0.05, 0));
+      for (let i = 0; i < 4; i++) {
+        box(w * 0.60, 0.11, 0.03, Obstacles._emissive(i % 2 ? 'panelLine2' : 'panelLine', i % 2 ? C.magenta : C.cyan),
+            0, 0.35 + i * 0.44, -0.04);
+      }
+      box(w * 0.30, 0.16, D * 0.5, Obstacles._material('panelHub', C.body), 0, TOP - 0.30, 0);
+      [-1, 1].forEach((s2) => {
+        box(0.34, 0.04, 0.10, Obstacles._material('panelRotor', C.cyan, 0.55), s2 * w * 0.28, TOP - 0.10, 0);
+        box(0.06, 0.24, 0.06, Obstacles._material('panelEdge', C.steel), s2 * w * 0.20, TOP - 0.20, 0);
+      });
+      box(w * 0.7, 0.07, D * 0.5, Obstacles._emissive('panelWarn', C.warn), 0, TOP - 0.03, 0);
+      box(w * 0.7, 0.06, D * 0.5, Obstacles._emissive('panelWarn', C.warn), 0, 0.04, 0);
+      lamp(0.05, C.red, 0, TOP - 0.04, D * 0.2);
+
+    }
+  },
+
+  /* 動く部品（マージしない。place() が bands()/MOT から毎フレーム置く） */
+  buildMoving(type, g, w, t, x) {
+    const C = x.C;
+    if (type === 'LASER_SCAN') {
+      /* 到達位置の予告マーカー（床・天井）＋掃引範囲の薄い帯 */
+      const mark = new THREE.Group();
+      [[0.02, 1], [CFG.H - 0.02, -1]].forEach((e) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(CFG.LANE_W - 0.16, 3.4),
+                                 Obstacles._material('scanMark', 0xff66d8, 0.34));
+        m.rotation.x = -Math.PI / 2 * e[1];
+        m.position.set(0, e[0], 0);
+        m.renderOrder = 4;
+        mark.add(m);
+        const b = new THREE.Mesh(new THREE.BoxGeometry(CFG.LANE_W - 0.16, 0.05, 0.10),
+                                 Obstacles._emissive('scanMarkLine', C.magenta));
+        b.position.set(0, e[0] + e[1] * 0.03, -1.55);
+        mark.add(b);
+      });
+      g.add(mark);
+      g.userData.mark = mark;
+      const range = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.9),
+                                   Obstacles._material('scanRange', C.cyan, 0.16));
+      range.rotation.x = -Math.PI / 2;
+      range.position.y = 0.012;
+      range.renderOrder = 3;
+      g.add(range);
+      g.userData.range = range;
+
+    } else if (type === 'LASER_V' || type === 'LASER_LOW') {
+      /* 点滅レーザーが消えている間の「待機表示」。
+         消えている＝通れる ことが分かりつつ、そこに装置があることも分かるように、
+         暗い光の筋だけを残す（点いている時は beam 側が出る）。 */
+      const isV = (type === 'LASER_V');
+      const hh = isV ? (OBS[type].y1 - OBS[type].y0) : 0.6;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w * (isV ? 0.30 : 0.98), isV ? hh - 0.32 : 0.05, 0.05),
+                               Obstacles._material('standby', 0x7a4aa8, 0.30));
+      m.position.set(0, isV ? CFG.H / 2 : 0.44, 0);
+      m.visible = false;
+      g.add(m);
+      g.userData.standby = m;
+
+    } else if (type === 'LASER_ROT') {
+      const R = CFG.LASER.ROT_R, TH = CFG.LASER.ROT_W;
+      const mkArm = (coreCol, haloOp, ghost) => {
+        const arm = new THREE.Group();
+        const sc = new THREE.Group();
+        arm.add(sc);
+        const halo = new THREE.Mesh(new THREE.BoxGeometry(1, TH, TH),
+                                    Obstacles._material(ghost ? 'rotGhost' : 'rotHalo', ghost ? C.cyan : C.red, haloOp));
+        halo.position.x = 0.5;
+        sc.add(halo);
+        if (!ghost) {
+          const core = new THREE.Mesh(new THREE.BoxGeometry(1, TH * 0.34, TH * 0.34),
+                                      Obstacles._emissive('rotCore', coreCol));
+          core.position.x = 0.5;
+          sc.add(core);
+        }
+        arm.userData = { sc: sc };
+        g.add(arm);
+        return arm;
+      };
+      g.userData.ghost = mkArm(0x9fe8ff, 0.22, true);      // 到達時の角度を薄く予告（水色）
+      g.userData.arm = mkArm(0xffd0c0, 0.60, false);
+      /* 光のカーテン: bands() の帯を1つずつ描く（InstancedMesh 1つ＝1ドローコール） */
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1),
+                                         Obstacles._material('rotCurtain', 0xff5a4d, 0.36),
+                                         CFG.LASER.ROT_SLATS + 1);
+      im.frustumCulled = false;
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.renderOrder = 2;
+      g.add(im);
+      g.userData.slats = { mesh: im, dummy: new THREE.Object3D(), n: CFG.LASER.ROT_SLATS + 1 };
+      g.userData.armR = R;
+    }
+  }
+};
+
+Zones.register(ZoneNeon);

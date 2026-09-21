@@ -300,10 +300,10 @@ const Setpieces = {
     const d = Setpieces.dust;
     if (!d) return;
     const s = Setpieces.state;
-    /* 滑空: 眼下の街と雲の層を出す（ZoneNeon 側が持つ） */
-    if (typeof ZoneNeon !== 'undefined' && ZoneNeon.setGlide) {
+    /* 滑空: 眼下の街と雲の層を出す（ゾーン側が持つ演出） */
+    {
       const fx = Setpieces.camFx();
-      ZoneNeon.setGlide(fx && fx.glide ? fx.glide : 0);
+      Zones.setGlide(fx && fx.glide ? fx.glide : 0);
     }
     if (s && s.id === 'bigjump') {
       if (d.mat.opacity !== 0) d.mat.opacity = 0;
@@ -347,7 +347,7 @@ const Setpieces = {
     Setpieces.state = null;
     if (Setpieces.dust) Setpieces.dust.mat.opacity = 0;
     if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
-    if (typeof ZoneNeon !== 'undefined' && ZoneNeon.setGlide) ZoneNeon.setGlide(0);
+    Zones.setGlide(0);
     if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     if (typeof World !== 'undefined' && World.ready) World.clearSetpieceFx();
   }

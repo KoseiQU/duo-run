@@ -130,6 +130,11 @@
   #tip .finger{font-size:17px; margin-right:4px; vertical-align:-2px;}
   @media (orientation:landscape){ #tip{max-width:min(64vw,520px); font-size:13px; padding:5px 13px;} }
 
+  /* ---------- ゾーン切替の暗転（§6 P3a 切替を繋ぐ簡易演出） ---------- */
+  #zonefade{position:absolute; inset:0; background:#05070f; opacity:0; pointer-events:none;}
+  #zonefade.on{animation:zoneFade .42s ease-out 1;}
+  @keyframes zoneFade{0%{opacity:1;} 60%{opacity:.55;} 100%{opacity:0;}}
+
   /* ---------- 大演出の予告（§4.4 ビル間の大ジャンプ「JUMP!」） ---------- */
   #cue{position:absolute; left:50%; top:44%; transform:translate(-50%,-50%) scale(.8);
     text-align:center; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;}
@@ -144,6 +149,8 @@
 <body>
 <div id="app">
   <canvas id="gl"></canvas>
+
+  <div id="zonefade"></div>
 
   <div id="touchzones" data-ui="touchzones">
     <div class="tz top" data-zone="top"></div>
@@ -236,6 +243,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/zones.js"></script>
 <script src="js/obstacles.js"></script>
 <script src="js/chunks.js"></script>
 <script src="js/runners.js"></script>

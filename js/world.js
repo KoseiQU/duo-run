@@ -13,11 +13,9 @@ const World = {
   TILE: 3.0,            // 路面スラブ1枚の長さ（ギャップの穴の粒度もこれで決まる）
   TILE_BEHIND: 12,      // カメラ後方に残す長さ
 
-  init(canvas) {
+  init(canvas, zoneId) {
     if (World.ready) return;
-    const P = ZoneNeon.PAL;
     const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false });
-    renderer.setClearColor(P.fog, 1);
     World.renderer = renderer;
 
     const scene = new THREE.Scene();
@@ -26,14 +24,17 @@ const World = {
     World.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 400);
     World.camera.position.set(0, CFG.CAM.Y, CFG.CAM.Z);
 
-    /* --- ゾーン装飾（光・空・遠景・小物・雨） ------------------------------ */
-    ZoneNeon.build(scene);
+    /* --- ゾーン装飾（光・空・遠景・小物・粒子）＝ 差し替え可能（契約§6 P3a） -- */
+    Zones.build(scene, zoneId || 'neon');
+    const P = Zones.pal();
+    renderer.setClearColor(P.fog, 1);
 
-    /* --- 路面／天井面（濡れた高光沢のスラブ。InstancedMesh 1つ） ---------- */
+    /* --- 路面／天井面（InstancedMesh 1つ。材質の色・質感はゾーンで替わる） -- */
     const tileGeo = new THREE.BoxGeometry(CFG.LANE_W - 0.07, 0.14, World.TILE - 0.10);
     const roadMat = new THREE.MeshStandardMaterial({
-      color: P.road, roughness: 0.18, metalness: 0.46
+      color: P.road, roughness: P.roadRough, metalness: P.roadMetal
     });
+    World._roadMat = roadMat;
     World.nTiles = Math.ceil((CFG.VIEW_FAR + World.TILE_BEHIND) / World.TILE) + 2;
     World.tileMesh = {};
     ['floor', 'ceil'].forEach((surface) => {
@@ -49,7 +50,8 @@ const World = {
        まとめて1つの群にしておく（大演出で持ち上げる／消すため） */
     const LONG = CFG.VIEW_FAR + 60;
     const zc = -(LONG / 2) + World.TILE_BEHIND;
-    const skirtMat = ZoneNeon.lam(0x252e5e);
+    const skirtMat = ZoneKit.lam(P.skirt);
+    World._skirtMat = skirtMat;
     World.trim = new THREE.Group();
     scene.add(World.trim);
     const trim = World.trim;
@@ -64,11 +66,11 @@ const World = {
     const lineGeo = new THREE.BoxGeometry(0.07, 0.05, LONG);
     const glowGeo = new THREE.PlaneGeometry(0.42, LONG);
     [-1, 1].forEach((s) => {
-      [['floor', 0.05, ZoneNeon.PAL.amber, -Math.PI / 2], ['ceil', CFG.H - 0.05, ZoneNeon.PAL.indigo, Math.PI / 2]].forEach((c) => {
-        const l = new THREE.Mesh(lineGeo, ZoneNeon.bas(c[2]));
+      [['floor', 0.05, P.amber, -Math.PI / 2], ['ceil', CFG.H - 0.05, P.indigo, Math.PI / 2]].forEach((c) => {
+        const l = new THREE.Mesh(lineGeo, ZoneKit.bas(c[2]));
         l.position.set(s * (CFG.HALF_W - 0.05), c[1], zc);
         trim.add(l);
-        const gl = new THREE.Mesh(glowGeo, ZoneNeon.add(c[2], 0.26));
+        const gl = new THREE.Mesh(glowGeo, ZoneKit.add(c[2], 0.26));
         gl.position.set(s * (CFG.HALF_W - 0.28), (c[0] === 'floor') ? 0.014 : CFG.H - 0.014, zc);
         gl.rotation.x = c[3];
         gl.renderOrder = 3;
@@ -128,8 +130,8 @@ const World = {
     const matLimb = new THREE.MeshStandardMaterial({
       color: limbC, emissive: deep, emissiveIntensity: 0.8, roughness: 0.55, metalness: 0.02
     });
-    const matDark = ZoneNeon.bas(isL ? 0x3a1a04 : 0x150c38);
-    const matHot = ZoneNeon.bas(hot);
+    const matDark = ZoneKit.bas(isL ? 0x3a1a04 : 0x150c38);
+    const matHot = ZoneKit.bas(hot);
     const matCape = new THREE.MeshStandardMaterial({
       color: 0x6153cf, emissive: 0x2a1f8e, emissiveIntensity: 0.9,
       roughness: 0.6, metalness: 0.0, side: THREE.DoubleSide
@@ -206,7 +208,7 @@ const World = {
       body.add(cape);
       add(cape, new THREE.CylinderGeometry(0.135, 0.185, 0.42, 5, 1, true, -Math.PI * 0.40, Math.PI * 0.80),
           matCape, [0, -0.20, -0.035], [-0.14, 0, 0], [1.0, 1, 0.75]);
-      add(cape, new THREE.BoxGeometry(0.21, 0.024, 0.02), ZoneNeon.bas(0xb0a2ff), [0, -0.40, 0.10], [-0.14, 0, 0]);
+      add(cape, new THREE.BoxGeometry(0.21, 0.024, 0.02), ZoneKit.bas(0xb0a2ff), [0, -0.40, 0.10], [-0.14, 0, 0]);
       add(cape, new THREE.BoxGeometry(0.26, 0.05, 0.09), matCape, [0, 0.005, 0.005]);
     }
 
@@ -231,7 +233,7 @@ const World = {
     /* --- 面に貼りつく丸影＋自分の色の弱い点光源 ---------------------------- */
     const glow = new THREE.Mesh(
       new THREE.CircleGeometry(0.42, 18),
-      ZoneNeon.add(isL ? CFG.COL.LUMEN : CFG.COL.UMBRA, 0.42)
+      ZoneKit.add(isL ? CFG.COL.LUMEN : CFG.COL.UMBRA, 0.42)
     );
     glow.renderOrder = 5;
     glow.rotation.x = -Math.PI / 2;
@@ -252,8 +254,12 @@ const World = {
     const T = World.TILE;
     const d = World._dummy;
     const base = Math.floor((dist - World.TILE_BEHIND) / T);
+    /* 路面に穴が空く障害物（ギャップ・崩れる橋）。区間は Obstacles.holeSpan が唯一の出所 */
     const gaps = [];
-    for (let i = 0; i < obstacles.length; i++) if (obstacles[i].type === 'GAP') gaps.push(obstacles[i]);
+    for (let i = 0; i < obstacles.length; i++) {
+      const sp = Obstacles.holeSpan(obstacles[i]);
+      if (sp) gaps.push({ o: obstacles[i], from: sp.from, to: sp.to });
+    }
     ['floor', 'ceil'].forEach((surface) => {
       const im = World.tileMesh[surface];
       const y = (surface === 'floor') ? -0.07 : CFG.H + 0.07;
@@ -264,9 +270,9 @@ const World = {
           const lane = CFG.LANES[li];
           let hide = false;
           for (let k = 0; k < gaps.length; k++) {
-            const o = gaps[k];
+            const o = gaps[k].o;
             if (o.surface !== surface || o.lane !== lane) continue;
-            if (Math.abs(o.at - atM) < (T + OBS.GAP.depth) / 2) { hide = true; break; }
+            if (atM > gaps[k].from - T / 2 && atM < gaps[k].to + T / 2) { hide = true; break; }
           }
           const fall = Setpieces.tileFall(atM, surface, lane);
           if (Setpieces.tileHidden(atM)) hide = true;          // 滑空区間＝ビルとビルの間（道がない）
@@ -317,11 +323,18 @@ const World = {
     if (o.view) { World.obsRoot.remove(o.view); Obstacles.release(o.type, o.view); o.view = null; }
   },
 
+  /* ゲート・門柱の金属（ゾーンで色が替わるので材質を覚えておく） */
+  _frame() {
+    const m = ZoneKit.lam(Zones.pal().metal);
+    (World._frameMats || (World._frameMats = [])).push(m);
+    return m;
+  },
+
   /* 発射台の点滅ライン（§4.4 大ジャンプの予告）: 路面に引いた矢羽根と門柱 */
   _buildRampCue() {
     const g = new THREE.Group();
-    const neon = ZoneNeon.bas(0xffd479);
-    const neon2 = ZoneNeon.bas(0x38e2ff);
+    const neon = ZoneKit.bas(0xffd479);
+    const neon2 = ZoneKit.bas(0x38e2ff);
     for (let i = 0; i < 9; i++) {
       const z = -i * 2.4;
       [-1, 1].forEach((sfc) => {
@@ -332,7 +345,7 @@ const World = {
       });
     }
     [-1, 1].forEach((sx) => {
-      const p = new THREE.Mesh(new THREE.BoxGeometry(0.18, CFG.H, 0.18), ZoneNeon.lam(0x8f99d4));
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.18, CFG.H, 0.18), World._frame());
       p.position.set(sx * (CFG.HALF_W + 0.14), CFG.H / 2, -20.5);
       g.add(p);
       const l = new THREE.Mesh(new THREE.BoxGeometry(0.10, CFG.H * 0.9, 0.10), neon);
@@ -506,9 +519,9 @@ const World = {
   /* ゴールゲート: ネオンの門。2体がここを抜けるとクリア演出に入る */
   _buildGoalGate() {
     const g = new THREE.Group();
-    const frame = ZoneNeon.lam(0x8f99d4);
-    const neon = ZoneNeon.bas(ZoneNeon.PAL.amber);
-    const neon2 = ZoneNeon.bas(ZoneNeon.PAL.indigo);
+    const frame = World._frame();
+    const neon = ZoneKit.bas(Zones.pal().amber);
+    const neon2 = ZoneKit.bas(Zones.pal().indigo);
     const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
     [-1, 1].forEach((s2) => {
       add(new THREE.BoxGeometry(0.28, CFG.H + 0.6, 0.6), frame, s2 * (CFG.HALF_W + 0.22), CFG.H / 2, 0);
@@ -520,11 +533,32 @@ const World = {
     add(new THREE.BoxGeometry(CFG.HALF_W * 2, 0.10, 0.08), neon, 0, -0.02, 0.32);
     /* 門をくぐる帯（通過が分かるように光の膜を薄く張る） */
     const veil = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2, CFG.H),
-                                ZoneNeon.add(0xfff0c8, 0.16));
+                                ZoneKit.add(0xfff0c8, 0.16));
     veil.position.set(0, CFG.H / 2, 0);
     veil.renderOrder = 4;
     g.add(veil);
     return g;
+  },
+
+  /* ゾーンが変わったときに、World 側が持っている材質・霧の基準を合わせる（契約§6 P3a）。
+     ＝ 路面の色と質感・路肩・ゲートの枠・背景色・霧の基準値。
+     縁の発光ライン（琥珀＝床／藍＝天井）は**意味を持つ色**なので、どのゾーンでも変えない。 */
+  applyZone() {
+    if (!World.ready) return false;
+    const P = Zones.pal();
+    if (!P) return false;
+    if (World._roadMat) {
+      World._roadMat.color.setHex(P.road);
+      World._roadMat.roughness = P.roadRough;
+      World._roadMat.metalness = P.roadMetal;
+      World._roadMat.needsUpdate = true;
+    }
+    if (World._skirtMat) World._skirtMat.color.setHex(P.skirt);
+    (World._frameMats || []).forEach((m) => m.color.setHex(P.metal));
+    World.renderer.setClearColor(P.fog, 1);
+    const f = World.scene.fog;
+    if (f) World._fogBase = { near: f.near, far: f.far, color: f.color.getHex() };
+    return true;
   },
 
   /* 大演出の後始末（リトライ・タイトルで必ず通る） */
@@ -602,7 +636,7 @@ const World = {
 
   render() {
     if (!World.ready) return;
-    ZoneNeon.sync(World._dist, World._t, World._speed);
+    Zones.sync(World._dist, World._t, World._speed);
     Setpieces.syncView(World._dist, World._t);
     World.renderer.render(World.scene, World.camera);
   },
