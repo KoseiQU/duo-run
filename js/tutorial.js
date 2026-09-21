@@ -28,7 +28,11 @@ const Tutorial = {
     /* S4 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     sync: { ph: ['<span class="finger">👆</span>光る踏み板を', '<b class="k">下</b>と<b class="k2">上</b>で<b>同時に</b>',
                  '踏むと橋が架かる'] },
-    dropceil: { ph: ['<span class="finger">👇</span>天井が落ちる', '<b class="k">下</b>は<b>横へ</b>、<b class="k2">上</b>は<b>跳ぶ</b>'] }
+    dropceil: { ph: ['<span class="finger">👇</span>天井が落ちる', '<b class="k">下</b>は<b>横へ</b>、<b class="k2">上</b>は<b>跳ぶ</b>'] },
+    /* S5 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
+    current: { ph: ['<span class="finger">👈</span>海流に流される', '<b>逆へフリック</b>で踏みとどまる'] },
+    liftpad: { ph: ['<span class="finger">👆</span>浮き上がる足場は', '<b>跳び越える</b>', '沈んでいれば通れる'] },
+    colordoor: { ph: ['<span class="finger">👉</span>扉は<b class="k">同じ色</b>だけ通れる', '<b class="k">下は琥珀</b>／<b class="k2">上は藍</b>へ'] }
   },
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },

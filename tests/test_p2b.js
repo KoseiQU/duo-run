@@ -37,6 +37,7 @@
       Object.keys(OBS).forEach((type) => {
         if (OBS[type].motion) return;                       // 動く型は次のテストで見る
         if (OBS[type].pad) return;                          // 当たり判定を持たない型（同時スイッチのパッド / P3b）
+        if (OBS[type].ghost) return;                        // 〃（海流の帯・同色の扉 / P4a）
         ['floor', 'ceil'].forEach((surface) => {
           const o = Ob.make(type, surface, 0, 100, 0);
           const side = OBS[type].both ? surface : surface;

@@ -82,6 +82,10 @@ const ZoneSea = {
     return ZoneSea.mode;
   },
   isWall(m) {
+    /* 大演出「巨大魚の通過」（§4.4 S5）の間は開放区間にする。
+       壁があるとコリドーの外を泳ぐ巨体が隠れて「巨大さが画面で分かる」を満たせない。
+       演出側の状態を読むだけ（Setpieces は照明も区間も触らない / 一方通行の参照）。 */
+    if (typeof Setpieces !== 'undefined' && Setpieces.fishOpenSection && Setpieces.fishOpenSection(m)) return false;
     const p = ((m % ZoneSea.WALL_PERIOD) + ZoneSea.WALL_PERIOD) % ZoneSea.WALL_PERIOD;
     return p < ZoneSea.WALL_LEN;
   },
@@ -1508,6 +1512,26 @@ ZoneSea.obstacleSkin = {
                     rib: Obstacles._material('coRib', C.dark),
                     warn: Obstacles._emissive('coWarn', C.warn),
                     hot: Obstacles._emissive('coHot', C.fire) });
+
+    } else if (OBS[type].belt) {
+      /* 海流ベルト（契約§4.5 / S5）: 流れの矢印と入口ゲート。当たり判定は持たない */
+      x.beltKit({ arrow: C.cyan, line: C.jelly,
+                  frame: Obstacles._material('cgFrame', C.dark) });
+
+    } else if (OBS[type].door) {
+      /* 色の扉（契約§4.5 / S5）: 珊瑚の門。色は place() が面と型から決める */
+      x.doorKit({ frame: Obstacles._material('drFrame', C.dark) });
+
+    } else if (type === 'LIFTPAD') {
+      /* 浮上足場（契約§4.5 / S5）: 海底から迫り上がる岩の台 */
+      x.liftKit({ base: Obstacles._material('lpBase', C.dark),
+                  body: Obstacles._material('lpBody', C.steel) });
+
+    } else if (OBS[type].fish) {
+      /* 巨大魚の部位（契約§4.4 S5 の大演出） */
+      x.fishKit({ flesh: Obstacles._material('fsFlesh', 0x3c7784),
+                  bone: Obstacles._material('fsBone', 0xdcd6bf),
+                  hotCol: C.warn });
 
     } else if (type === 'SLOWBAND') {
       /* 減速帯（砂の山）: 死なないが越えないと速度が落ちる */

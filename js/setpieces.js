@@ -152,7 +152,68 @@ const Setpieces = {
         { at: 176, type: 'temple.exit' },
         { at: 200, type: 'temple.end' }
       ]
+    },
+
+    /* ====================================================================
+       S5「巨大魚の通過」（契約§4.4 / P4a）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0      予告（HUD「LEVIATHAN!」）＋ 前方の霧の中に巨体の影
+         8〜44  **横断**: 横から巨大魚がコリドーを横切る。
+                rel 26 付近で **画面の半分以上を魚体が占める**（契約の合格条件）。
+                この区間には障害物を置かない（視認距離ぶん空けて 64m から置く）
+         56〜   **並走**: 魚が左を並んで泳ぐ。ヒレ・牙・尾がコリドーへ入ってくる
+         64〜170 譜面: 牙（口の中をくぐる＝両者ジャンプ）／ヒレ（レーン移動）／
+                尾の振り（横スキャン＝到達時刻で判定）
+         146〜176 **目玉が画面に入る**（頭が寄ってくる。カメラは奪わない）
+         178〜  魚が深みへ去る
+         200    ゴールへ
+       §4.7 は通常どおり（演出でも理不尽な死を作らない）。
+       ==================================================================== */
+    megafish: {
+      id: 'megafish',
+      lengthM: 200,
+      floor: [
+        { at: 76,  lane: 0,  type: 'FISH_TOOTH' },    // 口の中をくぐる（下顎の牙）
+        { at: 98,  lane: 1,  type: 'FISH_TOOTH' },
+        { at: 126, lane: -1, type: 'FISH_FIN' },      // ヒレの隙間（both＝両者レーン移動）
+        { at: 140, lane: 1,  type: 'FISH_FIN' },
+        { at: 154, lane: 0,  type: 'FISH_TAIL',       // 尾の振り（到達時刻で判定）
+          params: { scan: { from: -1, to: 1, phase: 0 } } },
+        { at: 168, lane: 0,  type: 'FISH_FIN' },
+        { at: 182, lane: -1, type: 'FISH_TOOTH' }
+      ],
+      ceil: [
+        { at: 76,  lane: 1,  type: 'FISH_TOOTH' },    // 上顎の牙（＝口の中）
+        { at: 98,  lane: -1, type: 'FISH_TOOTH' },
+        { at: 182, lane: 0,  type: 'FISH_TOOTH' }
+      ],
+      events: [
+        { at: 0,   type: 'fish.start' },
+        { at: 46,  type: 'fish.cue' },
+        { at: 146, type: 'fish.eye' },
+        { at: 200, type: 'fish.end' }
+      ]
     }
+  },
+
+  /* ---- 巨大魚のキーフレーム（距離 m。すべてここから引く） ----------------- */
+  FISH: {
+    LEN: 92, H: 13, W: 9,          // 全長・高さ・幅（コリドー 3.6×4.0 よりはるかに大きい）
+    CROSS0: 8, CROSS1: 44,         // 横断の区間
+    CROSS_Z: 40,                   // 横断する地点（演出開始からの相対距離）
+    /* 横断の始点と終点（魚体の中心の x）。鼻先は中心の 46m 左なので、
+       真ん中（u=0.5）で **頭が正面に来る** ように振る＝巨体の頭が目の前を横切る。 */
+    CROSS_X0: -32, CROSS_X1: 124,
+    CROSS_Y: 2.2,                  // 横断時の高さ（コリドーの高さ。巨体が通路を塞いで通る）
+    SWIM0: 56,                     // 並走の始まり
+    EYE0: 146, EYE1: 176,          // 目玉が画面に入る区間
+    END: 200,
+    X_FAR: -15.0, X_NEAR: -10.5,   // 並走の横位置（寄ってくる。体が画面を覆わない距離で止める）
+    Y_FAR: 6.0, Y_NEAR: 3.0,       // 〃 高さ（目線まで下りてくる）
+    EYE_Z: 0.42,                   // 目玉の位置（頭から全長の何割か）
+    /* 〃 奥行き（魚体の中心）。全長92mなので、中心が +30 まで来ると
+       **目玉（頭から少し後ろ）がちょうど2体の真横**に来る＝目が合う瞬間になる。 */
+    Z_FAR: -60, Z_NEAR: 30
   },
 
   /* ---- 神殿崩壊のキーフレーム（距離 m。すべてここから引く） --------------- */
@@ -204,13 +265,13 @@ const Setpieces = {
   /* ---- 生成（createGenerator から呼ばれる） ------------------------------- */
   /* scale …「その地点の速度 / 基準速度」。演出の at は実寸だが、落ちる天井や
      同時スイッチの**時刻規則**はここを通して実寸の秒へ直す（§4.7 と同じ考え方）。 */
-  build(id, startM, nowDist, scale, syncs) {
+  build(id, startM, nowDist, scale, sink) {
     const d = Setpieces.DEFS[id];
     if (!d) return null;
     const items = [];
     const sc = (scale === undefined) ? 1 : scale;
-    (d.floor || []).forEach((e) => expandEntry(items, e, 'floor', startM + e.at, nowDist, sc, syncs));
-    (d.ceil || []).forEach((e) => expandEntry(items, e, 'ceil', startM + e.at, nowDist, sc, syncs));
+    (d.floor || []).forEach((e) => expandEntry(items, e, 'floor', startM + e.at, nowDist, sc, sink));
+    (d.ceil || []).forEach((e) => expandEntry(items, e, 'ceil', startM + e.at, nowDist, sc, sink));
     items.sort((a, b) => a.at - b.at);
     const events = (d.events || []).map((e) => ({ at: startM + e.at, type: e.type, params: e.params || null, done: false }));
     return { id: id, items: items, events: events, lengthM: d.lengthM, startM: startM };
@@ -266,7 +327,90 @@ const Setpieces = {
     } else if (e.type === 'temple.end') {
       if (Setpieces.state) Setpieces.state.ending = true;
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'fish.start') {
+      Setpieces.state = { id: 'megafish', startM: e.at, t: 0 };
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('LEVIATHAN!', '巨大魚が横切る', 'high');
+    } else if (e.type === 'fish.cue') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('SWIM!', '口とヒレの隙間を抜けろ');
+    } else if (e.type === 'fish.eye') {
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'fish.end') {
+      if (Setpieces.state) Setpieces.state.ending = true;
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     }
+  },
+
+  /* ---- 巨大魚の通過（距離の関数。フレームに依存しない） ------------------- */
+  fishActive() { const s = Setpieces.state; return !!(s && s.id === 'megafish'); },
+  /* 魚の位置（世界座標。z は 2体から見た奥行き＝手前が +z）。
+     見た目・照明・監査（画面占有の測定）がすべてこの1本から引く。 */
+  fishPos(m) {
+    const s = Setpieces.state, F = Setpieces.FISH;
+    if (!s || s.id !== 'megafish') return { vis: false, x: 0, y: 0, z: 0, yaw: 0, phase: 'none' };
+    const rel = m - s.startM;
+    if (rel < F.CROSS0) {
+      /* 予告: 前方の霧の中に、まだ遠い影 */
+      return { vis: true, x: F.CROSS_X0 - 30, y: F.CROSS_Y, z: -(F.CROSS_Z - rel) - 40,
+               yaw: Math.PI / 2, phase: 'far' };
+    }
+    if (rel <= F.CROSS1) {
+      const u = U.smooth((rel - F.CROSS0) / (F.CROSS1 - F.CROSS0));
+      return { vis: true, x: U.lerp(F.CROSS_X0, F.CROSS_X1, u), y: F.CROSS_Y,
+               z: -(F.CROSS_Z - rel), yaw: Math.PI / 2, phase: 'cross' };
+    }
+    if (rel < F.SWIM0) return { vis: false, x: F.CROSS_X, y: F.CROSS_Y, z: 0, yaw: Math.PI / 2, phase: 'turn' };
+    /* 並走: 左から寄ってきて、目線の高さまで下りる → 目が合う → 深みへ去る */
+    const v = U.smooth(U.clamp((rel - F.SWIM0) / (F.EYE0 - F.SWIM0), 0, 1));
+    const w = U.smooth(U.clamp((rel - F.EYE1) / (F.END - F.EYE1), 0, 1));
+    const x = U.lerp(U.lerp(F.X_FAR, F.X_NEAR, v), -30, w);
+    const y = U.lerp(U.lerp(F.Y_FAR, F.Y_NEAR, v), 8.0, w);
+    const z = U.lerp(U.lerp(F.Z_FAR, F.Z_NEAR, v), -52, w);
+    return { vis: true, x: x, y: y, z: z, yaw: -0.10 + 0.16 * w, phase: (w > 0.01) ? 'leave' : 'swim' };
+  },
+  /* 大演出の間はゾーンの区間パターンを **開放区間** に固定する（ゾーンが読む）。
+     壁のある区間だと、コリドーの外にいる巨体が壁に隠れて画面に映らないため。
+     ＝ 演出はゾーンを触らず「今は開けておいてほしい」とだけ答える（一方通行）。 */
+  fishOpenSection(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'megafish') return false;
+    const rel = m - s.startM;
+    return rel > -24 && rel < Setpieces.FISH.END + 24;
+  },
+
+  /* 魚体の外接箱（世界座標）。契約§4.4 S5「魚の巨大さが画面で分かる」の測定窓口 */
+  fishBox(m) {
+    const F = Setpieces.FISH;
+    const p = Setpieces.fishPos((m === undefined) ? (Setpieces.state ? Setpieces.state.dist : 0) : m);
+    if (!p.vis) return null;
+    /* 横断中は全長が x 方向、並走中は z 方向 */
+    const cross = (p.phase === 'cross' || p.phase === 'far');
+    const hx = cross ? F.LEN / 2 : F.W / 2;
+    const hz = cross ? F.W / 2 : F.LEN / 2;
+    return { x0: p.x - hx, x1: p.x + hx, y0: p.y - F.H / 2, y1: p.y + F.H / 2,
+             z0: p.z - hz, z1: p.z + hz };
+  },
+  /* 目玉の外接箱（頭の手前側・プレイヤーに向いた面） */
+  fishEyeBox(m) {
+    const F = Setpieces.FISH;
+    const p = Setpieces.fishPos((m === undefined) ? (Setpieces.state ? Setpieces.state.dist : 0) : m);
+    if (!p.vis || p.phase === 'cross' || p.phase === 'far') return null;
+    const r = 1.5;
+    const ex = p.x + F.W * 0.42, ey = p.y + F.H * 0.16, ez = p.z - F.LEN * F.EYE_Z;
+    return { x0: ex - r, x1: ex + r, y0: ey - r, y1: ey + r, z0: ez - r, z1: ez + r };
+  },
+  /* 魚体が画面をどれだけ覆っているか 0..1（描いていないときは 0） */
+  fishOnScreen(m) {
+    const f = Setpieces.fish;
+    if (!f || !f.group.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    return World.projectCoverage(Setpieces.fishBox(m));
+  },
+  fishEyeOnScreen(m) {
+    const f = Setpieces.fish;
+    if (!f || !f.group.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    const b = Setpieces.fishEyeBox(m);
+    return b ? World.projectCoverage(b) : 0;
   },
 
   /* ---- 神殿崩壊（距離の関数。フレームに依存しない） ----------------------- */
@@ -519,6 +663,10 @@ const Setpieces = {
       s.rage = Setpieces.templeRage(game.dist);
       return;
     }
+    if (s.id === 'megafish') {
+      /* 位置も演出量もすべて距離の関数（fishPos）なので、ここでは何も溜めない */
+      return;
+    }
     /* 崩落前線はプレイヤーの後ろを上下しながら追う（演出＝絶対に追いつかない） */
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
@@ -545,6 +693,14 @@ const Setpieces = {
       const ahead = atM - dist;
       if (ahead < -4 || ahead > 40) return 0;
       return (0.012 + 0.05 * p) * (1 - U.clamp(ahead / 40, 0, 1)) * Math.sin(s.t * 31 + atM * 2.1);
+    }
+    if (s && s.id === 'megafish') {
+      /* 巨大魚が横切るとき、押された水で前方の床と天井が波打つ（落とさない） */
+      const p = Setpieces.fishPos(dist);
+      const cross = (p.phase === 'cross') ? U.clamp(1 - Math.abs(p.x) / 46, 0, 1) : 0;
+      const ahead = atM - dist;
+      if (ahead < -6 || ahead > 56) return 0;
+      return (0.008 + 0.05 * cross) * (1 - U.clamp(ahead / 56, 0, 1)) * Math.sin(s.t * 22 + atM * 1.8);
     }
     if (s && s.id === 'templefall') {
       /* 神殿崩壊: 前方の床と天井が地響きで震える（落とさない＝公平性に影響しない） */
@@ -633,6 +789,25 @@ const Setpieces = {
         rage: r, exit: q
       };
     }
+    if (s.id === 'megafish') {
+      /* 巨大魚: 横断の瞬間に水が押されて揺れる。並走中は霧が晴れて巨体が見える */
+      const m = s.dist || s.startM;
+      const p = Setpieces.fishPos(m);
+      const cross = (p.phase === 'cross') ? U.clamp(1 - Math.abs(p.x) / 46, 0, 1) : 0;
+      const near = (p.phase === 'swim') ? U.clamp(1 - Math.abs(p.x) / 26, 0, 1) : 0;
+      return {
+        shake: 0.012 + 0.085 * cross * (0.7 + 0.3 * Math.sin(s.t * 24)) + 0.02 * near,
+        fovAdd: 3 + 6 * cross + 3 * near,
+        camBack: 0,
+        /* 巨体を見上げる（横断は上、並走はやや上）。カメラは前を向いたまま＝操作は奪わない */
+        camUp: 0.30 + 0.35 * cross,
+        lookUp: 0.30 + 1.15 * cross + 0.35 * near,
+        fogFar: U.lerp(76, 118, Math.max(cross, near)),
+        fogColor: 0x083244,
+        glide: 0,
+        cross: cross, near: near
+      };
+    }
     const ramp = U.clamp(s.t / 1.2, 0, 1);              // 立ち上がり
     return {
       shake: 0.055 * ramp * (0.7 + 0.3 * Math.sin(s.t * 23.3)),
@@ -667,6 +842,156 @@ const Setpieces = {
                        base: new THREE.Color(0x9b86c8) };
     Setpieces._buildRock(scene);
     Setpieces._buildTemple(scene);
+    Setpieces._buildFish(scene);
+  },
+
+  /* ---- 巨大魚（S5「巨大魚の通過」）の造形 --------------------------------
+     ・全長 92m の巨体（クジラ／リュウグウノツカイ級）。コリドーより大きい。
+     ・頭（顎と牙）・胴・背ビレ・胸ビレ・尾ビレ・発光する側線・大きな目玉。
+     ・テクスチャ画像は使わない（契約§3）。形はプリミティブの合成だけで彫る。
+     ・ローカル座標は「鼻先が -z、尾が +z」＝ 2体と同じ向き（yaw 0 で並走）。 */
+  _buildFish(scene) {
+    const F = Setpieces.FISH;
+    const L = F.LEN, H = F.H, W = F.W;
+    const g = new THREE.Group();
+    g.visible = false;
+    const skin = new THREE.MeshLambertMaterial({ color: 0x4d8e9b, flatShading: true });
+    const belly = new THREE.MeshLambertMaterial({ color: 0xa8cfc8, flatShading: true });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x17323c, flatShading: true });
+    const tooth = new THREE.MeshLambertMaterial({ color: 0xe8e2cf, flatShading: true });
+    const glow = new THREE.MeshBasicMaterial({ color: 0x8ff0ff, fog: true });
+    const eyeW = new THREE.MeshBasicMaterial({ color: 0xffe9b0, fog: true });
+    const eyeB = new THREE.MeshBasicMaterial({ color: 0x0a1418, fog: true });
+    /* 胴（前後で細くなる塊を連ねる＝ローポリでも「魚」に見える） */
+    const body = [];
+    const seg = 7;
+    for (let i = 0; i < seg; i++) {
+      const u = i / (seg - 1);                       // 0=頭 1=尾
+      const taper = Math.sin(Math.PI * (0.16 + 0.78 * u));
+      const hh = H * (0.34 + 0.66 * taper), ww = W * (0.30 + 0.70 * taper);
+      body.push({ g: ZoneKit.box(ww, hh, L / seg + 0.6), p: [0, 0, -L / 2 + (i + 0.5) * (L / seg)] });
+    }
+    g.add(new THREE.Mesh(ZoneKit.merge(body), skin));
+    /* 腹（明るい面。下から見上げたときの明部） */
+    const bl = [];
+    for (let i = 1; i < seg - 1; i++) {
+      const u = i / (seg - 1);
+      const taper = Math.sin(Math.PI * (0.16 + 0.78 * u));
+      const ww = W * (0.26 + 0.64 * taper), hh = H * (0.30 + 0.62 * taper);
+      bl.push({ g: ZoneKit.box(ww * 0.92, hh * 0.22, L / seg + 0.4), p: [0, -hh * 0.42, -L / 2 + (i + 0.5) * (L / seg)] });
+    }
+    g.add(new THREE.Mesh(ZoneKit.merge(bl), belly));
+    /* 頭（鼻先へすぼまる）と顎 */
+    g.add(new THREE.Mesh(ZoneKit.merge([
+      { g: ZoneKit.box(W * 0.62, H * 0.52, 9), p: [0, 0.6, -L / 2 - 3.4] },
+      { g: ZoneKit.box(W * 0.40, H * 0.30, 6), p: [0, 0.2, -L / 2 - 7.5] },
+      { g: ZoneKit.box(W * 0.78, H * 0.16, 12), p: [0, -H * 0.24, -L / 2 - 1.5], r: [0.10, 0, 0] }
+    ]), skin));
+    /* 牙（口の中をくぐる、の“口”） */
+    const teeth = [];
+    for (let i = 0; i < 9; i++) {
+      const x = (i / 8 - 0.5) * W * 0.66;
+      teeth.push({ g: new THREE.ConeGeometry(0.5, 2.4, 5), p: [x, -H * 0.10, -L / 2 - 4.0], r: [Math.PI, 0, 0] });
+      teeth.push({ g: new THREE.ConeGeometry(0.44, 2.0, 5), p: [x, -H * 0.30, -L / 2 - 3.2] });
+    }
+    g.add(new THREE.Mesh(ZoneKit.merge(teeth), tooth));
+    /* 目玉（両側）。大きく・光る＝「目が画面に入る」瞬間が作れる */
+    [-1, 1].forEach((s) => {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(1.5, 12, 9), eyeW);
+      e.position.set(s * W * 0.42, H * 0.16, -L * F.EYE_Z);
+      g.add(e);
+      const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.72, 10, 8), eyeB);
+      p2.position.set(s * W * 0.50, H * 0.16, -L * F.EYE_Z);
+      g.add(p2);
+    });
+    /* 背ビレ・尾ビレ・胸ビレ */
+    g.add(new THREE.Mesh(ZoneKit.merge([
+      { g: ZoneKit.box(1.0, H * 0.52, 16), p: [0, H * 0.62, -4], r: [0.08, 0, 0] },
+      { g: ZoneKit.box(1.0, H * 0.34, 9), p: [0, H * 0.52, 16], r: [0.16, 0, 0] },
+      { g: ZoneKit.box(1.0, H * 0.92, 8), p: [0, 2, L / 2 + 2], r: [0.30, 0, 0] },
+      { g: ZoneKit.box(1.0, H * 0.70, 7), p: [0, -3, L / 2 + 4], r: [-0.42, 0, 0] },
+      { g: ZoneKit.box(W * 1.3, 0.9, 7), p: [0, -H * 0.24, -L * 0.22], r: [0, 0, 0.22] },
+      { g: ZoneKit.box(W * 1.1, 0.9, 6), p: [0, -H * 0.30, L * 0.10], r: [0, 0, -0.18] }
+    ]), dark));
+    /* 発光する側線と斑（深海生物らしさ＋明部） */
+    const dots = [];
+    /* 側線（体の横を貫く光の筋）。間近を横切るときに「生き物だ」と分かる主役 */
+    [-1, 1].forEach((s) => {
+      dots.push({ g: ZoneKit.box(0.6, 0.70, L * 0.88), p: [s * W * 0.38, H * 0.06, 2] });
+    });
+    for (let i = 0; i < 14; i++) {
+      const z = -L / 2 + 6 + i * (L - 12) / 13;
+      /* 発光器（点々と並ぶ大きな斑）。深海生物らしさと明部を作る */
+      dots.push({ g: ZoneKit.box(1.0, 1.6, 1.6), p: [W * 0.34, H * 0.22, z] });
+      dots.push({ g: ZoneKit.box(1.0, 1.6, 1.6), p: [-W * 0.34, H * 0.22, z] });
+      if (i % 2 === 0) {
+        dots.push({ g: ZoneKit.box(1.2, 1.2, 1.2), p: [W * 0.30, -H * 0.26, z] });
+        dots.push({ g: ZoneKit.box(1.2, 1.2, 1.2), p: [-W * 0.30, -H * 0.26, z] });
+      }
+    }
+    g.add(new THREE.Mesh(ZoneKit.merge(dots), glow));
+    scene.add(g);
+    /* 魚が落とす影（前方の床と天井を覆う暗い帯） */
+    const shadows = [];
+    [[0.03, -Math.PI / 2], [CFG.H - 0.03, Math.PI / 2]].forEach((c) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2 + 1.4, 34),
+                               new THREE.MeshBasicMaterial({ color: 0x03141c, transparent: true,
+                                                             opacity: 0, depthWrite: false, fog: true }));
+      m.rotation.x = c[1];
+      m.position.set(0, c[0], 0);
+      m.renderOrder = 2;
+      m.visible = false;
+      scene.add(m);
+      shadows.push(m);
+    });
+    Setpieces.fish = { group: g, shadows: shadows, glowMat: glow };
+  },
+
+  _hideFish() {
+    const f = Setpieces.fish;
+    if (!f || !f.group.visible) return;
+    f.group.visible = false;
+    f.shadows.forEach((m) => { m.visible = false; m.material.opacity = 0; });
+  },
+  /* 巨大魚の更新（すべて距離の関数。フレームに依存しない） */
+  _syncFish(dist, t) {
+    const f = Setpieces.fish, d = Setpieces.dust;
+    if (!f) return;
+    const p = Setpieces.fishPos(dist);
+    f.group.visible = p.vis;
+    if (p.vis) {
+      /* 泳ぐうねり（体を左右に振る）。距離の関数なので巻き戻しても同じ */
+      const sway = Math.sin(dist * 0.05) * 0.06;
+      f.group.position.set(p.x, p.y + Math.sin(dist * 0.035) * 0.5, p.z);
+      f.group.rotation.set(0, p.yaw + sway, Math.sin(dist * 0.04) * 0.04);
+      f.glowMat.color.setHex(0x8ff0ff).multiplyScalar(0.75 + 0.25 * Math.sin(t * 2.4));
+    }
+    /* 影: 魚が近いほど濃く、前方へ伸びる */
+    const near = p.vis && (p.phase === 'cross' || p.phase === 'swim');
+    const k = near ? U.clamp(1 - Math.abs(p.x) / 26, 0, 1) : 0;
+    f.shadows.forEach((m) => {
+      m.visible = k > 0.01;
+      m.material.opacity = 0.42 * k;
+      m.position.z = U.clamp(p.z, -60, 0) + 6;
+    });
+    /* 巻き上がる砂と泡（既存の粒子を水色に染めて使い回す） */
+    if (d) {
+      d.mat.color.setHex(0xbfe8f2);
+      d.mat.opacity = 0.10 + 0.22 * k;
+      const o2 = d.dummy;
+      for (let i = 0; i < d.count; i++) {
+        const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+        const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+        const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+        const u = (h1 + (t * 0.22 + i * 0.013)) % 1;
+        o2.position.set((h2 - 0.5) * 7.0, (h3 < 0.5 ? 0.3 : CFG.H - 0.3) + (h3 - 0.5) * 3.0, -6 - u * 56);
+        o2.rotation.set(t * (0.5 + h1) + i, t * 0.3 + i, t * (0.2 + h2));
+        o2.scale.setScalar((0.4 + h3 * 1.3) * (1 - u * 0.3));
+        o2.updateMatrix();
+        d.mesh.setMatrixAt(i, o2.matrix);
+      }
+      d.mesh.instanceMatrix.needsUpdate = true;
+    }
   },
 
   /* ---- 神殿崩壊（S4）の造形 ----------------------------------------------
@@ -911,6 +1236,8 @@ const Setpieces = {
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
       FF.syncView(dist, t, Setpieces.viewLift(dist), Setpieces.duoK(dist));
     }
+    if (s && s.id === 'megafish') { Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._syncFish(dist, t); return; }
+    Setpieces._hideFish();
     if (s && s.id === 'templefall') { Setpieces._hideRock(); Setpieces._syncTemple(dist, t); return; }
     Setpieces._hideTemple();
     if (s && s.id === 'rockchase') { Setpieces._syncRock(dist, t); return; }
@@ -1036,6 +1363,7 @@ const Setpieces = {
     if (typeof HUD !== 'undefined' && HUD.freeFlight) HUD.freeFlight(false);
     Setpieces._hideRock();
     Setpieces._hideTemple();
+    Setpieces._hideFish();
     if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 0;

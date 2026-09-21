@@ -466,7 +466,203 @@ const CHUNK_DEFS = [
     floor: [{ at: 8, lane: 0, type: 'DROPCEIL' },
             { at: 20, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
             { at: 44, lane: 1, type: 'DROPCEIL' }, { at: 54, lane: 0, type: 'ROVER' }],
-    ceil:  [{ at: 54, lane: -1, type: 'ROVER' }], events: [] }
+    ceil:  [{ at: 54, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* ==========================================================================
+     S5「深海」（契約§4.4 / §4.5 / P4a）
+     ------------------------------------------------------------------------
+     新ギミック:
+       CURRENT  海流ベルト。区間に入ると **1.0秒ごとに1レーンぶん** 横へ流される。
+                params.cur = { dir:床の向き, cdir:天井の向き（既定 -dir）, n:押し出し回数 }
+                押し出しの直前にはウォールを置けない（Fair が §4.7 の余白で弾く）ので、
+                譜面は「流された先で次の壁を迎える」ように組む。
+       LIFTPAD  浮上足場。到達時に浮いていれば ローバー相当（跳ぶ）、沈んでいれば通れる。
+                params.lift = { upAtArrival:true/false }（点滅レーザーと同じ流儀）
+       DOOR     色の扉。lane が **同色＝通れる扉**、残り2レーンは異色＝レーン移動。
+                床に置けば LUMEN、天井に置けば UMBRA の判断になる。
+                床と天井で別のレーンに置くと「左右で別々の判断」になる（契約§4.5）。
+     密度は 8→12回/100m（契約§4.7）。both 型（柱・放電柱・触手）を厚く敷いて、
+     間隔を詰めずに密度を稼ぐ。§4.7 の両者同時要求の余白は 0.45秒。
+     ========================================================================== */
+  /* --- 列柱の縫い（密度の主役）: both 型を 6 基準m おきに連ねる ------------
+     PILLAR / LASER_V / LASER_SCAN は both＝1本で床と天井の両方に要求が出る。
+     6 基準m = 0.6秒 で §4.7（反応窓0.45・両者同時0.45）を満たしつつ、
+     契約§4.7 の密度（S5 は 8→12回/100m）を作る。 */
+  { id: 's5_weave_a', zone: 'sea', lengthM: 58, difficulty: 3, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 14, lane: 1, type: 'LASER_V' },
+            { at: 20, lane: -1, type: 'PILLAR' }, { at: 26, lane: 0, type: 'LASER_V' },
+            { at: 32, lane: 1, type: 'PILLAR' }, { at: 38, lane: -1, type: 'LASER_V' },
+            { at: 44, lane: 0, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 's5_weave_b', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, dense: 2, moving: 1,
+    floor: [{ at: 8, lane: 1, type: 'LASER_V' },
+            { at: 14, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0.5 } } },
+            { at: 20, lane: 1, type: 'PILLAR' }, { at: 26, lane: -1, type: 'LASER_V' },
+            { at: 32, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0.5 } } },
+            { at: 38, lane: -1, type: 'PILLAR' }, { at: 44, lane: 1, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 's5_scan', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, moving: 1,
+    floor: [{ at: 8, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 14, lane: 1, type: 'PILLAR' }, { at: 20, lane: -1, type: 'LASER_V' },
+            { at: 26, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0.5 } } },
+            { at: 32, lane: 0, type: 'PILLAR' }, { at: 38, lane: 1, type: 'LASER_V' },
+            { at: 44, lane: -1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  /* --- 跳び継ぎ（両者が 0.72秒おきに跳ぶ。§4.7 ジャンプ連続 0.70秒の下限ぎりぎり） -- */
+  { id: 's5_leap', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, leap: 1,
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: -1, type: 'GAP' },
+            { at: 22.4, lane: 1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'ROVER' },
+            { at: 36.8, lane: -1, type: 'GAP' }, { at: 44, lane: 1, type: 'ROVER' },
+            { at: 51.2, lane: 0, type: 'LASER_LOW' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
+            { at: 22.4, lane: -1, type: 'GAP' }, { at: 29.6, lane: 1, type: 'ROVER' },
+            { at: 36.8, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'GAP' },
+            { at: 51.2, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's5_leap_b', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, dense: 2, leap: 1, lift: 1,
+    /* 浮上足場を跳び継ぎに混ぜる（沈んでいる足場は素通り＝読みの要素） */
+    floor: [{ at: 8, lane: 0, type: 'ROVER' },
+            { at: 15.2, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 22.4, lane: 1, type: 'GAP' },
+            { at: 29.6, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 36.8, lane: -1, type: 'ROVER' }, { at: 44, lane: 1, type: 'LASER_LOW' },
+            { at: 51.2, lane: 0, type: 'GAP' }],
+    ceil:  [{ at: 8, lane: 1, type: 'LASER_LOW' }, { at: 15.2, lane: 0, type: 'ROVER' },
+            { at: 22.4, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 29.6, lane: 1, type: 'GAP' }, { at: 36.8, lane: 0, type: 'LASER_LOW' },
+            { at: 44, lane: -1, type: 'ROVER' }, { at: 51.2, lane: 1, type: 'GAP' }], events: [] },
+  { id: 's5_leap_c', zone: 'sea', lengthM: 56, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, leap: 1,
+    floor: [{ at: 8, lane: 0, type: 'GAP' }, { at: 15.2, lane: 1, type: 'ROVER' },
+            { at: 22.4, lane: -1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'GAP' },
+            { at: 36.8, lane: 1, type: 'ROVER' }, { at: 44, lane: -1, type: 'LASER_LOW' }],
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
+            { at: 22.4, lane: 1, type: 'ROVER' }, { at: 29.6, lane: -1, type: 'LASER_LOW' },
+            { at: 36.8, lane: 0, type: 'GAP' }, { at: 44, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 浮上足場（rank3〜4） ---------------------------------------------
+     到達時に浮いていれば ローバー相当（跳ぶ）、沈んでいれば通れる。
+     ジャンプを要求するウォールの後は 9.2 基準m（0.92秒）空けてから横移動を要求する。 */
+  { id: 's5_lift_a', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, lift: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 18, lane: 1, type: 'PILLAR' }, { at: 24, lane: -1, type: 'LASER_V' },
+            { at: 30, lane: 0, type: 'PILLAR' },
+            { at: 36, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 46, lane: 1, type: 'PILLAR' }, { at: 52, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's5_lift_b', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, lift: 1, dense: 2,
+    /* 到達時に沈んでいる足場＝そのまま走り抜ける（読み切れば動かなくてよい） */
+    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: false } } },
+            { at: 14, lane: 1, type: 'PILLAR' }, { at: 20, lane: -1, type: 'LASER_V' },
+            { at: 26, lane: 0, type: 'PILLAR' },
+            { at: 36, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 46, lane: -1, type: 'PILLAR' }, { at: 52, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 36, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's5_lift_duo', zone: 'sea', lengthM: 62, difficulty: 4, minSpeed: 0, s5: 1, lift: 1, dense: 2,
+    /* 床と天井で別レーンの足場＝2体に別の譜面 */
+    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 18, lane: 1, type: 'PILLAR' }, { at: 24, lane: -1, type: 'LASER_V' },
+            { at: 34, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 44, lane: 0, type: 'PILLAR' }, { at: 50, lane: 1, type: 'LASER_V' },
+            { at: 56, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 34, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } }], events: [] },
+
+  /* --- 色の扉（rank3〜4） -----------------------------------------------
+     lane に書いたレーンだけが同色＝通れる。床に置けば LUMEN、天井に置けば UMBRA の判断。 */
+  { id: 's5_door_f', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, door: 1, dense: 2,
+    floor: [{ at: 8, lane: 1, type: 'DOOR' }, { at: 14, lane: 0, type: 'PILLAR' },
+            { at: 20, lane: -1, type: 'LASER_V' }, { at: 26, lane: 1, type: 'PILLAR' },
+            { at: 36, lane: 0, type: 'ROVER' }, { at: 46, lane: 1, type: 'LASER_V' },
+            { at: 52, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 36, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's5_door_c', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, door: 1, dense: 2,
+    floor: [{ at: 14, lane: 0, type: 'PILLAR' }, { at: 20, lane: 1, type: 'LASER_V' },
+            { at: 26, lane: -1, type: 'PILLAR' }, { at: 36, lane: 1, type: 'ROVER' },
+            { at: 46, lane: 0, type: 'LASER_V' }, { at: 52, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: -1, type: 'DOOR' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's5_door_duo', zone: 'sea', lengthM: 62, difficulty: 4, minSpeed: 0, s5: 1, door: 1, dense: 2,
+    /* **床と天井で別のレーンの扉**＝左右で別々の判断（契約§4.5 の主題） */
+    floor: [{ at: 8, lane: -1, type: 'DOOR' }, { at: 14, lane: 0, type: 'PILLAR' },
+            { at: 20, lane: 1, type: 'LASER_V' }, { at: 30, lane: 1, type: 'DOOR' },
+            { at: 36, lane: -1, type: 'PILLAR' }, { at: 42, lane: 0, type: 'LASER_V' },
+            { at: 48, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: 1, type: 'DOOR' }, { at: 30, lane: -1, type: 'DOOR' }], events: [] },
+  { id: 's5_door_lift', zone: 'sea', lengthM: 64, difficulty: 4, minSpeed: 0, s5: 1, door: 1, lift: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 18, lane: 1, type: 'DOOR' }, { at: 24, lane: -1, type: 'PILLAR' },
+            { at: 30, lane: 0, type: 'LASER_V' },
+            { at: 40, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 50, lane: -1, type: 'DOOR' }, { at: 56, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 18, lane: -1, type: 'DOOR' },
+            { at: 40, lane: 0, type: 'ROVER' }, { at: 50, lane: 1, type: 'DOOR' }], events: [] },
+
+  /* --- 海流ベルト（rank3〜4） -------------------------------------------
+     ベルトは 1.0秒ごとに1レーンぶん流す。押し出しの直前 0.45秒にはウォールを置けない
+     （Fair が弾く）ので、**押し出しと押し出しのちょうど中間** に壁を置く＝
+     「流されてから 0.5秒で避ける」が譜面になる。 */
+  { id: 's5_cur_a', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, cur: 1, dense: 1,
+    /* 床は右へ、天井は左へ流れる＝2体が逆向きに逆らう */
+    floor: [{ at: 8, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
+            { at: 18, lane: 0, type: 'PILLAR' }, { at: 28, lane: 1, type: 'PILLAR' },
+            { at: 38, lane: -1, type: 'LASER_V' }, { at: 44, lane: 0, type: 'PILLAR' },
+            { at: 50, lane: 1, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 's5_cur_b', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, cur: 1, dense: 1,
+    /* 床も天井も同じ向き（2人とも同じ側へ寄せられる） */
+    floor: [{ at: 8, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: -1, n: 3 } } },
+            { at: 18, lane: 1, type: 'LASER_V' }, { at: 28, lane: 0, type: 'PILLAR' },
+            { at: 38, lane: -1, type: 'LASER_V' }, { at: 44, lane: 1, type: 'PILLAR' },
+            { at: 50, lane: 0, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 's5_cur_door', zone: 'sea', lengthM: 66, difficulty: 4, minSpeed: 0, s5: 1, cur: 1, door: 1, dense: 2,
+    /* 流された先に色の扉＝「流れに逆らって自分の色へ入る」 */
+    floor: [{ at: 6, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
+            { at: 16, lane: 0, type: 'PILLAR' }, { at: 26, lane: -1, type: 'PILLAR' },
+            { at: 36, lane: 1, type: 'LASER_V' }, { at: 46, lane: -1, type: 'DOOR' },
+            { at: 52, lane: 0, type: 'PILLAR' }, { at: 58, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 46, lane: 1, type: 'DOOR' }], events: [] },
+  { id: 's5_cur_lift', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, cur: 1, lift: 1, dense: 2,
+    floor: [{ at: 6, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: 1, n: 3 } } },
+            { at: 16, lane: 0, type: 'PILLAR' }, { at: 26, lane: 1, type: 'PILLAR' },
+            { at: 36, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 46, lane: 0, type: 'PILLAR' }, { at: 52, lane: 1, type: 'LASER_V' },
+            { at: 58, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 36, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 深海の最奥（rank4・最も密）と、壁の穴・つなぎ -------------------- */
+  { id: 's5_gauntlet', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, door: 1, lift: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 14, lane: 1, type: 'LASER_V' },
+            { at: 20, lane: -1, type: 'PILLAR' }, { at: 26, lane: 0, type: 'DOOR' },
+            { at: 32, lane: 1, type: 'LASER_V' }, { at: 38, lane: -1, type: 'PILLAR' },
+            { at: 48, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 58, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 26, lane: -1, type: 'DOOR' }, { at: 48, lane: -1, type: 'ROVER' }], events: [] },
+  /* 最奥の縫い（rank4・0.5秒おき＝§4.7 反応窓 0.45秒の下限ぎりぎり）。
+     ランク4は進行率50%から出るので、ここが「後半ほど濃い」を作る主役になる。 */
+  { id: 's5_weave_x', zone: 'sea', lengthM: 58, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 13, lane: 1, type: 'LASER_V' },
+            { at: 18, lane: -1, type: 'PILLAR' }, { at: 23, lane: 0, type: 'LASER_V' },
+            { at: 28, lane: 1, type: 'PILLAR' }, { at: 33, lane: -1, type: 'LASER_V' },
+            { at: 38, lane: 0, type: 'PILLAR' }, { at: 43, lane: 1, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 's5_door_x', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, door: 1, dense: 2,
+    floor: [{ at: 8, lane: 1, type: 'DOOR' }, { at: 13, lane: 0, type: 'PILLAR' },
+            { at: 18, lane: -1, type: 'LASER_V' }, { at: 23, lane: 1, type: 'PILLAR' },
+            { at: 28, lane: -1, type: 'DOOR' }, { at: 33, lane: 0, type: 'LASER_V' },
+            { at: 38, lane: 1, type: 'PILLAR' }, { at: 43, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 8, lane: -1, type: 'DOOR' }, { at: 28, lane: 1, type: 'DOOR' }], events: [] },
+  { id: 's5_wallhole', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, wallhole: 1, dense: 1,
+    floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 20, lane: 0, type: 'PILLAR' },
+            { at: 26, lane: -1, type: 'LASER_V' }, { at: 36, lane: 1, type: 'ROVER' },
+            { at: 46, lane: 0, type: 'PILLAR' }, { at: 52, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's5_fill_a', zone: 'sea', lengthM: 26, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, fill: 1,
+    floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 11, lane: 1, type: 'LASER_V' },
+            { at: 17, lane: -1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 's5_fill_b', zone: 'sea', lengthM: 30, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, fill: 1, lift: 1,
+    floor: [{ at: 5, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 15, lane: 1, type: 'PILLAR' }, { at: 21, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 5, lane: 1, type: 'ROVER' }], events: [] }
 ];
 
 /* ---------------------------------------------------------------- 導入区間（S1）
@@ -493,7 +689,7 @@ const STAGE_DEFS = {
   S0: {
     id: 'S0', name: '仮ステージ S0', zone: 'neon', lengthM: 900,
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
-    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s5).map((c) => c.id)
   },
   /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
      冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
@@ -505,7 +701,7 @@ const STAGE_DEFS = {
     /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
        「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
        ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s5).map((c) => c.id)
       .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
       .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b'])
   },
@@ -537,12 +733,12 @@ const STAGE_DEFS = {
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
       /* S3 の顔ぶれ（!c.s3）は混ぜない。ゾーンが変わればギミックも変わる（契約§4.4） */
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3).map((c) => c.id))     // 動くレーザーを厚く
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && c.difficulty <= 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))      // 密集チャンク
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s5).map((c) => c.id))     // 動くレーザーを厚く
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s5).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s5 && c.difficulty <= 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s5).map((c) => c.id))      // 密集チャンク
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s5).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s5).map((c) => c.id))
       /* 横に避けるチャンクを厚くしたぶん、点滅レーザーが薄まらないよう補う（P2c） */
       .concat(['c2_blink_v', 'c2_blink_low', 'c3_blink_scan',
                'c2_blink_v', 'c2_blink_low', 'c3_blink_scan'])
@@ -587,12 +783,37 @@ const STAGE_DEFS = {
       .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
                'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole'])
   },
+  /* S5 深海（契約 §4.4）: 1500m / 26→30 / チェックポイント 500・1000 /
+     新ギミック＝海流ベルト・浮上足場・色の扉。終盤200mは「巨大魚の通過」。
+     密度は 8→12回/100m（契約§4.7）。両者同時要求の余白は 0.45秒。 */
+  S5: {
+    id: 'S5', name: 'S5 深海', zone: 'sea', lengthM: 1500,
+    speedFrom: 26, speedTo: 30, minRank: 3, maxRank: 4, setpiece: 'megafish',
+    density: [8, 12],
+    reactBoth: CFG.FAIR.REACT_BOTH_LATE,
+    tipOnce: { cur: 'current', lift: 'liftpad', door: 'colordoor' },
+    /* 顔ぶれ: S5 の新チャンクが主役。基本形（柱・光線・跳び継ぎ）は深海スキンで顔が変わる。
+       他ゾーン専用のギミック（崩れる橋・同時スイッチ・落ちる天井）は混ぜない（契約§4.4）。 */
+    /* 跳び継ぎ（leap）を厚く入れて §4.3 の比率（レーン50%前後／ジャンプ35%前後）に寄せる。
+       深海の顔ぶれは both 型（岩柱・放電柱・触手）が主役でレーン移動に偏るため。 */
+    chunkPool: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id)
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.dense === 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.cur).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.cur).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.door).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.lift).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+  },
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
     /* 最初から入っているのは S1 の顔ぶれ（基本セット）だけ。
        遺跡の新ギミックは S3 をクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s5).map((c) => c.id)
   }
 };
 
@@ -600,9 +821,10 @@ const STAGE_DEFS = {
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
   S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
-  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4).map((c) => c.id),
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5).map((c) => c.id),
   S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id),       // 崩れる橋・振り子の刃
-  S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id)        // 同時スイッチ・落ちる天井
+  S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id),       // 同時スイッチ・落ちる天井
+  S5: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id)        // 海流ベルト・浮上足場・色の扉
 };
 function endlessPool(cleared) {
   let pool = STAGE_DEFS.endless.chunkPool.slice();
@@ -750,6 +972,21 @@ const Fair = {
       });
     });
 
+    /* 海流ベルト（契約§4.5 / S5）: **押し出しの直前にウォールを置かない**。
+       流されてから避けるまでに、少なくとも反応窓ぶんの余白が要る。 */
+    if (opt.currents && opt.currents.length) {
+      Fair.SIDES.forEach((side) => {
+        walls.forEach((w) => {
+          if (!w.demand[side]) return;
+          const sp = speedAt(w.at);
+          if (Current.pushNear(opt.currents, side, w.at, sp * CFG.CURRENT.SAFE_T)) {
+            errs.push('海流の押し出しがウォール直前(' + side + ') @' + w.at.toFixed(1) +
+                      '（' + CFG.CURRENT.SAFE_T + '秒の余白が要る）');
+          }
+        });
+      });
+    }
+
     /* 生存経路（各ウォールで生存レーンが1つ以上＋前ウォールから到達可能） */
     Fair.SIDES.forEach((side) => {
       let reach = opt.startLanes === 'any' ? CFG.LANES.slice() : (opt.startLanes || [0]).slice();
@@ -762,6 +999,13 @@ const Fair = {
         const passM = Fair.maxDepth() + Math.max(CFG.BODY_D, CFG.SLIDE_D);
         const usable = Math.max(0, (w.at - prevAt) - passM);
         const steps = Math.floor(usable / (sp * CFG.LANE_T));
+        /* 海流で流された分を織り込む（契約§4.5「ボット・Fair は流れ込みで評価」）。
+           押し出しは決定論的なので、前のウォールの生存レーンから
+           **押された先** を起点にして、そこから steps 回だけ動ける、と数える。
+           逆らう横入力で戻すのも同じ「1回の移動」なので steps を分け合う。 */
+        const drift = opt.currents
+          ? Current.driftBetween(opt.currents, side, prevAt, w.at) : 0;
+        if (drift) reach = reach.map((l) => U.clamp(l + drift, -1, 1));
         const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps));
         const ok = cand.filter((l) => Fair.laneSurvivable(w, side, l));
         const anySafe = CFG.LANES.filter((l) => Fair.laneSurvivable(w, side, l));
@@ -878,14 +1122,16 @@ const MOTION_SCALE = {
   scan:   { key: 'periodM', def() { return CFG.LASER.SCAN_PERIOD; } },
   rot:    { key: 'periodM', def() { return CFG.LASER.ROT_PERIOD; } },
   blink:  { key: 'periodM', def() { return CFG.LASER.BLINK_PERIOD; } },
-  bridge: { key: 'leadM',   def() { return CFG.REF_SPEED * CFG.BRIDGE.LEAD_T; } }
+  bridge: { key: 'leadM',   def() { return CFG.REF_SPEED * CFG.BRIDGE.LEAD_T; } },
+  /* 浮上足場（S5）も同じ仕組みに乗せる＝「浮上→沈むの1周期の秒数」が速度によらず一定 */
+  lift:   { key: 'periodM', def() { return CFG.LIFT.PERIOD; } }
 };
-/* 崩れる橋は必ず bridge パラメータを持つ（leadM＝踏んでから落ちるまでの距離）。
-   書き忘れても生成時に既定値が入るようにしておく。 */
+/* 崩れる橋は必ず bridge パラメータを、浮上足場は必ず lift パラメータを持つ。
+   書き忘れても生成時に既定値が入るようにしておく（＝位相の規則が常に効く）。 */
 function normParams(type, p) {
-  if (type !== 'BRIDGE') return p;
-  if (p && p.bridge) return p;
-  return Object.assign({}, p || {}, { bridge: {} });
+  if (type === 'BRIDGE') return (p && p.bridge) ? p : Object.assign({}, p || {}, { bridge: {} });
+  if (type === 'LIFTPAD') return (p && p.lift) ? p : Object.assign({}, p || {}, { lift: {} });
+  return p;
 }
 function scaleParams(p, scale) {
   if (!p) return null;
@@ -909,7 +1155,7 @@ function scaleParams(p, scale) {
      WALLHOLE … 穴のレーン + 残り2レーンの壁（＝全幅の壁に穴が1つ）
      SYNCSW   … 床と天井の対のパッド + その先の橋（失敗なら谷になる2レーン） / 契約§4.5
    syncs に展開したグループを積む（Sync がそこを見て 0.3秒窓を判定する）。 */
-function expandEntry(items, e, surface, at, nowDist, scale, syncs) {
+function expandEntry(items, e, surface, at, nowDist, scale, sink) {
   const params = scaleParams(normParams(e.type, e.params), scale === undefined ? 1 : scale);
   if (e.type === 'WALLHOLE') {
     CFG.LANES.forEach((l) => {
@@ -917,7 +1163,20 @@ function expandEntry(items, e, surface, at, nowDist, scale, syncs) {
     });
     return;
   }
-  if (e.type === 'SYNCSW') { Sync.expand(items, e, surface, at, nowDist, scale, syncs); return; }
+  /* 色の扉（契約§4.5 / S5）: lane に書いたレーンだけが **同色＝通れる扉**、
+     残りの2レーンは異色の扉になる（＝そのレーンへ移らないと抜けられない）。
+     壁の穴と同じ「1エントリ＝全幅に展開」の流儀。 */
+  if (e.type === 'DOOR') {
+    CFG.LANES.forEach((l) => {
+      items.push(Obstacles.make(l === e.lane ? 'DOOR' : 'DOORX', surface, l, at, nowDist, params));
+    });
+    return;
+  }
+  if (e.type === 'CURRENT') {
+    Current.expand(items, e, surface, at, nowDist, scale, sink && sink.currents);
+    return;
+  }
+  if (e.type === 'SYNCSW') { Sync.expand(items, e, surface, at, nowDist, scale, sink && sink.syncs); return; }
   if (e.type === 'DROPCEIL') {
     /* 落ちる天井の時刻規則（予告→落下→着地）は「その地点の1秒ぶんの距離」で持つ */
     const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
@@ -954,6 +1213,8 @@ function createGenerator(stage, seed) {
     ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
   const out = [];               // 生成済み障害物（at 昇順）
   const syncs = [];             // 同時スイッチのグループ（Sync が 0.3秒窓を判定する / P3b）
+  const currents = [];          // 海流ベルトの区間（Current が押し出しを判定する / P4a）
+  const sink = { syncs: syncs, currents: currents };
   const events = [];            // チャンクの events（P2以降のフック）
   const log = [];               // {id, startM, lengthM}
   let seedMix = null;           // 大演出が持ち込む必須動作の内訳（比率の是正に使う）
@@ -1041,17 +1302,28 @@ function createGenerator(stage, seed) {
   }
   /* 定義 → 実体（基準速度からの伸縮つき）
      WALLHOLE は「穴のレーン + 残り2レーンの壁」へ展開する（＝全幅の壁に穴が1つ）。 */
-  function put(items, e, surface, at, nowDist, scale) {
-    expandEntry(items, e, surface, at, nowDist, scale, syncs);
+  function put(items, e, surface, at, nowDist, scale, dst) {
+    expandEntry(items, e, surface, at, nowDist, scale, dst || sink);
   }
+  /* 置けるかどうか分からないうちは、同時スイッチ・海流ベルトの「区間」を
+     本物の入れ物へ入れない（試し置きの残骸が走行中に効いてしまう）。
+     ＝ 各試行はその場限りの local に積み、§4.7 を満たした時だけ移す。 */
   function instantiate(def, startM, nowDist) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
     const items = [];
-    (def.floor || []).forEach((e) => put(items, e, 'floor', startM + e.at * scale, nowDist, scale));
-    (def.ceil || []).forEach((e) => put(items, e, 'ceil', startM + e.at * scale, nowDist, scale));
+    const local = { syncs: [], currents: [] };
+    (def.floor || []).forEach((e) => put(items, e, 'floor', startM + e.at * scale, nowDist, scale, local));
+    (def.ceil || []).forEach((e) => put(items, e, 'ceil', startM + e.at * scale, nowDist, scale, local));
     items.sort((a, b) => a.at - b.at);
     const evs = (def.events || []).map((e) => ({ at: startM + e.at * scale, type: e.type, params: e.params || null, done: false }));
-    return { items: items, events: evs, lengthM: def.lengthM * scale, startM: startM, id: def.id };
+    return { items: items, events: evs, lengthM: def.lengthM * scale, startM: startM, id: def.id, local: local };
+  }
+  /* 試行が通った時だけ、区間を本物の入れ物へ移す */
+  function commit(inst) {
+    if (!inst.local) return;
+    inst.local.syncs.forEach((g) => syncs.push(g));
+    inst.local.currents.forEach((c) => currents.push(c));
+    inst.local = null;
   }
 
   /* 直近に置いた障害物の位置（継ぎ目＝この後ろに speed*0.6秒 以内で次を置く） */
@@ -1078,10 +1350,11 @@ function createGenerator(stage, seed) {
   /* 終盤の大演出（実寸・固定。§4.7 は通常どおり検査する） */
   function appendSetpiece(nowDist) {
     if (setpieceDone) return false;             // 二度置かない（置いたら二度と戻らない）
-    const inst = Setpieces.build(stage.setpiece, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, syncs);
+    const inst = Setpieces.build(stage.setpiece, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, sink);
     if (!inst) { setpieceDone = true; return false; }
     const tail = out.slice(-8);
-    const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any', reactBoth: stage.reactBoth });
+    const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
+                               { startLanes: 'any', reactBoth: stage.reactBoth, currents: currents });
     if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
     inst.items.forEach((o) => out.push(o));
     noteItems(inst.items);
@@ -1138,8 +1411,11 @@ function createGenerator(stage, seed) {
       for (let pad = 0; pad <= 40; pad += 3) {
         const startM = Math.max(cursor - st.firstAt * scale, wantFirst + pad - st.firstAt * scale);
         const inst = instantiate(def, startM, nowDist);
-        const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any', reactBoth: stage.reactBoth });
+        const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
+                                   { startLanes: 'any', reactBoth: stage.reactBoth,
+                                     currents: currents.concat(inst.local.currents) });
         if (!errs.length) {
+          commit(inst);
           inst.items.forEach((o) => out.push(o));
           noteItems(inst.items);
           noteDemands(inst.items);
@@ -1176,6 +1452,7 @@ function createGenerator(stage, seed) {
     get cursor() { return cursor; },
     obstacles: out,
     syncs: syncs,
+    currents: currents,
     events: events,
     log: log,
     /* untilM まで生成しておく。nowDist は視認距離の記録用 */

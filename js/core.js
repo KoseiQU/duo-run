@@ -128,7 +128,11 @@ const Game = {
     const runway = Math.max(CFG.LEAD_IN * 0.6, Game.speed * CFG.FAIR.SEE + 10);
     /* 同時スイッチは「パッドは通り過ぎたのに橋だけ残る」を作らない（P3b）＝
        助走の中にパッドがあるグループは橋ごと取り込まない。 */
-    Game.active = Sync.dropOrphans(Game.gen.obstacles.filter((o) => o.at >= fromM + runway), fromM + runway);
+    /* 海流ベルトも同じ（入口を通り過ぎたのに流れだけ残る、を作らない / P4a） */
+    Current.killBefore(Game.gen.currents, fromM + runway);
+    Game.active = Current.dropOrphans(
+      Sync.dropOrphans(Game.gen.obstacles.filter((o) => o.at >= fromM + runway), fromM + runway),
+      fromM + runway);
     Game.active.forEach((o) => { o.spawnDist = fromM; });
     Game.genPtr = Game.gen.obstacles.length;
     /* 再開位置より手前のイベントだけ「済み」にする。
@@ -191,6 +195,9 @@ const Game = {
       /* 同時スイッチ（契約§4.5 / P3b）: パッドを踏んだかを見て 0.3秒窓の成否を決める。
          判定（bands）より先に置く＝その場で橋が架かる／崩れる。 */
       Sync.update(Game);
+      /* 海流ベルト（契約§4.5 / S5）: prevDist → dist の間に跨いだ押し出しを実行する。
+         判定（bands）より先に置く＝押された結果の位置で当たり判定される。 */
+      Current.update(Game);
       Game.fireEvents();
       Setpieces.update(Game, d);
       Tutorial.update(dt);
@@ -400,6 +407,16 @@ const Game = {
       slowT: +Game.slowT.toFixed(3),
       /* 同時スイッチ（§4.5 / P3b）と神殿崩壊（§4.4 S4）の観測窓口 */
       sync: Sync.snapshot(Game),
+      /* 海流ベルト（§4.5 / S5）: 今どちらへ流されているか（0 = 流れの外） */
+      current: Game.gen ? Current.inBelt(Game.gen.currents, 'floor', Game.dist) : 0,
+      currentCeil: Game.gen ? Current.inBelt(Game.gen.currents, 'ceil', Game.dist) : 0,
+      currents: Current.snapshot(Game),
+      /* 巨大魚の通過（§4.4 S5）: 画面占有と目玉 */
+      fish: Setpieces.fishActive()
+        ? { phase: Setpieces.fishPos(Game.dist).phase,
+            cover: +Setpieces.fishOnScreen(Game.dist).toFixed(4),
+            eye: +Setpieces.fishEyeOnScreen(Game.dist).toFixed(4) }
+        : null,
       templeExit: +Setpieces.templeExit(Game.dist).toFixed(3),
       rockGap: Setpieces.rockGap(),
       lookBack: +Setpieces.lookBack(Game.dist).toFixed(3),

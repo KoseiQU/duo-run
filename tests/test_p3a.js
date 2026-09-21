@@ -122,10 +122,17 @@
       /* 例外（意図的に判定の外へ出る装飾。test_p2a と同じ考え方）:
          GAP/WALLHOLE/LASER_SCAN/LASER_ROT … ネオンと同じ理由
          BRIDGE … 板（判定の外＝乗っている間は無害）と谷が前後・下へ伸びる */
+      /* P4a で足した S5 の新ギミック:
+           CURRENT/CURGATE … 当たり判定を持たない（流れの矢印とゲートだけ）
+           DOOR            … 同色＝通れる扉なので当たり判定を持たない
+           LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
+           FISH_TAIL       … 動く部品（bands から毎フレーム置く / LASER_SCAN と同じ理由） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
                      LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
                      /* P3b の新ギミック（理由は tests/test_p2a.js の同じ表と同じ） */
-                     SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'] };
+                     SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],
+                     CURRENT: ['x', 'y', 'z'], CURGATE: ['x', 'y', 'z'], DOOR: ['x', 'y', 'z'],
+                     LIFTPAD: ['z'], FISH_TAIL: ['x', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);

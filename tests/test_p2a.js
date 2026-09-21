@@ -158,9 +158,16 @@
            SYNCPAD … 当たり判定を持たない（踏むだけ）ので外接箱と比べられない
            SYNCGAP … 谷・折れた橋脚・架かる橋の3態を重ねて持つ（tests/test_p3b.js が occ⇔hits で見る）
            DROPCEIL … 床のブロックと天井の穴の2枚を絶対 y で持つので y/z は外接箱と合わない */
+      /* P4a で足した S5 の新ギミック:
+           CURRENT/CURGATE … 当たり判定を持たない（流れの矢印とゲートだけ）
+           DOOR            … 同色＝通れる扉なので当たり判定を持たない
+           LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
+           FISH_TAIL       … 動く部品（bands から毎フレーム置く / LASER_SCAN と同じ理由） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
                      BRIDGE: ['x', 'y', 'z'],
-                     SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'] };
+                     SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],
+                     CURRENT: ['x', 'y', 'z'], CURGATE: ['x', 'y', 'z'], DOOR: ['x', 'y', 'z'],
+                     LIFTPAD: ['z'], FISH_TAIL: ['x', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);

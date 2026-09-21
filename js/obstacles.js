@@ -100,6 +100,37 @@ const OBS = {
   COLUMN:   { span: 3, depth: 0.62, y0: 0.00, y1: 0.62, both: false, safe: ['jump'],
               label: '倒れた柱' },
 
+  /* ------------------------------------------------------------------------
+     S5「深海」の新ギミック（契約§4.4 / §4.5 / P4a）
+     ------------------------------------------------------------------------ */
+  /* 海流ベルトの帯（見た目だけ・当たり判定なし）。流される規則は Current が唯一の出所。
+     ghost:true ＝ bands が常に空＝完全に無害（占有もしない）。 */
+  CURRENT:  { span: 3, depth: 1.0, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, belt: true, label: '海流ベルト' },
+  /* 海流ベルトの入口ゲート（予告）。同じく当たり判定なし */
+  CURGATE:  { span: 3, depth: 0.5, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, belt: true, label: '海流の入口' },
+  /* 色の扉（契約§4.5）: 扉に色があり、**同色のキャラしか通れない**。
+       DOOR  … そのキャラと同じ色の扉＝通れる（当たり判定なし）
+       DOORX … 異色の扉＝通れない。跳んでも潜っても抜けられない（0〜2.30）＝レーン移動
+     床側は琥珀＝LUMEN が通れる色、天井側は藍＝UMBRA が通れる色（スキンが surface で塗り分ける）。 */
+  DOOR:     { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, door: true, label: '色の扉（同色）' },
+  DOORX:    { span: 1, depth: 0.55, y0: 0.00, y1: 2.30, both: false, safe: [],
+              door: true, label: '色の扉（異色）' },
+  /* 浮上足場（契約§4.5）: 周期的に浮き上がって高さ0.60（ローバー相当）になり、
+     沈むと通れる。天井側は逆に垂れ下がる。到達時刻の高さで判定する。 */
+  LIFTPAD:  { span: 1, depth: 0.55, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],
+              motion: 'lift', label: '浮上足場' },
+  /* 巨大魚の部位（契約§4.4 S5 の大演出）。判定は既存の型と同じ寸法で、
+     見た目だけ魚の牙・ヒレ・尾になる（fishKit がゾーン共通で建てる）。 */
+  FISH_TOOTH: { span: 1, depth: 0.50, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],
+                fish: true, label: '巨大魚の牙' },
+  FISH_FIN:   { span: 1, depth: 0.50, y0: 0.00, y1: CFG.H, both: true, safe: [],
+                fish: true, label: '巨大魚のヒレ' },
+  FISH_TAIL:  { span: 1, depth: 0.40, y0: 0.00, y1: CFG.H, both: true, safe: [],
+                motion: 'scan', fish: true, label: '巨大魚の尾' },
+
   /* 減速帯（瓦礫の山）: 巨岩の追跡で使う**死なない**障害物。
      ジャンプで越えなければ速度が一時的に -20%（契約§4.4 S3 の大演出）。
      公平性（§4.7）の扱いは通常のジャンプ要求と同じ＝間隔も生存経路も守られる。 */
@@ -180,6 +211,27 @@ const MOT = {
   dropWarn(o, dist) {
     const a = MOT.dropWarnAt(o), b = MOT.dropFallAt(o);
     return U.clamp((dist - a) / Math.max(1e-6, b - a), 0, 1);
+  },
+
+  /* ------------------------------------------------------------------------
+     浮上足場（契約§4.5 / §4.4 S5）の時刻規則。**ここが唯一の出所**。
+     点滅レーザー（blinkOn）と同じ「到達した瞬間（dist = at）が枠の中央」という作り。
+       liftK(o, dist) … 0（沈みきって通れる）〜 1（浮ききってローバー相当）
+     枠の終わりの RISE だけを使って次の姿へ移る＝到達の前後は平ら（“溜め”）なので、
+     通過窓（±0.6m 程度）の中で高さが変わらない＝判定が譜面どおりになる。
+     ------------------------------------------------------------------------ */
+  liftK(o, dist) {
+    const p = o.params && o.params.lift;
+    if (!p) return 1;                                     // params 無しは「浮いたまま」
+    const P = p.periodM || CFG.LIFT.PERIOD;
+    const x = (dist - o.at) / P + 0.5;
+    const k = Math.floor(x), f = x - k;
+    const even = ((k % 2) + 2) % 2 === 0;
+    const upNow = even ? (p.upAtArrival !== false) : !(p.upAtArrival !== false);
+    const a = upNow ? 1 : 0, b = upNow ? 0 : 1;
+    const TR = CFG.LIFT.RISE;
+    if (f > 1 - TR) return U.lerp(a, b, U.smooth((f - (1 - TR)) / TR));
+    return a;
   },
 
   /* 次に ON になるまでの距離（予告灯用。ON 中は 0） */
@@ -313,6 +365,138 @@ const Sync = {
   }
 };
 
+/* ============================================================================
+   Current — 海流ベルト（契約§4.5 / §4.4 S5）の**時刻規則の唯一の出所**
+
+   ■ 形
+     区間 [from, to] に入ると、床側と天井側がそれぞれ決まった向きへ流される。
+     流れは「PUSH_T 秒ごとに1レーンぶん押し出す」という離散の押し出しで表す
+     （1スワイプ＝1レーンという操作の粒度にそろえる / §4.2）。
+     押し出す距離は生成時に決まった unit（＝その地点の速度×1秒）で測るので、
+     速度が変わっても「1レーンぶんを1.0秒で」が一定になる。
+   ■ 規則
+     ・押し出しは **走行距離が pushes[i] を跨いだ瞬間** に1回だけ起きる。
+       距離の関数なので、フレームレート・スロー演出・中断復元に左右されない。
+     ・跳んでいても押される（水に流されるので当然）＝ 予測が常に成り立つ。
+     ・流れに逆らう横入力で相殺できる（押し戻すのは普通のレーン移動）。
+   ■ 誰が読むか
+     判定（Game.step → Current.update）・ボット（押された結果の laneTo を見て戻す）・
+     不変条件（Fair.validate が driftBetween / pushNear を読む）が同じここを読む。
+   ============================================================================ */
+const Current = {
+  /* 譜面の1エントリ（type:'CURRENT'）を実体へ展開する。
+     params.cur = { dir: 床の向き(+1=右/-1=左), cdir: 天井の向き（省略時は -dir）,
+                    n: 押し出しの回数（＝区間の長さ 秒） } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.cur) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    const dir = (p.dir === undefined) ? 1 : p.dir;
+    const cdir = (p.cdir === undefined) ? -dir : p.cdir;
+    const n = (p.n === undefined) ? 3 : p.n;
+    const pushM = unit * CFG.CURRENT.PUSH_T;
+    const from = at, to = at + n * pushM;
+    const pushes = [];
+    for (let i = 0; i < n; i++) pushes.push(from + (i + 0.5) * pushM);
+    const reg = { from: from, to: to, unit: unit, n: n,
+                  dir: { floor: dir, ceil: cdir }, pushes: pushes, done: [], dead: false };
+    /* 入口ゲート（予告）＋ 矢印の帯（1秒ぶんずつ）。どちらも当たり判定を持たない */
+    const gate = Obstacles.make('CURGATE', 'floor', 0, from, nowDist, { cur: { unitM: unit, dir: dir, cdir: cdir } });
+    gate.reg = reg;
+    items.push(gate);
+    for (let i = 0; i < n; i++) {
+      ['floor', 'ceil'].forEach((side) => {
+        const o = Obstacles.make('CURRENT', side, 0, from + (i + 0.5) * pushM, nowDist,
+                                 { cur: { unitM: unit, dir: (side === 'floor') ? dir : cdir } });
+        o.reg = reg;
+        items.push(o);
+      });
+    }
+    if (sink) sink.push(reg);
+    return reg;
+  },
+
+  /* a < 押し出し ≤ b の回数 × 向き（符号つきレーン数）。Fair とボットの共通の窓口 */
+  driftBetween(list, side, a, b) {
+    if (!list || !list.length) return 0;
+    let d = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead || r.to < a || r.from > b) continue;
+      for (let k = 0; k < r.pushes.length; k++) {
+        if (r.pushes[k] > a && r.pushes[k] <= b) d += r.dir[side];
+      }
+    }
+    return d;
+  },
+  /* atM の直前 windowM 以内に押し出しがあるか（＝避ける余裕がないか） */
+  pushNear(list, side, atM, windowM) {
+    if (!list || !list.length) return false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead || !r.dir[side]) continue;
+      for (let k = 0; k < r.pushes.length; k++) {
+        if (r.pushes[k] > atM - windowM && r.pushes[k] <= atM) return true;
+      }
+    }
+    return false;
+  },
+  /* 今この距離が海流の中か（HUD・見た目・ボットの参考に） */
+  inBelt(list, side, m) {
+    if (!list) return 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.dead && m >= r.from && m <= r.to) return r.dir[side];
+    }
+    return 0;
+  },
+
+  /* 毎フレーム1回（Game.step から）。prevDist → dist の間に跨いだ押し出しを実行する */
+  update(game) {
+    const list = (game.gen && game.gen.currents) ? game.gen.currents : null;
+    if (!list || !list.length) { Current.hud(game, 0); return; }
+    const a = game.prevDist, b = game.dist;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      for (let k = 0; k < r.pushes.length; k++) {
+        const p = r.pushes[k];
+        if (p <= a || p > b) continue;
+        for (let j = 0; j < game.runners.length; j++) {
+          const rn = game.runners[j];
+          const d = r.dir[rn.surface];
+          if (d) Runners.push(rn, d);
+        }
+      }
+    }
+    Current.hud(game, Current.inBelt(list, 'floor', b));
+  },
+
+  /* HUD の「CURRENT」表示（流れの向きを出す） */
+  hud(game, dir) {
+    if (typeof HUD === 'undefined' || !HUD.currentCue) return;
+    const list = (game.gen && game.gen.currents) ? game.gen.currents : null;
+    const c = Current.inBelt(list, 'ceil', game.dist);
+    HUD.currentCue(dir, c);
+  },
+
+  /* 中断・チェックポイント再開で「入口は通り過ぎたのに流れだけ残る」を作らない */
+  dropOrphans(list, cutM) {
+    return list.filter((o) => !(o.reg && o.reg.from < cutM));
+  },
+  killBefore(regs, cutM) {
+    if (!regs) return;
+    for (let i = 0; i < regs.length; i++) if (regs[i].from < cutM) regs[i].dead = true;
+  },
+
+  /* テスト・監査の窓口 */
+  snapshot(game) {
+    const list = (game.gen && game.gen.currents) ? game.gen.currents : [];
+    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
+               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1), n: r.n,
+                              dir: r.dir.floor, cdir: r.dir.ceil }));
+  }
+};
+
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
 
@@ -355,7 +539,17 @@ const Obstacles = {
                     : { x0: x0, x1: x1, y0: y0, y1: y1 });
     };
 
-    if (t.pad) return out;                                 // スイッチのパッドは当たらない
+    if (t.pad || t.ghost) return out;                      // 踏み板・海流の帯・同色の扉は当たらない
+
+    if (t.motion === 'lift') {
+      /* 浮上足場（契約§4.5）: 到達時刻の高さがそのまま判定になる。
+         沈みきっている間は帯を返さない＝通れることが判定でも見た目でも同じ。 */
+      const k = MOT.liftK(o, dist);
+      if (k <= CFG.LIFT.EPS) return out;
+      put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET,
+          t.y0, t.y0 + (t.y1 - t.y0) * k);
+      return out;
+    }
 
     if (t.motion === 'sync') {
       /* 同時スイッチの橋（契約§4.5）: 成功していれば橋が架かっている＝完全に無害。
@@ -898,16 +1092,211 @@ const Obstacles = {
       g.userData.column = true;
     };
 
+    /* ------------------------------------------------------------------------
+       S5 の新ギミックの骨組み（ゾーン共通・2026-09-22 P4a）
+       同時スイッチ・落ちる天井と同じ考え方。スキンは色（mats）を渡すだけでよく、
+       スキンが知らないゾーンへ混ざっても見た目と判定がずれない。
+       ------------------------------------------------------------------------ */
+    /* 海流ベルト: 流れの向きを示す矢印の帯。長さ1で作り、place() が「1秒ぶん」へ伸ばす。
+       床と天井の両方に敷く（帯そのものは当たり判定を持たない）。 */
+    const beltKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const emis = (col, op) => {
+        const m = new THREE.MeshBasicMaterial({ color: col, fog: true, transparent: true,
+                                                opacity: op, depthWrite: false });
+        own.push(m);
+        return m;
+      };
+      const grp = new THREE.Group();
+      const isGate = (type === 'CURGATE');
+      /* 矢印の色は place() が面から決める（床＝琥珀＝LUMEN／天井＝藍＝UMBRA）。
+         ゾーンの青緑から確実に浮く色で、HUD の矢印とも意味が揃う。 */
+      const arrowMat = emis(mats.arrow || C.cyan, 0.95);
+      g.userData.beltArrowMat = arrowMat;
+      if (isGate) {
+        /* 入口ゲート: コリドーを跨ぐ門と、大きな矢印。「ここから流される」の予告 */
+        const frame = mats.frame || Obstacles._material('cgFrame', C.dark);
+        grp.add(new THREE.Mesh(ZoneKit.merge([
+          { g: ZoneKit.box(0.22, CFG.H + 0.5, 0.22), p: [-(CFG.HALF_W + 0.12), CFG.H / 2, 0] },
+          { g: ZoneKit.box(0.22, CFG.H + 0.5, 0.22), p: [CFG.HALF_W + 0.12, CFG.H / 2, 0] },
+          { g: ZoneKit.box(CFG.HALF_W * 2 + 0.5, 0.22, 0.22), p: [0, CFG.H + 0.12, 0] },
+          { g: ZoneKit.box(CFG.HALF_W * 2 + 0.5, 0.22, 0.22), p: [0, -0.12, 0] }
+        ]), frame));
+        const big = [];
+        [0.55, CFG.H - 0.55].forEach((y) => {
+          big.push({ g: ZoneKit.box(0.9, 0.16, 0.16), p: [0, y, 0] });
+          big.push({ g: ZoneKit.box(0.30, 0.30, 0.16), p: [0.45, y, 0], r: [0, 0, Math.PI / 4] });
+        });
+        const arrows = new THREE.Mesh(ZoneKit.merge(big), arrowMat);
+        grp.add(arrows);
+        g.userData.beltArrows = arrows;
+      } else {
+        /* 矢印の帯（粒）: 面に並ぶ小さな矢羽根。流れの向きへ animated に流れる */
+        const parts = [];
+        for (let i = 0; i < 4; i++) {
+          const z = -0.36 + i * 0.24;
+          /* 矢羽根（軸＋斜めの羽）。遠くからでも向きが読めるよう太めに彫る */
+          parts.push({ g: ZoneKit.box(0.60, 0.05, 0.14), p: [0, 0.035, z] });
+          parts.push({ g: ZoneKit.box(0.26, 0.05, 0.14), p: [0.22, 0.035, z - 0.13], r: [0, -0.7, 0] });
+          parts.push({ g: ZoneKit.box(0.26, 0.05, 0.14), p: [0.22, 0.035, z + 0.13], r: [0, 0.7, 0] });
+        }
+        const lanes = new THREE.Group();
+        CFG.LANES.forEach((l) => {
+          const m = new THREE.Mesh(ZoneKit.merge(parts), arrowMat);
+          m.position.x = l * CFG.LANE_W;
+          m.renderOrder = 4;
+          lanes.add(m);
+        });
+        grp.add(lanes);
+        g.userData.beltArrows = lanes;
+        /* 流れの筋（面のすぐ上を走る光） */
+        const lineMat = emis(mats.line || C.cyan, 0.34);
+        const line = new THREE.Mesh(new THREE.BoxGeometry(CFG.HALF_W * 2 - 0.1, 0.02, 1), lineMat);
+        line.position.y = 0.05;
+        grp.add(line);
+      }
+      g.add(grp);
+      g.userData.belt = grp;
+      g.userData.beltLen = 1;
+      g.userData.beltMats = own;
+    };
+    /* 色の扉（契約§4.5）: 琥珀＝LUMEN／藍＝UMBRA。同色は枠だけ（通れる）、
+       異色は 0〜2.30 を塞ぐ板（跳んでも潜っても抜けられない＝レーン移動）。
+       色は place() が o.surface と型から決めるので、ここでは形だけ作る。 */
+    const doorKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const pane = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true, transparent: true,
+                                                 opacity: 0.55, depthWrite: false });
+      own.push(pane);
+      const edge = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true });
+      own.push(edge);
+      const TOP = (type === 'DOORX') ? OBS.DOORX.y1 : 2.30;
+      const frameMat = mats.frame || Obstacles._material('drFrame', C.dark);
+      /* 枠（同色・異色とも同じ形。どちらの扉かは色で見せる） */
+      g.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.10, TOP, D * 0.9), p: [-(w / 2 - 0.05), TOP / 2, 0] },
+        { g: ZoneKit.box(0.10, TOP, D * 0.9), p: [w / 2 - 0.05, TOP / 2, 0] },
+        { g: ZoneKit.box(w, 0.16, D * 0.9), p: [0, TOP - 0.08, 0] },
+        { g: ZoneKit.box(w, 0.12, D * 0.9), p: [0, 0.06, 0] }
+      ]), frameMat));
+      /* 枠の内側を走る色の光（遠くから色が読める） */
+      const rim = new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.07, TOP, D * 0.95), p: [-(w / 2 - 0.035), TOP / 2, 0] },
+        { g: ZoneKit.box(0.07, TOP, D * 0.95), p: [w / 2 - 0.035, TOP / 2, 0] },
+        { g: ZoneKit.box(w, 0.07, D * 0.95), p: [0, TOP - 0.03, 0] }
+      ]), edge);
+      g.add(rim);
+      if (type === 'DOORX') {
+        /* 異色の扉は「膜」で塞がっている（通れないことが一目で分かる） */
+        const mem = new THREE.Mesh(new THREE.BoxGeometry(w, TOP - 0.1, D * 0.35), pane);
+        mem.position.y = TOP / 2;
+        mem.renderOrder = 3;
+        g.add(mem);
+        const barsMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true, transparent: true,
+                                                      opacity: 0.9, depthWrite: false });
+        own.push(barsMat);
+        const bars = [];
+        for (let i = 0; i < 4; i++) bars.push({ g: ZoneKit.box(w * 0.94, 0.05, D * 0.4), p: [0, 0.4 + i * 0.55, 0] });
+        const bm = new THREE.Mesh(ZoneKit.merge(bars), barsMat);
+        bm.renderOrder = 3;
+        g.add(bm);
+        g.userData.doorBars = bm;
+      }
+      g.userData.door = { rim: rim, mats: own };
+      g.userData.doorMats = own;
+    };
+    /* 浮上足場（契約§4.5）: 沈んだ土台（判定の外）と、浮き上がる天板。
+       天板の高さは place() が MOT.liftK から引く＝ **見た目＝判定**。 */
+    const liftKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const TOP = OBS.LIFTPAD.y1;                      // 0.60（判定どおり）
+      const base = mats.base || Obstacles._material('lpBase', C.dark);
+      /* 土台（面に埋まっている部分＝判定の外。沈んだときはここだけが見える） */
+      g.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.06, D + 0.12), p: [0, 0.03, 0] },
+        { g: ZoneKit.box(w, 0.04, 0.10), p: [0, 0.02, -(D / 2 + 0.06)] },
+        { g: ZoneKit.box(w, 0.04, 0.10), p: [0, 0.02, D / 2 + 0.06] }
+      ]), base));
+      const warnMat = new THREE.MeshBasicMaterial({ color: C.warn, fog: true });
+      own.push(warnMat);
+      g.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, 0.03, 0.07), p: [0, 0.055, -(D / 2 - 0.03)] },
+        { g: ZoneKit.box(w, 0.03, 0.07), p: [0, 0.055, D / 2 - 0.03] }
+      ]), warnMat));
+      /* 天板（**浮ききった姿＝判定どおりの 0〜0.60** で作り、place() が liftK で縦に潰す）。
+         ＝ 見た目と判定が同じ寸法から出る（ズレ検査もそのまま通る）。 */
+      const top = new THREE.Group();
+      top.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, TOP * 0.86, D * 0.92), p: [0, TOP * 0.43, 0] },
+        { g: ZoneKit.box(w, TOP * 0.14, D), p: [0, TOP * 0.93, 0] }
+      ]), mats.body || Obstacles._material('lpBody', C.body)));
+      const hotMat = new THREE.MeshBasicMaterial({ color: C.red, fog: true });
+      own.push(hotMat);
+      top.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(w, TOP * 0.07, D), p: [0, TOP * 0.985, 0] },
+        { g: ZoneKit.box(w * 0.9, TOP * 0.05, D * 0.5), p: [0, TOP * 0.55, 0] }
+      ]), hotMat));
+      g.add(top);
+      g.userData.lift = { top: top, mats: own };
+      g.userData.liftMats = own;
+    };
+    /* 巨大魚の部位（契約§4.4 S5）: 牙・ヒレ・尾。判定どおりの寸法で彫る */
+    const fishKit = (mats) => {
+      mats = mats || {};
+      const flesh = mats.flesh || Obstacles._material('fsFlesh', C.body);
+      const bone = mats.bone || Obstacles._material('fsBone', C.steel);
+      const own = [];
+      const hot = new THREE.MeshBasicMaterial({ color: mats.hotCol || C.warn, fog: true });
+      own.push(hot);
+      if (type === 'FISH_TOOTH') {
+        const TOP = t.y1;
+        box(w, 0.16, D * 0.9, flesh, 0, 0.08, 0);                       // 歯肉
+        for (let i = 0; i < 4; i++) {
+          const px = -w / 2 + w * (i + 0.5) / 4;
+          solid(new THREE.ConeGeometry(0.11, TOP - 0.14, 5), bone, px, 0.16 + (TOP - 0.14) / 2, 0);
+        }
+        box(w, 0.10, D * 1.02, hot, 0, TOP - 0.05, 0);
+      } else if (type === 'FISH_FIN') {
+        /* ヒレ: 床から天井まで貫く膜と骨（1レーン全高＝レーン移動で避ける） */
+        const H = CFG.H;
+        box(w * 0.80, H, D * 0.5, flesh, 0, H / 2, 0);
+        for (let i = 0; i < 4; i++) {
+          box(0.10, H - 0.2, D * 0.62, bone, -w * 0.32 + w * 0.64 * i / 3, H / 2, 0, [0, 0, 0.02 * (i - 1.5)]);
+        }
+        box(w, 0.12, D * 0.9, hot, 0, 0.06, 0);
+        box(w, 0.12, D * 0.9, hot, 0, H - 0.06, 0);
+      } else {
+        /* 尾: 横へ薙ぐ（動きは LASER_SCAN と同じ規則）。1レーン幅・全高 */
+        const H = CFG.H;
+        box(w * 0.66, H, D * 0.55, flesh, 0, H / 2, 0);
+        box(w * 0.94, H * 0.72, D * 0.35, flesh, 0, H / 2, 0.02);
+        for (let i = 0; i < 3; i++) box(0.09, H - 0.3, D * 0.5, bone, (i - 1) * w * 0.3, H / 2, 0);
+        box(w * 0.98, 0.10, D * 0.9, hot, 0, 0.05, 0);
+        box(w * 0.98, 0.10, D * 0.9, hot, 0, H - 0.05, 0);
+      }
+      g.userData.fish = true;
+      g.userData.fishMats = own;
+      /* 発光部は materials をビュー専用に持つので、捨てるときに一緒に開放する */
+      const add = (list) => { list.forEach((m) => { if (own.indexOf(m) < 0) own.push(m); }); };
+      add([hot]);
+    };
+
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
-                padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit };
+                padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit,
+                beltKit: beltKit, doorKit: doorKit, liftKit: liftKit, fishKit: fishKit };
     const childs0 = g.children.length, blink0 = g.userData.blink.length, parts0 = parts.length;
     const lamps0 = lampParts.length;
     skin.build(type, x);
     /* スキンが S4 の新ギミック（P3b）を知らないゾーンでも必ず動く形にする。
        汎用の当て板を捨ててから共通の骨組みを建てる＝見た目と判定がずれない。 */
     const needKit = (t.pad && !g.userData.pad) || (type === 'SYNCGAP' && !g.userData.sync) ||
-                    (type === 'DROPCEIL' && !g.userData.drop) || (type === 'COLUMN' && !g.userData.column);
+                    (type === 'DROPCEIL' && !g.userData.drop) || (type === 'COLUMN' && !g.userData.column) ||
+                    (t.belt && !g.userData.belt) || (t.door && !g.userData.door) ||
+                    (type === 'LIFTPAD' && !g.userData.lift) || (t.fish && !g.userData.fish);
     if (needKit) {
       for (let i = g.children.length - 1; i >= childs0; i--) { const c = g.children[i]; g.remove(c); ZoneKit.free(c); }
       g.userData.blink.length = blink0;
@@ -917,6 +1306,10 @@ const Obstacles = {
       if (t.pad) padKit(null);
       else if (type === 'SYNCGAP') syncKit(null);
       else if (type === 'DROPCEIL') dropKit(null);
+      else if (t.belt) beltKit(null);
+      else if (t.door) doorKit(null);
+      else if (type === 'LIFTPAD') liftKit(null);
+      else if (t.fish) fishKit(null);
       else columnKit(null);
     }
     buildLamps();
@@ -1035,7 +1428,53 @@ const Obstacles = {
       if (ud.padMats) ud.padMats.forEach((m) => { m.color.setHex(col).multiplyScalar(blink); });
     }
 
-    if (mot === 'sync' && ud.sync) {
+    /* 海流ベルト（契約§4.5 / S5）: 矢印の帯は「1秒ぶん」の長さに伸ばし、
+       流れの向きへ滑らせる。帯そのものは当たり判定を持たない。 */
+    if (OBS[o.type].belt && ud.belt) {
+      const cur = (o.params && o.params.cur) || {};
+      const unit = cur.unitM || CFG.REF_SPEED;
+      /* 天井側のビューは Z軸まわりに180度回っているので、ローカルの +x は世界の -x。
+         画面上の流れの向きと矢印の向きを一致させるため、天井側は符号を返す。 */
+      const dir = (cur.dir || 1) * ((o.surface === 'ceil') ? -1 : 1);
+      if (o.type === 'CURRENT') {
+        ud.belt.scale.z = (unit * CFG.CURRENT.SEG_T) / (ud.beltLen || 1);
+        const a = ud.beltArrows;
+        if (a) {
+          /* 流れの向きへ矢羽根を向け、距離に比例して横へ送る */
+          a.rotation.y = (dir > 0) ? 0 : Math.PI;
+          const slide = ((dist * 0.35) % CFG.LANE_W) * (dir > 0 ? 1 : -1);
+          a.position.x = slide - (dir > 0 ? CFG.LANE_W / 2 : -CFG.LANE_W / 2);
+        }
+      } else if (ud.beltArrows) {
+        ud.beltArrows.rotation.y = (dir > 0) ? 0 : Math.PI;
+      }
+      if (ud.beltMats) {
+        const fl = 0.72 + 0.28 * Math.sin(dist * 0.9 + (t || 0) * 5);
+        ud.beltMats.forEach((m) => { m.opacity = (m.__base || (m.__base = m.opacity)) * fl; });
+      }
+      if (ud.beltArrowMat) {
+        ud.beltArrowMat.color.setHex((o.surface === 'ceil') ? 0x8b9bff : 0xffb347);
+      }
+
+    } else if (OBS[o.type].door && ud.door) {
+      /* 色の扉（契約§4.5）: 床＝琥珀が自分の色（LUMEN）／天井＝藍が自分の色（UMBRA）。
+         同色の扉（DOOR）は自分の色、異色の扉（DOORX）は相手の色で光る。 */
+      const mine = (o.surface === 'ceil') ? 0x8b9bff : 0xffb347;
+      const other = (o.surface === 'ceil') ? 0xffb347 : 0x8b9bff;
+      const col = (o.type === 'DOOR') ? mine : other;
+      if (ud.doorMats) ud.doorMats.forEach((m) => { m.color.setHex(col); });
+      if (ud.doorBars) ud.doorBars.position.z = Math.sin(dist * 0.6 + (t || 0) * 2) * 0.03;
+
+    } else if (mot === 'lift' && ud.lift) {
+      /* 浮上足場（契約§4.5）: 天板の高さは **判定と同じ MOT.liftK** から引く。
+         沈みきったら天板を消す＝「今は通れる」が目で分かる。 */
+      const k = MOT.liftK(o, dist);
+      const s = ud.lift.top;
+      s.scale.y = Math.max(0.0001, k);
+      s.visible = (k > CFG.LIFT.EPS);
+      if (ud.liftMats) ud.liftMats.forEach((m) => { m.color.setHex(k > 0.5 ? 0xff5540 : 0xffd15a); });
+
+    } else if (mot === 'sync' && ud.sync) {
       /* 同時スイッチの橋: 成否が決まると「橋が架かる／崩れ落ちる」。
          見た目の進み具合も **距離の関数**（成否が決まった距離 okM から SHOW_T 秒） */
       const gp = o.grp, unit = Sync.unitOf(o);

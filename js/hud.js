@@ -14,11 +14,13 @@ const HUD = {
                  'hand-left-name', 'hand-right-name', 'hand-left-keys', 'hand-right-keys',
                  'flag-mirror', 'flag-swap', 'dead-dist', 'dead-cp', 'dead-best',
                  'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub',
-                 'sync', 'sync-main', 'sync-sub'];
+                 'sync', 'sync-main', 'sync-sub', 'cur', 'cur-f', 'cur-c'];
     ids.forEach((id) => { HUD.el[id] = document.getElementById(id); });
     HUD.cueHide();
     HUD.syncState = 'x';
     HUD.syncCue(null);
+    HUD.curState = 'x';
+    HUD.currentCue(0, 0);
   },
 
   /* 大演出の予告（§4.4 大ジャンプの「JUMP!」）。2体に被らない位置は CSS 側で担保 */
@@ -71,6 +73,27 @@ const HUD = {
     return true;
   },
 
+  /* 海流ベルト（契約§4.5 / S5）: 今どちらへ流されているかを矢印で出す。
+     床（下半分＝LUMEN）と天井（上半分＝UMBRA）で向きが違うので、2つ並べる。
+     dir / cdir は -1（左）/ 0（流れの外）/ +1（右）。 */
+  curState: null,
+  currentCue(dir, cdir) {
+    const e = HUD.el.cur || (HUD.el.cur = document.getElementById('cur'));
+    if (!e) return false;
+    const key = dir + '|' + cdir;
+    if (HUD.curState === key) return true;
+    HUD.curState = key;
+    const on = !!(dir || cdir);
+    e.classList.toggle('on', on);
+    if (!on) return true;
+    const arrow = (d) => (d > 0 ? '▶▶' : (d < 0 ? '◀◀' : '—'));
+    const f = HUD.el['cur-f'] || (HUD.el['cur-f'] = document.getElementById('cur-f'));
+    const c = HUD.el['cur-c'] || (HUD.el['cur-c'] = document.getElementById('cur-c'));
+    if (c) c.textContent = arrow(cdir);
+    if (f) f.textContent = arrow(dir);
+    return true;
+  },
+
   _set(id, txt) {
     if (HUD._last[id] === txt) return;
     HUD._last[id] = txt;
@@ -106,7 +129,7 @@ const UI = {
     { id: 'S2', name: 'ネオン都市・夜', ready: true },
     { id: 'S3', name: '古代遺跡・外周', ready: true },
     { id: 'S4', name: '古代遺跡・内部', ready: true },
-    { id: 'S5', name: '深海', ready: false },
+    { id: 'S5', name: '深海', ready: true },
     { id: 'S6', name: '宇宙ステーション', ready: false },
     { id: 'S7', name: '鏡の世界', ready: false },
     { id: 'S8', name: 'コア', ready: false }
