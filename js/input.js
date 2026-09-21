@@ -58,20 +58,32 @@ const Input = {
     return false;
   },
 
-  /* --- タッチ（上半分＝UMBRA / 下半分＝LUMEN・マルチタッチ） -------------- */
-  touchStart(id, x, y, height) {
+  /* --- タッチ（上半分＝UMBRA / 下半分＝LUMEN・マルチタッチ） --------------
+     **1スワイプ＝1レーン**（契約§4.2 2026-09-21 実機評）。
+     1回のタッチで出せるのは原則1動作。同じ指で2回目を出すには、
+     直前の動作を出した位置から **TOUCH_REPEAT_PX(64px) 以上**動かし、
+     さらに **TOUCH_REPEAT_MS(220ms) 以上**経ってからにする。
+     （指を止めずに大きく動かしても、端まで飛んでいかない） */
+  now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); },
+  touchStart(id, x, y, height, tMs) {
     /* 担当は開始点の y だけで決める。境界は画面のちょうど中央 */
-    Input.touches[id] = { zone: (y < height / 2) ? 'top' : 'bottom', x: x, y: y };
+    Input.touches[id] = { zone: (y < height / 2) ? 'top' : 'bottom', x: x, y: y,
+                          fired: 0, t: (tMs === undefined ? Input.now() : tMs) };
   },
-  touchMove(id, x, y) {
+  touchMove(id, x, y, tMs) {
     const t = Input.touches[id];
     if (!t) return null;
+    const now = (tMs === undefined) ? Input.now() : tMs;
     const dx = x - t.x, dy = y - t.y;
-    if (Math.abs(dx) < CFG.TOUCH_FLICK && Math.abs(dy) < CFG.TOUCH_FLICK) return null;
+    /* 1回目は通常のフリック閾値、2回目以降は「新しい原点から64px＋220ms」 */
+    const need = t.fired ? CFG.TOUCH_REPEAT_PX : CFG.TOUCH_FLICK;
+    if (Math.abs(dx) < need && Math.abs(dy) < need) return null;
+    if (t.fired && (now - t.t) < CFG.TOUCH_REPEAT_MS) return null;
     /* 主軸で方向を決める（スクリーン基準のまま積む） */
     const dir = (Math.abs(dx) >= Math.abs(dy)) ? ((dx > 0) ? 'right' : 'left')
                                                : ((dy > 0) ? 'down' : 'up');
-    t.x = x; t.y = y;                        // 指を離さない連続ドラッグを許す
+    t.x = x; t.y = y;                        // 次の判定はこの位置を新しい原点にする
+    t.fired++; t.t = now;
     Input.pushZone(t.zone, dir);
     return dir;
   },
@@ -105,7 +117,7 @@ const Input = {
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        Input.touchStart(t.identifier, t.clientX, t.clientY, h());
+        Input.touchStart(t.identifier, t.clientX, t.clientY, h(), e.timeStamp);
       }
     }, { passive: false });
     el.addEventListener('touchmove', function (e) {
@@ -113,7 +125,7 @@ const Input = {
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        Input.touchMove(t.identifier, t.clientX, t.clientY);
+        Input.touchMove(t.identifier, t.clientX, t.clientY, e.timeStamp);
       }
     }, { passive: false });
     const end = function (e) {

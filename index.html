@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#05070f">
+<!-- favicon を要求させない（ファイルを置かない＝$0構成のまま、コンソールを汚さない） -->
+<link rel="icon" href="data:,">
 <title>DUO RUN — Light &amp; Shadow</title>
 <style>
   :root{
@@ -52,6 +54,9 @@
     font-size:10px; letter-spacing:.16em; opacity:.55;}
   #touchzones .tz.top::after{color:var(--umbra); bottom:9px;}
   #touchzones .tz.bottom::after{color:var(--lumen); top:9px;}
+  /* チュートリアルの吹き出しは分割線の上に出るので、その間はラベルを伏せる */
+  #touchzones .tz::after{transition:opacity .2s;}
+  body.tip-on #touchzones .tz::after{opacity:0;}
   /* 中央の分割線 */
   #touch-split{position:absolute; left:8%; right:8%; top:50%; height:1px; transform:translateY(-.5px);
     background:linear-gradient(90deg,transparent,rgba(220,230,255,.30),transparent);}
@@ -112,17 +117,33 @@
   .result-dead{color:#ff9bb0; text-shadow:0 0 26px rgba(255,80,120,.5);}
   #clear-best,#dead-best{font-size:12px; letter-spacing:.1em; color:#ffe2a8; min-height:1.2em;}
 
-  /* ---------- チュートリアルの吹き出し（§4.8） ---------- */
-  #tip{position:absolute; left:50%; top:22%; transform:translate(-50%,0) scale(.96);
-    max-width:min(86vw,520px); padding:11px 20px; border-radius:14px; text-align:center;
-    font-size:clamp(14px,2.4vw,18px); font-weight:700; letter-spacing:.06em; line-height:1.5;
-    color:#eef3ff; background:linear-gradient(180deg,rgba(26,34,70,.86),rgba(12,16,38,.86));
+  /* ---------- チュートリアルの吹き出し（§4.8 / P2b-0 で位置と改行を修正） ----------
+     ・位置: 画面のちょうど中央（分割線の上）。2体は床(下)と天井(上)を走るので、
+       この中央の帯だけは **どちらの投影矩形とも交差しない**（機械テストあり）。
+     ・改行: 句（.ph）を inline-block にして、語の途中では絶対に折り返させない。 */
+  #tip{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) scale(.96);
+    max-width:min(78vw,430px); padding:7px 15px; border-radius:12px; text-align:center;
+    font-size:clamp(12px,2.1vw,16px); font-weight:700; letter-spacing:.04em; line-height:1.42;
+    color:#eef3ff; background:linear-gradient(180deg,rgba(26,34,70,.88),rgba(12,16,38,.88));
     border:1px solid rgba(150,190,255,.45); box-shadow:0 0 26px rgba(80,140,255,.28);
+    word-break:keep-all; overflow-wrap:normal;
     opacity:0; pointer-events:none; transition:opacity .22s, transform .22s;}
-  #tip.on{opacity:1; transform:translate(-50%,0) scale(1);}
+  #tip.on{opacity:1; transform:translate(-50%,-50%) scale(1);}
+  #tip .ph{display:inline-block; white-space:nowrap;}
   #tip .k{color:var(--lumen);}
   #tip .k2{color:var(--umbra);}
-  #tip .finger{font-size:20px; margin-right:6px; vertical-align:-2px;}
+  #tip .finger{font-size:17px; margin-right:4px; vertical-align:-2px;}
+  @media (orientation:landscape){ #tip{max-width:min(64vw,520px); font-size:13px; padding:5px 13px;} }
+
+  /* ---------- 大演出の予告（§4.4 ビル間の大ジャンプ「JUMP!」） ---------- */
+  #cue{position:absolute; left:50%; top:44%; transform:translate(-50%,-50%) scale(.8);
+    text-align:center; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;}
+  #cue.on{opacity:1; transform:translate(-50%,-50%) scale(1); animation:cuePulse .55s ease-in-out infinite alternate;}
+  #cue-main{text-shadow:0 0 18px rgba(255,190,90,.85),0 0 48px rgba(255,140,40,.55),0 2px 10px rgba(0,0,0,.6);}
+  #cue-main{font-size:clamp(26px,min(9vw,12vh),58px); font-weight:800; letter-spacing:.2em; color:#ffe6b0;
+    text-shadow:0 0 18px rgba(255,190,90,.85),0 0 48px rgba(255,140,40,.55);}
+  #cue-sub{font-size:clamp(11px,2vw,14px); letter-spacing:.14em; color:#dfe6ff; opacity:.85; margin-top:2px;}
+  @keyframes cuePulse{from{filter:brightness(.82);} to{filter:brightness(1.25);}}
 </style>
 </head>
 <body>
@@ -146,6 +167,7 @@
       <span class="flag" id="flag-swap" style="display:none">SWAP</span>
     </div>
     <div id="tip" data-ui="tip"></div>
+    <div id="cue" data-ui="cue"><div id="cue-main">JUMP!</div><div id="cue-sub"></div></div>
     <div class="hands">
       <div class="hand" id="hand-left" data-char="lumen">
         <b id="hand-left-name">LUMEN</b><span id="hand-left-keys">下半分</span>
@@ -240,6 +262,7 @@
 <script src="tests/test_touch.js"></script>
 <script src="tests/test_p2a.js"></script>
 <script src="tests/test_p2a3.js"></script>
+<script src="tests/test_p2b.js"></script>
 
 <script>
   (function boot(){

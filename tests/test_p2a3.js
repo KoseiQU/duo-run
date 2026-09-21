@@ -99,8 +99,8 @@
         agg.lane += cc.lane; agg.jump += cc.jump; agg.slide += cc.slide; agg.total += cc.total;
       }
       const pct = (k) => agg[k] / agg.total * 100;
-      t.ok(pct('lane') >= 40 && pct('lane') <= 60, 'S1 50シードのレーン移動 ' + pct('lane').toFixed(1) + '% が 40〜60%');
-      t.ok(pct('jump') >= 25 && pct('jump') <= 45, 'S1 50シードのジャンプ ' + pct('jump').toFixed(1) + '% が 25〜45%');
+      t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S1 50シードのレーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
+      t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S1 50シードのジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%（スライド0%のぶんが乗る）');
       t.eq(agg.slide, 0, 'S1 50シードでスライディングは0回（' + agg.total + '回中）');
       t.eq(bad, 0, 'S1 50シードで §4.7 違反なし（大演出区間を含む）');
       t.eq(spFound, 50, '50シードすべてに大演出（連鎖崩落）が入る');
@@ -242,6 +242,9 @@
     run(t) {
       const In = I();
       const snap = In.U.lsSnapshot();
+      /* 解放状態を既知にする（runAll ではボット完走テストが先に S1 をクリア済みにするため。
+         最後に lsRestore で元へ戻す） */
+      try { window.localStorage.removeItem(In.CFG.LS_PREFIX + 'cleared'); } catch (e) { /* noop */ }
       DUO.reset();
       t.eq(onScreen('title'), true, 'タイトルが出ている');
       t.eq(click('start'), true, 'START を押す');
@@ -252,7 +255,7 @@
       const s1 = document.querySelector('[data-ui="stage-S1"]');
       const s2 = document.querySelector('[data-ui="stage-S2"]');
       t.eq(s1 && s1.getAttribute('data-unlocked'), '1', 'S1 は解放されている');
-      t.eq(s2 && s2.getAttribute('data-unlocked'), '0', 'S2 はロックされている');
+      t.eq(s2 && s2.getAttribute('data-unlocked'), '0', 'S2 はロックされている（S1 未クリア時）');
       t.eq(!!(s2 && s2.hasAttribute('disabled')), true, 'ロックは押せない');
       t.eq(click('stage-S1'), true, 'S1 を押す');
       t.eq(DUO.state().stage, 'S1', 'S1 が始まる');

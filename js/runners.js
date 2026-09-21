@@ -15,6 +15,7 @@ const Runners = {
       mirrored: false,           // 左右反転中か（鏡ゾーン）
       laneFrom: 0, laneTo: 0, laneVal: 0, laneT: CFG.LANE_T,
       act: 'run', actT: 0,       // 'run' | 'jump' | 'slide'
+      laneBuf: 0,                // 空中で入った横入力（着地の瞬間に1回だけ実行 / §4.2）
       alive: true,
       view: null
     };
@@ -25,7 +26,7 @@ const Runners = {
     if (surface) r.surface = surface;
     r.mirrored = false;
     r.laneFrom = 0; r.laneTo = 0; r.laneVal = 0; r.laneT = CFG.LANE_T;
-    r.act = 'run'; r.actT = 0; r.alive = true;
+    r.act = 'run'; r.actT = 0; r.laneBuf = 0; r.alive = true;
   },
 
   /* 1動作ぶんの入力（keydownのエッジ／フリック1回ぶん） */
@@ -34,6 +35,9 @@ const Runners = {
     if (act === 'left' || act === 'right') {
       let dir = (act === 'right') ? 1 : -1;
       if (r.mirrored) dir = -dir;                 // 鏡ゾーン
+      /* **ジャンプ中は横に動けない**（契約§4.2 改訂／斜め飛びをなくす）。
+         入力は捨てずに1個だけ覚えておき、着地の瞬間に実行する。 */
+      if (r.act === 'jump') { r.laneBuf = dir; return false; }
       const target = U.clamp(r.laneTo + dir, -1, 1);
       if (target === r.laneTo && r.laneT >= CFG.LANE_T) return false;
       r.laneFrom = r.laneVal; r.laneTo = target; r.laneT = 0;
@@ -42,7 +46,8 @@ const Runners = {
     if (act === 'jump') {
       if (r.act === 'jump') return false;          // 空中ジャンプ不可
       r.act = 'jump'; r.actT = 0;                  // スライド中のジャンプは可（キャンセル）
-      return true;
+      r.laneBuf = 0;                               // 踏切の瞬間に古いバッファは捨てる
+      return true;                                 // 補間中のジャンプは可（補間はそのまま続く）
     }
     if (act === 'slide') {
       if (r.act !== 'run') return false;           // 空中スライド不可
@@ -62,9 +67,18 @@ const Runners = {
     }
     /* 動作タイマー */
     if (r.act !== 'run') {
+      const wasJump = (r.act === 'jump');
       r.actT += dt;
-      const dur = (r.act === 'jump') ? CFG.JUMP_T : CFG.SLIDE_T;
-      if (r.actT >= dur) { r.act = 'run'; r.actT = 0; }
+      const dur = wasJump ? CFG.JUMP_T : CFG.SLIDE_T;
+      if (r.actT >= dur) {
+        r.act = 'run'; r.actT = 0;
+        /* 着地の瞬間に、空中で入っていた横入力を1回だけ実行する（§4.2） */
+        if (wasJump && r.laneBuf) {
+          const target = U.clamp(r.laneTo + r.laneBuf, -1, 1);
+          if (target !== r.laneTo) { r.laneFrom = r.laneVal; r.laneTo = target; r.laneT = 0; }
+          r.laneBuf = 0;
+        }
+      }
     }
   },
 

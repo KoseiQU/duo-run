@@ -101,9 +101,12 @@ const ZoneNeon = {
     ZoneNeon._t = 0;
     scene.fog = new THREE.Fog(ZoneNeon.PAL.fog, 22, 104);
     scene.background = new THREE.Color(ZoneNeon.PAL.fog);
+    ZoneNeon._glide = 0;
     ZoneNeon._lights(scene);
     ZoneNeon._sky(scene);
     ZoneNeon._skyline(scene);
+    ZoneNeon._cityBelow(scene);
+    ZoneNeon._clouds(scene);
     ZoneNeon._corridorProps(scene);
     ZoneNeon._speedFx(scene);
     ZoneNeon._rain(scene);
@@ -246,6 +249,124 @@ const ZoneNeon = {
     /* 遠景の層（小さい・空に近い色） */
     mk({ count: 60, winCount: 300, salt: 303, x: 26, xSpread: 18, hMin: 20, hSpread: 36,
          wMin: 5, wSpread: 7, color: 0x3b4280, win: ZoneNeon.PAL.coolWin, winOp: 0.6, winRows: 8, par: 0.22 });
+  },
+
+  /* ==========================================================================
+     眼下の街と雲の層（契約§4.4「ビル間の大ジャンプ」＝眼下に世界が広がる構図）
+     ふだんは消えていて、滑空中だけ出す（ZoneNeon.setGlide）。
+     ・街はコリドーの**下**に敷き詰める。2層＋窓の点でビル群に見せる。
+     ・雲/霧の層を下に重ねて「高さ」を出す（＝中間調を作るので黒潰れも防げる）。
+     ========================================================================== */
+  _cityBelow(scene) {
+    const grp = new THREE.Group();
+    grp.visible = false;
+    scene.add(grp);
+    ZoneNeon.cityBelow = grp;
+    ZoneNeon.cityLayers = [];
+    const LEN = 420;
+    const mk = (opt) => {
+      const body = new THREE.InstancedMesh(ZoneNeon.box(1, 1, 1), ZoneNeon.lam(opt.color), opt.count);
+      const wins = new THREE.InstancedMesh(ZoneNeon.box(1, 1, 0.08),
+                                           ZoneNeon.bas(opt.win, { transparent: true, opacity: opt.winOp }), opt.winCount);
+      const d = new THREE.Object3D();
+      let wi = 0;
+      for (let i = 0; i < opt.count; i++) {
+        const h = ZoneNeon.hash(i, opt.salt);
+        const x = (ZoneNeon.hash(i, opt.salt + 7) - 0.5) * opt.spread;
+        const hgt = opt.hMin + ZoneNeon.hash(i, opt.salt + 3) * opt.hSpread;
+        const w = opt.wMin + h * opt.wSpread;
+        const z = -LEN * 2 * (i / opt.count) - ZoneNeon.hash(i, opt.salt + 11) * 9;
+        const top = opt.top - ZoneNeon.hash(i, opt.salt + 13) * opt.topSpread;
+        d.position.set(x, top - hgt / 2, z);
+        d.rotation.set(0, (ZoneNeon.hash(i, opt.salt + 5) - 0.5) * 0.5, 0);
+        d.scale.set(w, hgt, w * 0.95);
+        d.updateMatrix();
+        body.setMatrixAt(i, d.matrix);
+        for (let r = 0; r < opt.winRows && wi < opt.winCount; r++) {
+          if (ZoneNeon.hash(i * 61 + r, opt.salt + 23) > 0.62) continue;
+          d.position.set(x + (ZoneNeon.hash(i + r, 31) - 0.5) * w * 0.7, top - 1.2 - r * (hgt / opt.winRows), z + w * 0.5);
+          d.rotation.set(0, 0, 0);
+          d.scale.set(w * 0.5, 0.5 + ZoneNeon.hash(i * 7 + r, 41) * 0.8, 1);
+          d.updateMatrix();
+          wins.setMatrixAt(wi++, d.matrix);
+        }
+      }
+      d.position.set(0, -9999, 0); d.scale.set(0.0001, 0.0001, 0.0001); d.updateMatrix();
+      for (; wi < opt.winCount; wi++) wins.setMatrixAt(wi, d.matrix);
+      body.frustumCulled = false; wins.frustumCulled = false;
+      const g = new THREE.Group();
+      g.add(body); g.add(wins);
+      g.userData = { par: opt.par, len: LEN };
+      grp.add(g);
+      ZoneNeon.cityLayers.push(g);
+    };
+    /* 近い層（大きく・明るい）と遠い層（小さく・空の色に溶ける） */
+    mk({ count: 70, winCount: 420, salt: 511, spread: 46, top: -7, topSpread: 9,
+         hMin: 10, hSpread: 26, wMin: 2.6, wSpread: 4.2, color: 0x35407e,
+         win: ZoneNeon.PAL.warmWin, winOp: 0.9, winRows: 7, par: 0.42 });
+    mk({ count: 80, winCount: 300, salt: 733, spread: 120, top: -16, topSpread: 18,
+         hMin: 14, hSpread: 30, wMin: 5, wSpread: 8, color: 0x46519a,
+         win: ZoneNeon.PAL.coolWin, winOp: 0.55, winRows: 6, par: 0.16 });
+    /* 街路の光の筋（交差点の格子。高さがあることを一目で伝える） */
+    const grid = new THREE.InstancedMesh(ZoneNeon.box(1, 0.25, 1),
+                                         ZoneNeon.add(0xffd9a6, 0.34), 90);
+    const d2 = new THREE.Object3D();
+    for (let i = 0; i < 90; i++) {
+      const vert = (i % 2) === 0;
+      const x = (ZoneNeon.hash(i, 811) - 0.5) * 70;
+      const z = -ZoneNeon.hash(i, 821) * 700;
+      d2.position.set(x, -13 - ZoneNeon.hash(i, 823) * 10, z);
+      d2.rotation.set(0, 0, 0);
+      d2.scale.set(vert ? 0.5 : 60, 1, vert ? 70 : 0.5);
+      d2.updateMatrix();
+      grid.setMatrixAt(i, d2.matrix);
+    }
+    grid.frustumCulled = false;
+    grid.renderOrder = 1;
+    grp.add(grid);
+    ZoneNeon.cityGrid = grid;
+  },
+
+  _clouds(scene) {
+    const grp = new THREE.Group();
+    grp.visible = false;
+    scene.add(grp);
+    ZoneNeon.clouds = grp;
+    ZoneNeon.cloudMats = [];
+    [[-4.6, 0x6d7cc8, 0.16, 150], [-10.5, 0x8390d8, 0.22, 240], [-21, 0xa9b4ee, 0.20, 340]].forEach((c, i) => {
+      const mat = new THREE.MeshBasicMaterial({
+        color: c[1], transparent: true, opacity: 0, depthWrite: false,
+        blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false
+      });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(c[3], c[3] * 2.6, 1, 1), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(0, c[0], -c[3] * 0.9);
+      m.renderOrder = 1 + i;
+      grp.add(m);
+      ZoneNeon.cloudMats.push({ mesh: m, mat: mat, base: c[2], y: c[0] });
+    });
+  },
+
+  /* 滑空の強さ 0..1（Setpieces.syncView から毎フレーム）。0 で完全に元へ戻る */
+  setGlide(k) {
+    k = U.clamp(k || 0, 0, 1);
+    ZoneNeon._glide = k;
+    const on = k > 0.01;
+    /* 滑空中はカメラが高く画角も広いので、近景のビル群が画面を埋めてしまう。
+       層ごと外側へ押し広げて「ビルの谷間を飛ぶ」構図にする（0 で完全に元へ戻る）。 */
+    if (ZoneNeon.skyLayers) {
+      ZoneNeon.skyLayers.forEach((g, i) => {
+        const push = (i === 0) ? 1.35 : 0.45;
+        g.scale.x = 1 + push * k;
+        g.position.y = -3.2 * k * (i === 0 ? 1 : 0.4);
+      });
+    }
+    if (ZoneNeon.cityBelow) ZoneNeon.cityBelow.visible = on;
+    if (ZoneNeon.clouds) {
+      ZoneNeon.clouds.visible = on;
+      ZoneNeon.cloudMats.forEach((c) => { c.mat.opacity = c.base * k; });
+    }
+    if (ZoneNeon.cityGrid) ZoneNeon.cityGrid.material.opacity = 0.34 * k;
   },
 
   /* ---- 雨（1つの LineSegments。落下はオブジェクトの移動で作る） ----------- */
@@ -767,13 +888,15 @@ const ZoneNeon = {
     const d = ZoneNeon._dummy;
     let ahead = 0;
     const fs = ZoneNeon.fields;
+    /* 滑空中はコリドーが存在しない（ビルとビルの間）ので、道の小物は全部しまう */
+    const hideProps = (ZoneNeon._glide > 0.02);
     for (let i = 0; i < fs.length; i++) {
       const f = fs[i];
       const base = Math.floor((dist - f.behind) / f.spacing);
       for (let k = 0; k < f.count; k++) {
         const slot = base + k;
         const m = slot * f.spacing;
-        const o = f.place(slot, m, t, dist);
+        const o = hideProps ? null : f.place(slot, m, t, dist);
         if (!o) {
           d.position.set(0, -9999, 0);
           d.rotation.set(0, 0, 0);
@@ -799,6 +922,18 @@ const ZoneNeon = {
       g.position.z = (dist * u.par) % u.len;
     }
 
+    /* 眼下の街（滑空中だけ）。遠景と同じく層ごと視差で流す */
+    if (ZoneNeon.cityBelow && ZoneNeon.cityBelow.visible) {
+      for (let i = 0; i < ZoneNeon.cityLayers.length; i++) {
+        const g = ZoneNeon.cityLayers[i];
+        g.position.z = (dist * g.userData.par) % g.userData.len;
+      }
+      if (ZoneNeon.cityGrid) ZoneNeon.cityGrid.position.z = (dist * 0.55) % 120;
+      ZoneNeon.cloudMats.forEach((c, i) => {
+        c.mesh.position.z = -c.mesh.geometry.parameters.height * 0.35 + ((dist * (0.5 + i * 0.2)) % 90);
+      });
+    }
+
     /* 雨（落下＝オブジェクトの移動。粒子バッファは触らない） */
     if (ZoneNeon.rain) {
       const cell = ZoneNeon.RAIN_CELL;
@@ -812,7 +947,8 @@ const ZoneNeon = {
       ZoneNeon.speedLines.forEach((f) => { f.mesh.material.opacity = op; });
     }
     if (ZoneNeon.wind) {
-      ZoneNeon.windMat.opacity = 0.13 + ZoneNeon._spd01 * 0.30;
+      /* 滑空中は風の筋を強める（契約§4.4「風の筋強め」） */
+      ZoneNeon.windMat.opacity = 0.13 + ZoneNeon._spd01 * 0.30 + ZoneNeon._glide * 0.42;
       ZoneNeon.wind.position.z = (dist % ZoneNeon.WIND_CELL);
     }
 

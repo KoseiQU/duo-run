@@ -44,7 +44,55 @@ const Setpieces = {
         { at: 0, type: 'collapse.start' },
         { at: 200, type: 'collapse.end' }
       ]
+    },
+
+    /* ====================================================================
+       S2「ビル間の大ジャンプ」（契約§4.4）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0    予告（HUD「JUMP!」＋発射台の点滅ライン）／路面が上り勾配になり始める
+         6〜46 上り勾配（コリドーごと RAMP_H まで持ち上がる）
+         46〜52 ジャンプ台の先端（蹴り上げ）
+         52   **発射** → 滑空区間へ（ジャンプ／スライド入力は無効。レーン移動だけ）
+         52〜192 滑空 140m ＝ 速度 23〜24 m/s で約6.0秒（契約「約6〜8秒相当」）
+         192  隣のビルの屋上へ**着地**（衝撃・カメラ揺れ）
+         192〜200 走り抜けてゴール
+       空中の障害物は全て「跳べない／潜れない」型（§4.7 の生存経路はレーン移動で満たす）。
+       ==================================================================== */
+    bigjump: {
+      id: 'bigjump',
+      lengthM: 200,
+      /* 片側だけの ADPANEL を多めにして「2体が別々によける」場面を作る。
+         全部が both（2体とも同じレーンへ）だと、レーン移動の要求数が増えすぎて
+         §4.3 の動作比率（レーン50%前後）を押し上げてしまうため。 */
+      floor: [
+        { at: 66,  lane: 1,  type: 'ADPANEL' },     // 床側だけ（LUMEN のみ動く）
+        { at: 88,  lane: -1, type: 'WIRE2' },       // -1,0 を塞ぐ → 右へ（2体とも）
+        { at: 132, lane: 0,  type: 'DRONE' },
+        { at: 154, lane: -1, type: 'ADPANEL' },
+        { at: 176, lane: 0,  type: 'SIGNFRAG' }
+      ],
+      ceil: [
+        { at: 110, lane: 1,  type: 'ADPANEL' },     // 天井側だけ（UMBRA のみ動く）
+        { at: 154, lane: 1,  type: 'ADPANEL' }      // 同じ地点で床と天井が別レーン
+      ],
+      events: [
+        { at: 0,   type: 'bigjump.start' },
+        { at: 52,  type: 'bigjump.launch' },
+        { at: 192, type: 'bigjump.land' },
+        { at: 200, type: 'bigjump.end' }
+      ]
     }
+  },
+
+  /* ---- 大ジャンプのキーフレーム（距離 m。すべてここから引く） ------------- */
+  BJ: {
+    RAMP0: 6, RAMP1: 46, LIP: 52, LAND: 192, END: 200,
+    RAMP_H: 2.6,          // 発射台の高さ
+    KICK: 0.55,           // 先端の蹴り上げ
+    ARC: 3.4,             // 滑空の山（発射高さからさらにこれだけ上がる）
+    ARC_PEAK: 0.34,       // 山の位置（滑空区間の割合）
+    SETTLE: 9,            // 着地の沈み込みが収まるまでの距離
+    SETTLE_D: 0.55        // 沈み込み量
   },
 
   /* ---- 生成（createGenerator から呼ばれる） ------------------------------- */
@@ -69,6 +117,7 @@ const Setpieces = {
   CAM_BACK: 2.8,        // 演出中にカメラを後ろへ引く量（崩落を画面に入れるため）
 
   active() { return !!Setpieces.state; },
+  id() { return Setpieces.state ? Setpieces.state.id : null; },
 
   /* イベント（Game.onEvent から） */
   onEvent(e) {
@@ -77,7 +126,64 @@ const Setpieces = {
     } else if (e.type === 'collapse.end') {
       /* 終わってもゴールまで崩落は続く（前線は走り続ける） */
       if (Setpieces.state) Setpieces.state.ending = true;
+    } else if (e.type === 'bigjump.start') {
+      Setpieces.state = { id: 'bigjump', startM: e.at, t: 0, phase: 'ramp', land: 0 };
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('JUMP!', 'ビルの間を跳ぶ ／ 空中は左右だけ');
+    } else if (e.type === 'bigjump.launch') {
+      if (Setpieces.state) Setpieces.state.phase = 'glide';
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'bigjump.land') {
+      if (Setpieces.state) { Setpieces.state.phase = 'land'; Setpieces.state.land = 0; }
+    } else if (e.type === 'bigjump.end') {
+      if (Setpieces.state) Setpieces.state.phase = 'done';
     }
+  },
+
+  /* ---- 大ジャンプの状態（距離の関数。フレームに依存しない） --------------- */
+  /* 演出開始からの相対距離 */
+  _rel(m) {
+    const s = Setpieces.state;
+    return (s && s.id === 'bigjump') ? (m - s.startM) : null;
+  },
+  /* 滑空中か（＝ジャンプ／スライド入力が無効になる区間・契約§4.4） */
+  glideActive() {
+    const s = Setpieces.state;
+    return !!(s && s.id === 'bigjump' && s.phase === 'glide');
+  },
+  /* コリドー（路面・天井面・障害物・2体・カメラ）の持ち上がり量。見た目だけ。
+     **同じ距離には必ず同じ値**なので、2体と障害物のズレは生まれない。 */
+  viewLift(m) {
+    const rel = Setpieces._rel(m);
+    if (rel === null) return 0;
+    const B = Setpieces.BJ;
+    if (rel <= B.RAMP0) return 0;
+    if (rel <= B.RAMP1) return B.RAMP_H * U.smooth((rel - B.RAMP0) / (B.RAMP1 - B.RAMP0));
+    if (rel <= B.LIP) return B.RAMP_H + B.KICK * (rel - B.RAMP1) / (B.LIP - B.RAMP1);
+    if (rel <= B.LAND) {
+      const u = (rel - B.LIP) / (B.LAND - B.LIP);
+      const h0 = B.RAMP_H + B.KICK, top = h0 + B.ARC, p = B.ARC_PEAK;
+      return (u < p) ? U.lerp(h0, top, U.smooth(u / p))
+                     : top * (1 - U.smooth((u - p) / (1 - p)));
+    }
+    if (rel <= B.LAND + B.SETTLE) {
+      const k = (rel - B.LAND) / B.SETTLE;                 // 着地の沈み込み→戻り
+      return -B.SETTLE_D * Math.sin(Math.PI * k) * Math.exp(-2.2 * k);
+    }
+    return 0;
+  },
+  /* その距離に路面／天井面があるか（滑空区間はビルとビルの間＝何もない） */
+  tileHidden(m) {
+    const rel = Setpieces._rel(m);
+    if (rel === null) return false;
+    return rel > Setpieces.BJ.LIP && rel < Setpieces.BJ.LAND;
+  },
+  /* 発射台の点滅ライン（予告）の強さ 0..1 */
+  rampCue(m) {
+    const rel = Setpieces._rel(m);
+    if (rel === null) return 0;
+    const B = Setpieces.BJ;
+    if (rel < -6 || rel > B.LIP) return 0;
+    return U.clamp(1 - Math.abs(rel - B.RAMP1) / 46, 0, 1);
   },
 
   /* 毎フレーム（Game.step の中から。dt は演出時間） */
@@ -85,6 +191,15 @@ const Setpieces = {
     const s = Setpieces.state;
     if (!s) return;
     s.t += dt;
+    s.dist = game.dist;                       // 距離基準の判定に使う（glideActive など）
+    if (s.id === 'bigjump') {
+      const rel = game.dist - s.startM;
+      s.phase = (rel < Setpieces.BJ.LIP) ? 'ramp'
+              : (rel < Setpieces.BJ.LAND) ? 'glide'
+              : (rel < Setpieces.BJ.END) ? 'land' : 'done';
+      if (s.phase === 'land') s.land = rel - Setpieces.BJ.LAND;
+      return;
+    }
     /* 崩落前線はプレイヤーの後ろを上下しながら追う（演出＝絶対に追いつかない） */
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
@@ -96,7 +211,16 @@ const Setpieces = {
   /* 前方の路面の「揺れ」（崩落が迫っている感じ。落とさない＝公平性に影響しない） */
   tileShake(atM, dist) {
     const s = Setpieces.state;
-    if (!s || atM < s.front) return 0;
+    if (s && s.id === 'bigjump') {
+      /* 発射台に近づくと路面が震える＋着地の瞬間に強く揺れる */
+      const rel = atM - s.startM, B = Setpieces.BJ;
+      if (rel > B.RAMP0 - 20 && rel < B.LIP) return 0.03 * Math.sin(s.t * 30 + atM * 1.9);
+      if (s.phase === 'land' && s.land < B.SETTLE) {
+        return 0.09 * (1 - s.land / B.SETTLE) * Math.sin(s.t * 42 + atM * 2.4);
+      }
+      return 0;
+    }
+    if (!s || s.id !== 'collapse' || atM < s.front) return 0;
     const ahead = atM - dist;
     if (ahead < -2 || ahead > 46) return 0;
     const k = 1 - U.clamp(ahead / 46, 0, 1);
@@ -106,7 +230,7 @@ const Setpieces = {
   /* 路面タイルの落下量 0..1（World.syncCorridor から。1 で消える） */
   tileFall(atM, surface, lane) {
     const s = Setpieces.state;
-    if (!s) return 0;
+    if (!s || s.id !== 'collapse') return 0;
     if (atM >= s.front) return 0;
     /* タイルごとに少しずつ落ち始めをずらす（一斉に落ちると板っぽい） */
     const h = Math.abs(Math.sin(atM * 12.9898 + lane * 4.1414 + (surface === 'ceil' ? 2.7 : 0))) % 1;
@@ -119,13 +243,34 @@ const Setpieces = {
   camFx() {
     const s = Setpieces.state;
     if (!s) return null;
+    if (s.id === 'bigjump') {
+      const B = Setpieces.BJ, rel = (s.dist || s.startM) - s.startM;
+      const lift = Setpieces.viewLift(s.dist || s.startM);
+      /* 滑空の強さ 0..1（発射で立ち上がり、着地で落とす） */
+      const g = (s.phase === 'glide')
+        ? U.clamp((rel - B.LIP) / 14, 0, 1) * U.clamp((B.LAND - rel) / 10, 0, 1)
+        : 0;
+      const impact = (s.phase === 'land') ? Math.max(0, 1 - s.land / B.SETTLE) : 0;
+      return {
+        shake: 0.16 * impact * (0.6 + 0.4 * Math.sin(s.t * 41)) + 0.012 * g,
+        fovAdd: 8 * g + 3 * impact,                       // 契約§4.4「FOV+8°」
+        camBack: 1.6 * g,
+        /* 眼下に街を広げるため、カメラを少し上げて視線を下げる（俯角） */
+        camUp: lift + 0.62 * g,
+        lookUp: lift - 0.95 * g,
+        fogFar: U.lerp(104, 210, g),                      // 遠くまで見える＝高さが出る
+        fogColor: g > 0.02 ? 0x2b3a86 : 0x1e2a5e,
+        glide: g
+      };
+    }
     const ramp = U.clamp(s.t / 1.2, 0, 1);              // 立ち上がり
     return {
       shake: 0.055 * ramp * (0.7 + 0.3 * Math.sin(s.t * 23.3)),
       fovAdd: 6 * ramp,
       camBack: Setpieces.CAM_BACK * ramp,
       fogFar: U.lerp(104, 76, ramp),
-      fogColor: 0x2a1c3e
+      fogColor: 0x2a1c3e,
+      glide: 0
     };
   },
 
@@ -155,6 +300,16 @@ const Setpieces = {
     const d = Setpieces.dust;
     if (!d) return;
     const s = Setpieces.state;
+    /* 滑空: 眼下の街と雲の層を出す（ZoneNeon 側が持つ） */
+    if (typeof ZoneNeon !== 'undefined' && ZoneNeon.setGlide) {
+      const fx = Setpieces.camFx();
+      ZoneNeon.setGlide(fx && fx.glide ? fx.glide : 0);
+    }
+    if (s && s.id === 'bigjump') {
+      if (d.mat.opacity !== 0) d.mat.opacity = 0;
+      if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
+      return;
+    }
     if (!s) {
       if (d.mat.opacity !== 0) { d.mat.opacity = 0; }
       if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
@@ -192,6 +347,8 @@ const Setpieces = {
     Setpieces.state = null;
     if (Setpieces.dust) Setpieces.dust.mat.opacity = 0;
     if (Setpieces.emberLight) Setpieces.emberLight.intensity = 0;
+    if (typeof ZoneNeon !== 'undefined' && ZoneNeon.setGlide) ZoneNeon.setGlide(0);
+    if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     if (typeof World !== 'undefined' && World.ready) World.clearSetpieceFx();
   }
 };

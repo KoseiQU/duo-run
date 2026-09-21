@@ -9,16 +9,22 @@
 const Tutorial = {
   SHOW_T: 2.6,          // 表示時間（秒）
 
-  /* 文言はタッチ前提（契約§1 iPhone/iPad専用）。指アイコン＋短い指示。 */
+  /* 文言はタッチ前提（契約§1 iPhone/iPad専用）。指アイコン＋短い指示。
+     ■ 改行は「句」の切れ目でしか起きないようにする（P2a-3 の残課題:
+       「上へフ／リックで」のように語の途中で折り返していた）。
+       各句を inline-block の <span class="ph"> に包むと、句の内部では絶対に折り返さない。
+       文言はここで **句の配列** として書き、show() が span に包む。 */
   TIPS: {
-    jump_l: { text: '<span class="finger">👆</span><b class="k">下半分</b>を<b class="k">上へ</b>フリックでジャンプ' },
-    jump_r: { text: '<span class="finger">👇</span><b class="k2">上半分</b>は<b class="k2">下へ</b>フリックでジャンプ' },
-    lane:   { text: '<span class="finger">👈</span>柱は<b>横へ</b>フリックで避ける（上下それぞれ）' },
-    gap:    { text: '<span class="finger">👆</span>穴はジャンプ（下半分を上へ）' },
-    laser:  { text: '<span class="finger">👇</span>赤い光線もジャンプ（上半分は下へ）' },
-    wide:   { text: '<span class="finger">👉</span>2レーンをふさぐ梁は 空いたレーンへ' },
-    both:   { text: '同時に来る！<b class="k">下</b>と<b class="k2">上</b>を別々に' }
+    jump_l: { ph: ['<span class="finger">👆</span><b class="k">下半分</b>を', '<b class="k">上へフリック</b>で', 'ジャンプ'] },
+    jump_r: { ph: ['<span class="finger">👇</span><b class="k2">上半分</b>は', '<b class="k2">下へフリック</b>で', 'ジャンプ'] },
+    lane:   { ph: ['<span class="finger">👈</span>柱は', '<b>横へフリック</b>で避ける', '（上下それぞれ）'] },
+    gap:    { ph: ['<span class="finger">👆</span>穴はジャンプ', '（下半分を上へ）'] },
+    laser:  { ph: ['<span class="finger">👇</span>赤い光線もジャンプ', '（上半分は下へ）'] },
+    wide:   { ph: ['<span class="finger">👉</span>2レーンをふさぐ梁は', '空いたレーンへ'] },
+    both:   { ph: ['同時に来る！', '<b class="k">下</b>と<b class="k2">上</b>を', '別々に'] }
   },
+  /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
+  html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },
 
   el: null,
   t: 0,
@@ -29,8 +35,10 @@ const Tutorial = {
   show(id) {
     const tip = Tutorial.TIPS[id];
     if (!tip || !Tutorial.el) return false;
-    Tutorial.el.innerHTML = tip.text;
+    Tutorial.el.innerHTML = Tutorial.html(tip);
     Tutorial.el.classList.add('on');
+    /* tip は分割線の上に出るので、同じ場所にあるタッチ領域のラベルは一時的に消す */
+    document.body.classList.add('tip-on');
     Tutorial.current = id;
     Tutorial.t = Tutorial.SHOW_T;
     return true;
@@ -39,6 +47,7 @@ const Tutorial = {
   hide() {
     if (!Tutorial.el) return;
     Tutorial.el.classList.remove('on');
+    document.body.classList.remove('tip-on');
     Tutorial.current = null;
     Tutorial.t = 0;
   },

@@ -53,7 +53,8 @@ const DUO = {
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
     Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
-    STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1,
+    STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
+    endlessPool: endlessPool, scaleParams: scaleParams, ZoneNeon: ZoneNeon,
     /* テストで単体の障害物を置く */
     spawnOne(type, surface, lane, atAheadM) {
       const o = Obstacles.make(type, surface, lane, Game.dist + atAheadM, Game.dist);

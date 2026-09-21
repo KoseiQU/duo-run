@@ -112,16 +112,17 @@
         fire('touchend', [mk(20, 0, 0), mk(21, 0, 0)]);
         settle();
 
-        /* 同じ指のドラッグ継続で2回目のジェスチャが取れる */
+        /* 1スワイプ＝1レーン（契約§4.2 改訂 2026-09-21 実機評）。
+           指を離さずそのまま戻しても、64px＋220ms を満たさない限り2回目は出ない。 */
         freshPlay();
         const x0 = X();
         fire('touchstart', [mk(30, x0, H() * 0.78)]);
         fire('touchmove', [mk(30, x0 + (F + 4), H() * 0.78)]);
         for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
         t.eq(DUO.state().runners.lumen.lane, 1, '横ドラッグ1回目で右へ');
-        fire('touchmove', [mk(30, x0, H() * 0.78)]);
+        fire('touchmove', [mk(30, x0 + (F + 4) - 40, H() * 0.78)]);
         for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
-        t.eq(DUO.state().runners.lumen.lane, 0, '指を離さない継続ドラッグで2回目のジェスチャも効く');
+        t.eq(DUO.state().runners.lumen.lane, 1, '同じ指で40pxだけ戻しても2回目は効かない（1スワイプ＝1レーン）');
         fire('touchend', [mk(30, 0, 0)]);
       }
 

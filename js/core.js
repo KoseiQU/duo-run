@@ -190,15 +190,23 @@ const Game = {
 
   applyInput() {
     const q = Input.drain();
+    /* 滑空区間（ビル間の大ジャンプ）は空中なので **レーン移動だけ**（契約§4.4）。
+       ジャンプ／スライドはここで捨てる（人間もボットも同じ経路を通るので1か所でよい）。 */
+    const glide = Setpieces.glideActive();
     for (let i = 0; i < q.length; i++) {
       const it = q[i];
       if (it.zone) {
         /* タッチ: 担当は画面の上下、動作は「足場から離れる向き＝ジャンプ」で決まる */
         const r = Game.runnerForZone(it.zone);
-        if (r) Runners.input(r, Input.actFromDir(it.dir, r.surface));
+        if (!r) continue;
+        const act = Input.actFromDir(it.dir, r.surface);
+        if (glide && (act === 'jump' || act === 'slide')) continue;
+        Runners.input(r, act);
       } else {
         const r = Game.runnerForHand(it.hand);
-        if (r) Runners.input(r, it.act);
+        if (!r) continue;
+        if (glide && (it.act === 'jump' || it.act === 'slide')) continue;
+        Runners.input(r, it.act);
       }
     }
   },
@@ -224,11 +232,11 @@ const Game = {
     for (let i = 0; i < Game.active.length; i++) {
       const o = Game.active[i];
       if (Math.abs(o.at - Game.dist) > 4) continue;
-      const ob = Obstacles.box(o, Game.dist);
       for (let k = 0; k < Game.runners.length; k++) {
         const r = Game.runners[k];
         if (!Obstacles.affects(o, r.surface)) continue;
-        if (U.overlapBox(Runners.box(r), ob)) { Game.onHit(r, o); return; }
+        /* 当たり判定は Obstacles.hits だけを通す（動く／点滅する障害物も同じ道） */
+        if (Obstacles.hits(o, Runners.box(r), Game.dist)) { Game.onHit(r, o); return; }
       }
     }
   },
@@ -344,7 +352,9 @@ const Game = {
       runners: rs,
       chunk: Game.gen ? (Game.gen.log.filter((c) => c.startM <= Game.dist).pop() || null) : null,
       obstacles: Game.active.length,
-      setpiece: Setpieces.active() ? 'collapse' : null,
+      setpiece: Setpieces.id(),
+      phase: Setpieces.state ? (Setpieces.state.phase || null) : null,
+      glide: Setpieces.glideActive(),
       tip: Tutorial.current,
       goalT: Game.goalT,
       bestUpdated: Game.bestUpdated,

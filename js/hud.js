@@ -13,8 +13,25 @@ const HUD = {
     const ids = ['hud-dist', 'hud-speed', 'hud-stage', 'hand-left', 'hand-right',
                  'hand-left-name', 'hand-right-name', 'hand-left-keys', 'hand-right-keys',
                  'flag-mirror', 'flag-swap', 'dead-dist', 'dead-cp', 'dead-best',
-                 'clear-dist', 'clear-best', 'title-best'];
+                 'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub'];
     ids.forEach((id) => { HUD.el[id] = document.getElementById(id); });
+    HUD.cueHide();
+  },
+
+  /* 大演出の予告（§4.4 大ジャンプの「JUMP!」）。2体に被らない位置は CSS 側で担保 */
+  cue(main, sub) {
+    const e = HUD.el.cue || document.getElementById('cue');
+    if (!e) return false;
+    if (HUD.el['cue-main']) HUD.el['cue-main'].textContent = main;
+    if (HUD.el['cue-sub']) HUD.el['cue-sub'].textContent = sub || '';
+    e.classList.add('on');
+    HUD.cueOn = main;
+    return true;
+  },
+  cueHide() {
+    const e = HUD.el.cue || document.getElementById('cue');
+    if (e) e.classList.remove('on');
+    HUD.cueOn = null;
   },
   _set(id, txt) {
     if (HUD._last[id] === txt) return;
@@ -45,10 +62,10 @@ const HUD = {
 /* ---------------------------------------------------------------- 画面遷移 */
 const UI = {
   screens: ['title', 'mode', 'stages', 'dead', 'clear'],
-  /* ステージ選択の並び（契約 §4.4）。実装済みは S1 のみ、以降は P2b 以降で解放 */
+  /* ステージ選択の並び（契約 §4.4）。実装済みは S1・S2、以降は P3 以降で解放 */
   STAGES: [
     { id: 'S1', name: 'ネオン都市・入門', ready: true },
-    { id: 'S2', name: 'ネオン都市・夜', ready: false },
+    { id: 'S2', name: 'ネオン都市・夜', ready: true },
     { id: 'S3', name: '古代遺跡・外周', ready: false },
     { id: 'S4', name: '古代遺跡・内部', ready: false },
     { id: 'S5', name: '深海', ready: false },

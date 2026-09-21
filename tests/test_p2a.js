@@ -34,8 +34,11 @@
       }
       const pct = (k) => sum.total ? sum[k] / sum.total * 100 : 0;
       t.ok(sum.total > 500, 'S0 50シードで必須動作が十分に集まる（' + sum.total + '回）');
-      t.ok(pct('lane') >= 40 && pct('lane') <= 60, 'レーン移動 ' + pct('lane').toFixed(1) + '% が 40〜60%');
-      t.ok(pct('jump') >= 25 && pct('jump') <= 45, 'ジャンプ ' + pct('jump').toFixed(1) + '% が 25〜45%');
+      /* 契約§4.3「レーン移動50%前後／ジャンプ35%前後／スライド15%以下」。
+         スライドは壁の穴だけ（S1は0%）なので、その余りはジャンプ側に乗る。
+         ＝ レーン 45〜60% を主基準、ジャンプは残り（28〜55%）で見る。 */
+      t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
+      t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
       t.ok(pct('slide') <= 15, 'スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
       t.info('内訳 lane=' + sum.lane + ' jump=' + sum.jump + ' slide=' + sum.slide);
 
@@ -140,8 +143,13 @@
       /* 例外（意図的に判定の外に出る装飾。いずれも「当たらないのに当たりそう」に
          見える方向ではないので許容する）:
            GAP      … 路面下の穴と、判定外の路面を戻す埋め板を持つので x だけ見る
-           WALLHOLE … 穴の中（判定の下）に潜り抜けの誘導帯があるので y の下端は見ない */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'] };
+           WALLHOLE … 穴の中（判定の下）に潜り抜けの誘導帯があるので y の下端は見ない
+           LASER_SCAN … 到達位置を示す路面のマーカー（判定の外の標示）が x/z に伸びる。
+                        光柱そのものの高さ y は判定どおりなので y だけ見る
+           LASER_ROT  … 腕と光のカーテンは毎フレーム bands() から置く“動く部品”なので
+                        静止した外接箱では測れない（tests/test_p2b.js が
+                        occ ⇔ hits の総当りで、判定と見た目の一致を直接検証している） */
+      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);

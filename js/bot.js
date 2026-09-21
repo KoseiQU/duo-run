@@ -65,7 +65,7 @@ const Bot = {
         const o = game.active[k];
         if (!Obstacles.affects(o, r.surface)) continue;
         if (Math.abs(o.at - cur.d) > 5) continue;
-        if (U.overlapBox(hull, Obstacles.box(o, cur.d))) return false;
+        if (Obstacles.hits(o, hull, cur.d)) return false;
       }
       prev = cur;
     }
@@ -99,6 +99,9 @@ const Bot = {
 
     /* 2) このフレームで出す入力 */
     if (lane !== r.laneTo) {
+      /* **空中では横に動けない**（契約§4.2 改訂）。着地してから動く。
+         §4.7 の「ジャンプ→レーン移動 0.92秒」があるので、待っても間に合う。 */
+      if (r.act === 'jump') return null;
       const dir = (lane > r.laneTo) ? 1 : -1;
       const step = U.clamp(r.laneTo + dir, -1, 1);
       /* 真横を通過中の障害物へ自分から突っ込まない。危ないフレームは動かずに待つ
@@ -111,11 +114,12 @@ const Bot = {
     const a = acts[lane];
     if (a.run) return null;                       // そのまま走れば通れる
 
-    /* このレーンを塞いでいる一番手前の障害物までの「見かけの距離」 */
+    /* このレーンを塞いでいる一番手前の障害物までの「見かけの距離」
+       （動く／点滅する障害物は「到達時の占有」で見る＝契約§4.5） */
     let target = null;
     for (let i = 0; i < w.items.length; i++) {
       const o = w.items[i];
-      if (Obstacles.laneCovers(o, lane)) { target = o; break; }
+      if (Obstacles.affects(o, r.surface) && Obstacles.blocksLane(o, r.surface, lane)) { target = o; break; }
     }
     if (!target) return null;
     const perceived = (target.at - game.dist) + sp * delaySec;

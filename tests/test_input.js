@@ -91,10 +91,13 @@
       /* 右へ2つ */
       tap('KeyD'); pumpFor(CFG.LANE_T); tap('KeyD'); pumpFor(CFG.LANE_T);
       t.eq(DUO.state().runners.lumen.lane, 1, '右端まで移動できる');
-      /* 空中でもレーン移動できる（§4.2） */
+      /* 空中では横に動けない。入力は着地の瞬間に1回だけ実行される（§4.2 改訂 2026-09-21） */
       tap('KeyW'); tap('KeyA'); pumpFor(CFG.LANE_T);
       const s2 = DUO.state();
-      t.eq(s2.runners.lumen.lane, 0, '空中でもレーン移動できる');
+      t.eq(s2.runners.lumen.lane, 1, '滞空中はレーンが変わらない');
+      while (I().Game.runners[0].act === 'jump') DUO.pump(1 / 60);
+      pumpFor(CFG.LANE_T);
+      t.eq(DUO.state().runners.lumen.lane, 0, '着地の瞬間に1回だけ実行される');
       t.eq(s2.runners.lumen.act, 'jump', 'レーン移動でジャンプは中断されない');
     }
   });
