@@ -98,8 +98,13 @@ const UI = {
   },
 
   cleared() { return U.lsGet('cleared', []) || []; },
+  /* 開発中は実装済み（ready）ステージを全部選べる（契約§4.4 2026-09-22 テスト用）。
+     正式リリース時に false へ。機械テストはロック規則の検証中だけ _testLock を立てる。 */
+  UNLOCK_ALL: true,
+  _testLock: false,
   isUnlocked(i) {
     if (i === 0) return true;
+    if (UI.UNLOCK_ALL && !UI._testLock) return true;
     return UI.cleared().indexOf(UI.STAGES[i - 1].id) >= 0;
   },
 

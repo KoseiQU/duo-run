@@ -95,6 +95,7 @@ const DUO = {
       for (let i = 0; i < list.length; i++) {
         const s = list[i];
         DUO.reset();
+        if (typeof UI !== 'undefined') UI._testLock = true;   // テスト中はステージ解放規則を本来の姿で検証
         const t = DUO._mkT();
         const st = (performance && performance.now) ? performance.now() : Date.now();
         try {
@@ -110,6 +111,7 @@ const DUO = {
         await yieldOnce();
       }
       /* --- 後始末: localStorage と製品状態を完全復帰し、通常操作が通るか確かめる --- */
+      if (typeof UI !== 'undefined') UI._testLock = false;
       U.lsRestore(lsSnap);
       DUO.reset();
       const t = DUO._mkT();
