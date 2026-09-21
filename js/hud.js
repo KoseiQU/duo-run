@@ -116,13 +116,18 @@ const HUD = {
     HUD._set('hud-stage', g.stage ? g.stage.name : '');
     /* 担当アイコン: 画面の下半分＝床のキャラ／上半分＝天井のキャラ（§4.2 改訂）。
        重力反転ワープで面が入れ替わっても、画面の位置と担当は一致し続ける。 */
-    [['left', 'floor', '下半分 ↑跳ぶ ↓潜る'], ['right', 'ceil', '上半分 ↓跳ぶ ↑潜る']].forEach((c) => {
-      const r = g.runners.filter((x) => x.surface === c[1])[0];
+    /* 入れ替えワープ（§4.5 / S7）で担当が入れ替わったら、**チップごと入れ替わる**
+       （名前・色・フリックの向きの案内が、その半分がいま動かすキャラのものになる）。
+       どちらを担当しているかは Game.runnerForZone の1か所だけが決める。 */
+    [['left', 'bottom', '下半分'], ['right', 'top', '上半分']].forEach((c) => {
+      const r = g.runnerForZone ? g.runnerForZone(c[1])
+                                : g.runners.filter((x) => x.surface === (c[1] === 'top' ? 'ceil' : 'floor'))[0];
       if (!r) return;
       const box = HUD.el['hand-' + c[0]];
       if (box) box.setAttribute('data-char', r.id);
       HUD._set('hand-' + c[0] + '-name', r.id.toUpperCase());
-      HUD._set('hand-' + c[0] + '-keys', c[2]);
+      HUD._set('hand-' + c[0] + '-keys',
+               c[2] + (r.surface === 'floor' ? ' ↑跳ぶ ↓潜る' : ' ↓跳ぶ ↑潜る'));
     });
     /* S6: 重力反転中／無重力区間（契約§4.5）。どちらも「今どうなっているか」を面と
        滞空倍率（Zero.cur）から引くだけ＝表示と判定が必ず一致する。 */
@@ -150,7 +155,7 @@ const UI = {
     { id: 'S4', name: '古代遺跡・内部', ready: true },
     { id: 'S5', name: '深海', ready: true },
     { id: 'S6', name: '宇宙ステーション', ready: true },
-    { id: 'S7', name: '鏡の世界', ready: false },
+    { id: 'S7', name: '鏡の世界', ready: true },
     { id: 'S8', name: 'コア', ready: false }
   ],
 

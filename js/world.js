@@ -260,7 +260,8 @@ const World = {
       /* 穴の区間は Obstacles.holeSpan が唯一の出所。
          side を返す型（落ちる天井＝天井側だけ抜ける / P3b）はそちらを優先する。 */
       const sp = Obstacles.holeSpan(obstacles[i], dist);
-      if (sp) gaps.push({ o: obstacles[i], from: sp.from, to: sp.to, side: sp.side || obstacles[i].surface });
+      if (sp) gaps.push({ o: obstacles[i], from: sp.from, to: sp.to,
+                          side: sp.side || obstacles[i].surface, lanes: sp.lanes || null });
     }
     ['floor', 'ceil'].forEach((surface) => {
       const im = World.tileMesh[surface];
@@ -272,7 +273,10 @@ const World = {
           const lane = CFG.LANES[li];
           let hide = false;
           for (let k = 0; k < gaps.length; k++) {
-            if (gaps[k].side !== surface || gaps[k].o.lane !== lane) continue;
+            if (gaps[k].side !== surface) continue;
+            /* lanes を返す型（割れた鏡の床＝3レーンとも抜ける / P5a）はそちらを見る */
+            const ls = gaps[k].lanes;
+            if (ls ? (ls.indexOf(lane) < 0) : (gaps[k].o.lane !== lane)) continue;
             if (atM > gaps[k].from - T / 2 && atM < gaps[k].to + T / 2) { hide = true; break; }
           }
           const fall = Setpieces.tileFall(atM, surface, lane);
@@ -294,9 +298,17 @@ const World = {
           } else {
             /* 崩落が迫ると前方の路面も揺れる（落とさないので公平性には影響しない） */
             const sh = Setpieces.tileShake(atM, dist);
-            d.position.set(lane * CFG.LANE_W, y + sh + lift, -(atM - dist));
+            /* 鏡の砕け散り（§4.4 S7）: 路面が「浮いた鏡片」になる（見た目だけ）。
+               判定を持つ裂け目は SHARDGAP の holeSpan が別に路面を消す。 */
+            const sd = Setpieces.tileShard(atM, surface, lane);
+            if (sd) {
+              d.position.set(lane * CFG.LANE_W + sd.dx, y + sh + lift + sd.dy, -(atM - dist));
+              d.rotation.set(sh * 2.2 + sd.rx, 0, sh * 3.0 + sd.rz);
+            } else {
+              d.position.set(lane * CFG.LANE_W, y + sh + lift, -(atM - dist));
+              d.rotation.set(sh * 2.2, 0, sh * 3.0);
+            }
             d.scale.set(1, 1, 1);
-            d.rotation.set(sh * 2.2, 0, sh * 3.0);
           }
           d.updateMatrix();
           im.setMatrixAt(n++, d.matrix);
@@ -537,7 +549,19 @@ const World = {
        （巨岩の振り返りカットと同じ仕組み・同じ約束）。 */
     const lsd = (fx && fx.lookSide) ? fx.lookSide : 0;
     const lb = (fx && fx.lookBack) ? fx.lookBack : 0;
-    if (lsd > 0.001) {
+    /* 鏡へ向くカット（§4.4 S7「鏡の砕け散り」/ P5a）: 出口の大鏡を正面に据え、
+       少し前へ出て視線を鏡の中心へ合わせる。カットの窓には障害物を置かないので
+       §4.7 は崩れない（巨岩の振り返り・巨大魚の横向きと同じ仕組み・同じ約束）。 */
+    const lmr = (fx && fx.lookMirror) ? fx.lookMirror : 0;
+    if (lmr > 0.001) {
+      const k = U.smooth(lmr);
+      const mb = Setpieces.mirrorBox(World._dist);
+      const mz = mb ? (mb.z0 + mb.z1) / 2 : CFG.CAM.LOOK_Z;
+      World.camera.position.set(avgX * 0.10 * (1 - k) + sx, CFG.CAM.Y + sy + camUp,
+                                CFG.CAM.Z - 3.2 * k - push);
+      World.camera.lookAt(sx * 0.5, CFG.H / 2 + sy * 0.5 + lookUp * 0.4,
+                          U.lerp(CFG.CAM.LOOK_Z, mz, k));
+    } else if (lsd > 0.001) {
       const k = U.smooth(lsd);
       World.camera.position.set(avgX * 0.10 + sx, CFG.CAM.Y + sy + camUp, CFG.CAM.Z - push);
       World.camera.lookAt(U.lerp(avgX * 0.09 + sx * 0.5, -70, k),

@@ -231,7 +231,66 @@ const Setpieces = {
         { at: 176, type: 'blast.land' },
         { at: 200, type: 'blast.end' }
       ]
+    },
+
+    /* ====================================================================
+       S7「鏡の砕け散り」（契約§4.4 / P5a）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0      予告（HUD「SHATTER!」）＋ **ひびの線が走る**（音は鳴らさない）
+         8〜44  ひびの広がる回廊を走る（鏡の柱・光の柱）
+         44〜62 **鏡面の床と天井が砕けて鏡片が浮遊**（路面が割れて浮き上がる）
+         62〜146 **飛び石**: 床側／天井側とも足場が離散的に浮かび、
+                 足場のないところは GAP（割れた鏡の床 SHARDGAP）。
+                 足場は左右に揺れる（到達時刻で判定＝動くレーザーの流儀）。
+                 裂け目は 28m おき（＝ジャンプ連続 0.70秒の下限より広い）
+         150〜  鏡片が集まりはじめ、出口の**大鏡**になる
+         162〜200 **カメラが鏡へ向く1秒カット**（38 m/s で 38m ＝ 1.0秒）
+         200    2体が鏡に飛び込んでゴール
+       §4.7 は通常どおり（演出でも理不尽な死を作らない）。カットの窓には
+       障害物を置かない＝視認距離も守れる。
+       ==================================================================== */
+    shatter: {
+      id: 'shatter',
+      lengthM: 200,
+      floor: [
+        { at: 8,  lane: 0,  type: 'PILLAR' },     // 鏡の柱（both＝両者レーン移動）
+        { at: 26, lane: 1,  type: 'LASER_V' },    // 光の柱（both）
+        { at: 44, lane: -1, type: 'PILLAR' },
+        /* 飛び石（足場は左右に揺れる。到達時は from の端で溜まっている＝phase 0） */
+        /* lane は必ず -1（全幅の型なので、見た目の中心が 0 に来る書き方）。
+           足場のレーンは params.shard.from（＝到達した瞬間の位置）で書く。 */
+        { at: 62,  lane: -1, type: 'SHARDGAP', params: { shard: { from: 0, to: 1, phase: 0 } } },
+        { at: 90,  lane: -1, type: 'SHARDGAP', params: { shard: { from: -1, to: 0, phase: 0 } } },
+        { at: 118, lane: -1, type: 'SHARDGAP', params: { shard: { from: 1, to: 0, phase: 0 } } },
+        { at: 146, lane: -1, type: 'SHARDGAP', params: { shard: { from: 0, to: -1, phase: 0 } } }
+      ],
+      ceil: [
+        { at: 62,  lane: -1, type: 'SHARDGAP', params: { shard: { from: 1, to: 0, phase: 0 } } },
+        { at: 90,  lane: -1, type: 'SHARDGAP', params: { shard: { from: 0, to: 1, phase: 0 } } },
+        { at: 118, lane: -1, type: 'SHARDGAP', params: { shard: { from: -1, to: 0, phase: 0 } } },
+        { at: 146, lane: -1, type: 'SHARDGAP', params: { shard: { from: 1, to: -1, phase: 0 } } }
+      ],
+      events: [
+        { at: 0,   type: 'shatter.start' },
+        { at: 50,  type: 'shatter.break' },
+        { at: 162, type: 'shatter.mirror' },
+        { at: 200, type: 'shatter.end' }
+      ]
     }
+  },
+
+  /* ---- 鏡の砕け散りのキーフレーム（距離 m。すべてここから引く） ------------ */
+  MR: {
+    CRACK0: 0, CRACK1: 44,      // ひびが走る（予告）
+    BREAK0: 44, BREAK1: 62,     // 床と天井が砕けて鏡片になる
+    STONE0: 56, STONE1: 158,    // 飛び石の区間（路面が浮いた鏡片になる）
+    GATHER0: 150, GATHER1: 190, // 鏡片が集まって大鏡になる
+    CUT0: 163, CUT1: 201,       // 鏡へ向くカット（38 m/s で 38m ＝ 1.0秒）
+    MIRROR_AT: 201,             // 出口の大鏡（相対 m）
+    MIRROR_W: 13.0, MIRROR_H: 10.5,
+    SHARD_N: 78,                // 浮遊する鏡片（演出用の粒。走行の通り道の外に舞う）
+    CRACK_N: 22,                // ひびの線
+    END: 200
   },
 
   /* ---- 巨大魚のキーフレーム（距離 m。すべてここから引く） ----------------- */
@@ -419,6 +478,16 @@ const Setpieces = {
     } else if (e.type === 'blast.end') {
       if (Setpieces.state) Setpieces.state.phase = 'done';
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'shatter.start') {
+      Setpieces.state = { id: 'shatter', startM: e.at, t: 0 };
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('SHATTER!', '鏡の世界が割れる', 'high');
+    } else if (e.type === 'shatter.break') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('STEP', '揺れる鏡片へ跳べ');
+    } else if (e.type === 'shatter.mirror') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('MIRROR', '出口の鏡へ飛び込め', 'high');
+    } else if (e.type === 'shatter.end') {
+      if (Setpieces.state) Setpieces.state.ending = true;
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     } else if (e.type === 'fish.start') {
       Setpieces.state = { id: 'megafish', startM: e.at, t: 0 };
       if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('LEVIATHAN!', '巨大魚が横切る', 'high');
@@ -605,6 +674,103 @@ const Setpieces = {
     const u = U.clamp((rel - B.LIP) / (B.LAND - B.LIP), 0, 1);
     /* 飛び出しで一気に回り、着地に向けて姿勢が戻る */
     return B.SPIN * Math.sin(Math.PI * u) * (1 - u * 0.25);
+  },
+
+  /* ---- 鏡の砕け散り（距離の関数。フレームに依存しない / 契約§4.4 S7） ----- */
+  shatterActive() { const s = Setpieces.state; return !!(s && s.id === 'shatter'); },
+  _mrel(m) {
+    const s = Setpieces.state;
+    return (s && s.id === 'shatter') ? (m - s.startM) : null;
+  },
+  /* ひびの強さ 0..1（世界が割れる予告。音は鳴らさない＝契約§6 P5a） */
+  shatterCrackK(m) {
+    const rel = Setpieces._mrel(m);
+    if (rel === null) return 0;
+    const R = Setpieces.MR;
+    return U.clamp((rel - R.CRACK0) / (R.CRACK1 - R.CRACK0), 0, 1) *
+           U.clamp(1 - (rel - R.BREAK0) / 10, 0, 1);
+  },
+  /* 砕けの進み具合 0..1（床と天井が鏡片になって浮く） */
+  shatterBreakK(m) {
+    const rel = Setpieces._mrel(m);
+    if (rel === null) return 0;
+    const R = Setpieces.MR;
+    return U.smooth(U.clamp((rel - R.BREAK0) / (R.BREAK1 - R.BREAK0), 0, 1));
+  },
+  /* 鏡片が集まって大鏡になる度合い 0..1 */
+  shatterGatherK(m) {
+    const rel = Setpieces._mrel(m);
+    if (rel === null) return 0;
+    const R = Setpieces.MR;
+    return U.smooth(U.clamp((rel - R.GATHER0) / (R.GATHER1 - R.GATHER0), 0, 1));
+  },
+  /* 出口の大鏡へカメラを向けるカットの強さ 0..1（0→1→0）。World.syncCamera が読む。
+     巨岩の lookBack・巨大魚/爆発の lookSide と同じ仕組み・同じ約束（契約§8 の決定ログ）。 */
+  mirrorCutK(m) {
+    const rel = Setpieces._mrel(m);
+    if (rel === null) return 0;
+    const R = Setpieces.MR;
+    if (rel <= R.CUT0 || rel >= R.CUT1) return 0;
+    return Math.sin(Math.PI * U.clamp((rel - R.CUT0) / (R.CUT1 - R.CUT0), 0, 1));
+  },
+  /* 出口の大鏡の外接箱（世界座標）。カットの可視性の測定窓口 */
+  mirrorBox(m) {
+    const s = Setpieces.state, R = Setpieces.MR;
+    if (!s || s.id !== 'shatter') return null;
+    const k = Setpieces.shatterGatherK(m);
+    if (k <= 0.02) return null;
+    const z = -((s.startM + R.MIRROR_AT) - m);
+    const w = R.MIRROR_W * (0.5 + 0.5 * k), h = R.MIRROR_H * (0.5 + 0.5 * k);
+    return { x0: -w / 2, x1: w / 2, y0: CFG.H / 2 - h / 2, y1: CFG.H / 2 + h / 2,
+             z0: z - 0.4, z1: z + 0.4 };
+  },
+  /* 大鏡が画面をどれだけ覆っているか 0..1（描いていないときは 0） */
+  mirrorOnScreen(m) {
+    const g = Setpieces.shatter;
+    if (!g || !g.group.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    const b = Setpieces.mirrorBox(m);
+    return b ? World.projectCoverage(b) : 0;
+  },
+  /* 大演出の間はゾーンの区間パターンを **開放区間** に固定する（ゾーンが読む）。
+     壁があると、砕けて浮かぶ鏡片と出口の大鏡が隠れて画面に映らない。 */
+  shatterOpenSection(m) {
+    const rel = Setpieces._mrel(m);
+    return rel !== null && rel > -24 && rel < Setpieces.MR.END + 24;
+  },
+  /* 鏡へ向くカットのあいだ、回廊の小物を間引く割合 0..1（ゾーンが読む） */
+  shatterClearK(m) {
+    const rel = Setpieces._mrel(m);
+    if (rel === null) return 0;
+    const R = Setpieces.MR;
+    return 0.80 * U.smooth(U.clamp((rel - (R.CUT0 - 10)) / 12, 0, 1));
+  },
+  /* 砕けた鏡片と大鏡が回廊を照らす強さ 0..1（ゾーンが読む） */
+  shatterLightK(m) {
+    const rel = Setpieces._mrel(m);
+    if (rel === null) return 0;
+    return Math.max(Setpieces.shatterBreakK(m) * 0.5, Setpieces.shatterGatherK(m));
+  },
+  /* 路面タイルを「浮いた鏡片」にする（World.syncCorridor から。見た目だけ）。
+     砕けの進み具合（距離の関数）で浮き上がり・傾き・横揺れを決めるので、
+     同じ距離には必ず同じ姿＝判定（SHARDGAP）とのズレは生まれない。 */
+  tileShard(atM, surface, lane) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'shatter') return null;
+    const R = Setpieces.MR, rel = atM - s.startM;
+    if (rel < R.BREAK0 || rel > R.STONE1 + 14) return null;
+    const k = U.smooth(U.clamp((rel - R.BREAK0) / (R.BREAK1 - R.BREAK0), 0, 1)) *
+              U.clamp((R.STONE1 + 14 - rel) / 14, 0, 1);
+    if (k <= 0.001) return null;
+    const h = ZoneKit.hash(Math.round(atM * 3) + lane * 7 + (surface === 'ceil' ? 131 : 0), 733);
+    const h2 = ZoneKit.hash(Math.round(atM * 3) + lane * 11 + (surface === 'ceil' ? 17 : 0), 739);
+    /* **ずらす量は小さく**（±0.12・傾き ±0.18rad）。大きく浮かせたり回したりすると、
+       割れた天井のかけらが回廊へ垂れ込んで **飛び石の道筋が読めなくなる**（P5a 監査）。
+       「割れて少し浮いている」だけで、砕けた床・天井としては十分に読める。 */
+    const up = (surface === 'floor') ? -1 : 1;
+    return { dx: (h - 0.5) * 0.22 * k,
+             dy: up * (0.02 + h2 * 0.10) * k,
+             rx: (h - 0.5) * 0.18 * k, rz: (h2 - 0.5) * 0.22 * k };
   },
 
   /* ---- 神殿崩壊（距離の関数。フレームに依存しない） ----------------------- */
@@ -866,6 +1032,10 @@ const Setpieces = {
       /* 位置も演出量もすべて距離の関数（fishPos）なので、ここでは何も溜めない */
       return;
     }
+    if (s.id === 'shatter') {
+      /* 砕け散りもすべて距離の関数（shatterBreakK など）なので、ここでは何も溜めない */
+      return;
+    }
     /* 崩落前線はプレイヤーの後ろを上下しながら追う（演出＝絶対に追いつかない） */
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
@@ -906,6 +1076,13 @@ const Setpieces = {
       const ahead = atM - dist;
       if (ahead < -6 || ahead > 56) return 0;
       return (0.008 + 0.05 * side) * (1 - U.clamp(ahead / 56, 0, 1)) * Math.sin(s.t * 22 + atM * 1.8);
+    }
+    if (s && s.id === 'shatter') {
+      /* 鏡の砕け散り: 割れていく床と天井が震える（落とさない＝公平性に影響しない） */
+      const k = Math.max(Setpieces.shatterCrackK(dist), Setpieces.shatterBreakK(dist) * 0.7);
+      const ahead = atM - dist;
+      if (ahead < -6 || ahead > 58) return 0;
+      return (0.008 + 0.055 * k) * (1 - U.clamp(ahead / 58, 0, 1)) * Math.sin(s.t * 27 + atM * 2.2);
     }
     if (s && s.id === 'templefall') {
       /* 神殿崩壊: 前方の床と天井が地響きで震える（落とさない＝公平性に影響しない） */
@@ -1022,6 +1199,29 @@ const Setpieces = {
         rage: r, exit: q
       };
     }
+    if (s.id === 'shatter') {
+      const m = s.dist || s.startM;
+      const cr = Setpieces.shatterCrackK(m), br = Setpieces.shatterBreakK(m);
+      const gk = Setpieces.shatterGatherK(m), cut = Setpieces.mirrorCutK(m);
+      /* 割れるほど霧が銀白へ抜け、鏡へ飛び込む瞬間に白く満ちる */
+      /* 白く満ちるのは「飛び込む瞬間」だけ。強くしすぎると画面が飛んで
+         暗部が消える（契約§3 の輝度規範）ので、抜けきらない程度に抑える。 */
+      const c = new THREE.Color(0x1d2433).lerp(new THREE.Color(0xc9d6ee), U.clamp(cut * 0.34 + gk * 0.12, 0, 1));
+      return {
+        shake: 0.012 + 0.055 * cr * (0.7 + 0.3 * Math.sin(s.t * 28))
+             + 0.085 * br * (1 - gk) * (0.6 + 0.4 * Math.sin(s.t * 34)),
+        fovAdd: 3 + 5 * br + 8 * cut,
+        camBack: 0,
+        camUp: 0.28 + 0.22 * br,
+        lookUp: -0.18 - 0.12 * br + 0.30 * cut,
+        fogFar: U.lerp(84, 168, Math.max(br * 0.5, cut)),
+        fogColor: c.getHex(),
+        glide: 0,
+        /* 鏡へ向く1秒カット（§4.4 S7）: World.syncCamera がこれを読んで鏡を正面に据える */
+        lookMirror: cut,
+        shatter: br
+      };
+    }
     if (s.id === 'megafish') {
       const m = s.dist || s.startM;
       const rel = m - s.startM;
@@ -1082,6 +1282,7 @@ const Setpieces = {
     Setpieces._buildTemple(scene);
     Setpieces._buildFish(scene);
     Setpieces._buildBlast(scene);
+    Setpieces._buildShatter(scene);
   },
 
   /* ---- 巨大魚（S5「巨大魚の通過」）の造形 --------------------------------
@@ -1702,6 +1903,178 @@ const Setpieces = {
     }
   },
 
+  /* ---- 鏡の砕け散り（S7）の造形 ------------------------------------------
+     ・**ひびの線**: 床と天井を走る細い明るい線（予告。音は鳴らさない）。
+     ・**浮遊する鏡片**: 割れた床・天井の破片。砕けたあとゆっくり回りながら漂い、
+       終盤は出口へ向かって集まる（＝大鏡になる）。
+     ・**出口の大鏡**: 銀の枠と、こちらを映す面。カメラを向ける1秒カットで見せる
+       （契約§8 の決定ログ: 巨大演出はカメラを向けるカット方式）。
+     ・テクスチャ画像は使わない（契約§3）。 */
+  _buildShatter(scene) {
+    const R = Setpieces.MR;
+    const g = new THREE.Group();
+    g.visible = false;
+    scene.add(g);
+    /* 浮遊する鏡片（1メッシュ＝1ドローコール） */
+    const shardMat = new THREE.MeshLambertMaterial({ color: 0xb9c6dc, flatShading: true });
+    const shards = new THREE.InstancedMesh(
+      ZoneKit.merge([{ g: ZoneKit.box(1, 0.045, 0.72), p: [0, 0, 0] },
+                     { g: ZoneKit.box(0.5, 0.045, 0.9), p: [0.3, 0, 0.1], r: [0, 0.5, 0] }]),
+      shardMat, R.SHARD_N);
+    shards.frustumCulled = false;
+    shards.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    g.add(shards);
+    /* 鏡片の虹の縁光 */
+    const rimMat = new THREE.MeshBasicMaterial({ color: 0xbfe4ff, transparent: true, opacity: 0.8,
+                                                 depthWrite: false, blending: THREE.AdditiveBlending, fog: true });
+    const rims = new THREE.InstancedMesh(
+      ZoneKit.merge([{ g: ZoneKit.box(1.04, 0.05, 0.05), p: [0, 0.03, 0.36] },
+                     { g: ZoneKit.box(1.04, 0.05, 0.05), p: [0, 0.03, -0.36] }]),
+      rimMat, R.SHARD_N);
+    rims.frustumCulled = false;
+    rims.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    rims.renderOrder = 4;
+    g.add(rims);
+    /* ひびの線（床・天井を走る）。長さ1で作り、_syncShatter が伸ばす */
+    const crackMat = new THREE.MeshBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0.9,
+                                                   depthWrite: false, blending: THREE.AdditiveBlending, fog: true });
+    const cracks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.02, 1), crackMat, R.CRACK_N * 2);
+    cracks.frustumCulled = false;
+    cracks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    cracks.renderOrder = 5;
+    g.add(cracks);
+    /* 出口の大鏡（銀の枠＋鏡の面＋縁の光） */
+    const mirror = new THREE.Group();
+    const frame = new THREE.Mesh(ZoneKit.merge([
+      { g: ZoneKit.box(R.MIRROR_W + 0.9, 0.55, 0.5), p: [0, (R.MIRROR_H + 0.55) / 2, 0] },
+      { g: ZoneKit.box(R.MIRROR_W + 0.9, 0.55, 0.5), p: [0, -(R.MIRROR_H + 0.55) / 2, 0] },
+      { g: ZoneKit.box(0.55, R.MIRROR_H + 1.6, 0.5), p: [-(R.MIRROR_W + 0.55) / 2, 0, 0] },
+      { g: ZoneKit.box(0.55, R.MIRROR_H + 1.6, 0.5), p: [(R.MIRROR_W + 0.55) / 2, 0, 0] }
+    ]), new THREE.MeshLambertMaterial({ color: 0xd6dfef, flatShading: true }));
+    mirror.add(frame);
+    const paneMat = new THREE.MeshBasicMaterial({ color: 0x9fc0e8, transparent: true, opacity: 0.62,
+                                                  depthWrite: false, fog: true, side: THREE.DoubleSide });
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(R.MIRROR_W, R.MIRROR_H), paneMat);
+    pane.renderOrder = 2;
+    mirror.add(pane);
+    /* 鏡の奥へ吸い込まれる光（飛び込む先が「別の世界」だと分かる） */
+    const wellMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5,
+                                                  depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const well = [];
+    for (let i = 0; i < 7; i++) {
+      well.push({ g: new THREE.TorusGeometry(0.7 + i * 0.62, 0.05, 4, 22), p: [0, 0, -0.5 - i * 0.9] });
+    }
+    const wellMesh = new THREE.Mesh(ZoneKit.merge(well), wellMat);
+    well.forEach((q) => q.g.dispose());
+    wellMesh.renderOrder = 3;
+    mirror.add(wellMesh);
+    g.add(mirror);
+    /* 大鏡の明かり（飛び込む瞬間に白く満ちる） */
+    const light = new THREE.PointLight(0xdfe8ff, 0, 46, 2);
+    scene.add(light);
+    Setpieces.shatter = { group: g, shards: shards, rims: rims, cracks: cracks,
+                          mirror: mirror, pane: pane, paneMat: paneMat, well: wellMesh, wellMat: wellMat,
+                          light: light, n: R.SHARD_N, dummy: new THREE.Object3D() };
+  },
+
+  _hideShatter() {
+    const b = Setpieces.shatter;
+    if (!b) return;
+    if (b.group.visible) b.group.visible = false;
+    if (b.light.intensity !== 0) b.light.intensity = 0;
+  },
+
+  /* 鏡片・ひび・大鏡の更新（すべて距離の関数） */
+  _syncShatter(dist, t) {
+    const s = Setpieces.state, b = Setpieces.shatter, R = Setpieces.MR, d = Setpieces.dust;
+    if (!b || !s) return;
+    const rel = dist - s.startM;
+    const cr = Setpieces.shatterCrackK(dist), br = Setpieces.shatterBreakK(dist);
+    const gk = Setpieces.shatterGatherK(dist);
+    b.group.visible = (rel > -20 && rel < R.END + 30);
+    if (!b.group.visible) { b.light.intensity = 0; return; }
+    b.group.position.set(0, 0, 0);
+    const o = b.dummy;
+    /* 鏡片: 割れた床・天井から浮き上がり、終盤は大鏡（前方）へ吸い寄せられる */
+    const mz = -((s.startM + R.MIRROR_AT) - dist);
+    for (let i = 0; i < b.n; i++) {
+      const h1 = ZoneKit.hash(i, 911), h2 = ZoneKit.hash(i, 919), h3 = ZoneKit.hash(i, 929);
+      const zSpread = -6 - h1 * 78;
+      const side = (h2 < 0.5) ? 1 : -1;
+      /* **走行の通り道には浮かべない**（|x| ≥ 2.3）。床と天井そのものが砕けて
+         浮いている（World の路面タイル＝ tileShard）ので、ここは「まわりに舞う鏡片」。
+         中央に浮かべると飛び石の道筋が読めなくなる。 */
+      const fx = side * (2.3 + h1 * 3.4);
+      const fy = (h3 < 0.5 ? 0.1 : CFG.H - 0.1) + side * (0.3 + h1 * 2.6) * br;
+      /* 集まる: 大鏡の位置へ寄る */
+      const gx = U.lerp(fx, (h2 - 0.5) * R.MIRROR_W * 0.8, gk);
+      const gy = U.lerp(fy, CFG.H / 2 + (h3 - 0.5) * R.MIRROR_H * 0.8, gk);
+      const gz = U.lerp(zSpread, mz + 1.2, gk);
+      const sc = (0.5 + h3 * 1.3) * (0.25 + 0.75 * br);
+      o.position.set(gx, gy, gz);
+      o.rotation.set(t * (0.3 + h1 * 0.5) + i, t * (0.25 + h2 * 0.4), t * (0.2 + h3 * 0.4));
+      o.scale.set(sc, 1, sc);
+      o.updateMatrix();
+      b.shards.setMatrixAt(i, o.matrix);
+      b.rims.setMatrixAt(i, o.matrix);
+    }
+    b.shards.instanceMatrix.needsUpdate = true;
+    b.rims.instanceMatrix.needsUpdate = true;
+    b.shards.visible = br > 0.01;
+    b.rims.visible = br > 0.01;
+    b.rims.material.opacity = 0.8 * (0.6 + 0.4 * Math.sin(t * 3.1));
+    /* ひびの線（砕ける前の予告）。前方の床と天井を走る */
+    b.cracks.visible = cr > 0.01;
+    if (b.cracks.visible) {
+      b.cracks.material.opacity = 0.9 * cr;
+      for (let i = 0; i < R.CRACK_N; i++) {
+        const h1 = ZoneKit.hash(i, 941), h2 = ZoneKit.hash(i, 947), h3 = ZoneKit.hash(i, 953);
+        const zz = -(h1 * 62) - 2;
+        const len = 1.6 + h2 * 4.4;
+        [0, 1].forEach((k) => {
+          o.position.set((h2 - 0.5) * 3.2, k ? (CFG.H - 0.03) : 0.03, zz + k * 3.1);
+          o.rotation.set(0, (h3 - 0.5) * 1.1, 0);
+          o.scale.set(0.6 + h3 * 1.4, 1, len * (0.5 + 0.5 * cr));
+          o.updateMatrix();
+          b.cracks.setMatrixAt(i * 2 + k, o.matrix);
+        });
+      }
+      b.cracks.instanceMatrix.needsUpdate = true;
+    }
+    /* 出口の大鏡（鏡片が集まってできる） */
+    b.mirror.visible = gk > 0.02;
+    if (b.mirror.visible) {
+      b.mirror.position.set(0, CFG.H / 2, mz);
+      const k = 0.5 + 0.5 * gk;
+      b.mirror.scale.set(k, k, 1);
+      b.paneMat.opacity = 0.30 + 0.45 * gk;
+      b.wellMat.opacity = 0.25 + 0.45 * gk;
+      b.well.rotation.z = t * 0.5;
+      b.light.position.set(0, CFG.H / 2, mz + 4);
+      b.light.intensity = 46 * gk * (0.85 + 0.15 * Math.sin(t * 6));
+    } else {
+      b.light.intensity = 0;
+    }
+    /* 舞う鏡の粉（既存の粉塵を銀色で使い回す） */
+    if (d) {
+      d.mat.color.setHex(0xcfe0f4);
+      d.mat.opacity = 0.08 + 0.26 * br;
+      const o2 = d.dummy;
+      for (let i = 0; i < d.count; i++) {
+        const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+        const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+        const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+        const u = (h1 + (t * 0.26 + i * 0.013)) % 1;
+        o2.position.set((h2 - 0.5) * 7.0, (h3 < 0.5 ? 0.3 : CFG.H - 0.3) + (h3 - 0.5) * 3.0, -4 - u * 58);
+        o2.rotation.set(t * (0.7 + h1) + i, t * 0.5 + i, t * (0.3 + h2));
+        o2.scale.setScalar((0.35 + h3 * 1.2) * (1 - u * 0.3));
+        o2.updateMatrix();
+        d.mesh.setMatrixAt(i, o2.matrix);
+      }
+      d.mesh.instanceMatrix.needsUpdate = true;
+    }
+  },
+
   /* ---- 神殿崩壊（S4）の造形 ----------------------------------------------
      ・**倒れる柱**: 走行空間（|x| ≤ 1.45）の外・壁パネルの内側（|x| = 2.42）に立ち、
        根元を軸に前方へ倒れる。当たり判定は持たない見た目だが、判定を持つ
@@ -1944,6 +2317,12 @@ const Setpieces = {
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
       FF.syncView(dist, t, Setpieces.viewLift(dist), Setpieces.duoK(dist));
     }
+    if (s && s.id === 'shatter') {
+      Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._hideFish(); Setpieces._hideBlast();
+      Setpieces._syncShatter(dist, t);
+      return;
+    }
+    Setpieces._hideShatter();
     if (s && s.id === 'blastout') {
       Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._hideFish();
       Setpieces._syncBlast(dist, t);
@@ -2079,6 +2458,7 @@ const Setpieces = {
     Setpieces._hideTemple();
     Setpieces._hideFish();
     Setpieces._hideBlast();
+    Setpieces._hideShatter();
     if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 0;

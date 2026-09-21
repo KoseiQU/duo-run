@@ -162,6 +162,22 @@ const OBS = {
   LASER_DIAG: { span: 1, depth: 0.34, y0: 0.00, y1: CFG.H, both: true, safe: [],
                 motion: 'diag', net: true, label: '斜めビーム' },
 
+  /* ------------------------------------------------------------------------
+     S7「鏡の世界」の新ギミック（契約§4.4 / §4.5 / P5a）
+     ------------------------------------------------------------------------ */
+  /* 鏡ゾーンの銀の枠のゲート: **当たり判定を持たない**（通るだけ）。
+     左右反転の規則は Mirror が唯一の出所。surface 型＝置かれた面のキャラに効く。 */
+  MIRGATE:  { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, gate: true, mirror: true, label: '鏡ゾーンのゲート' },
+  /* 入れ替えワープの紫のゲート: 当たり判定なし。上下の担当が入れ替わる（Swap が出所）。 */
+  SWAPGATE: { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, gate: true, swap: true, label: '入れ替えワープのゲート' },
+  /* 割れた鏡の床（飛び石 / 契約§4.4 S7 の大演出）: 全幅が抜けていて、
+     **揺れる鏡片1枚ぶんの幅だけ**が足場。足場の外は GAP と同じ寸法＝跳べば越えられる。
+     奥行きが深い（＝裂け目が広い）ので、Fair の「通過に要する距離」からは外す（noPass）。 */
+  SHARDGAP: { span: 3, depth: 5.20, y0: -1.60, y1: 0.04, both: false, safe: ['jump'],
+              motion: 'shard', noPass: true, label: '割れた鏡の床' },
+
   /* 減速帯（瓦礫の山）: 巨岩の追跡で使う**死なない**障害物。
      ジャンプで越えなければ速度が一時的に -20%（契約§4.4 S3 の大演出）。
      公平性（§4.7）の扱いは通常のジャンプ要求と同じ＝間隔も生存経路も守られる。 */
@@ -287,6 +303,21 @@ const MOT = {
     const f1 = (p.f1 === undefined) ? f0 : p.f1;
     const c1 = (p.c1 === undefined) ? c0 : p.c1;
     return { f: f0 + (f1 - f0) * u, c: c0 + (c1 - c0) * u };
+  },
+
+  /* ------------------------------------------------------------------------
+     割れた鏡の床の足場（契約§4.4 S7）の時刻規則。**ここが唯一の出所**。
+     横スキャン（scanLane）と同じ「到達した瞬間（dist = at）の位相が phase」という作り。
+       shardLane(o, dist) … 足場の中心（連続レーン座標 -1..1 の実数）
+     譜面には phase 0（＝到達時は from の端で溜まっている）を書くので、
+     通過窓（±2.6m）のあいだ足場はほとんど動かない＝判定が譜面どおりになる。
+     ------------------------------------------------------------------------ */
+  shardLane(o, dist) {
+    const p = o.params && o.params.shard;
+    if (!p) return o.lane;
+    const from = (p.from === undefined) ? o.lane : p.from;
+    const to = (p.to === undefined) ? -from : p.to;
+    return from + (to - from) * MOT._tri(MOT._u(p, o, dist, CFG.SHARD.PERIOD));
   },
 
   /* 次に ON になるまでの距離（予告灯用。ON 中は 0） */
@@ -720,6 +751,170 @@ const Zero = {
   }
 };
 
+/* ============================================================================
+   Mirror — 鏡ゾーン（契約§4.5 / §4.4 S7）の**時刻規則の唯一の出所**
+
+   ■ 形
+     銀の枠のゲートが2枚で1組（入口と出口）。**ゲートが置かれた面**（床 or 天井）を
+     走るキャラの左右操作が、跨ぐたびに反転する（runner.mirrored をトグル）。
+     反転そのものは Runners.input の1行（dir = -dir）が唯一の実装で、
+     人間のタッチもキーボードもボットも同じ1か所を通る。
+
+   ■ 規則（重力反転ワープと同じ流儀で、距離＝時刻として書く）
+     ・反転は **走行距離がゲートを跨いだ瞬間** に1回だけ起きる（フレーム非依存）。
+     ・ゲートの直後 CFG.MIRRORZ.GRACE_T 秒（1.0秒）は障害物を置かない。
+     ・Fair はこの余白を検査し、さらに **生存レーンの到達可能性をリセット**する
+       （左右が入れ替わった直後は、どちらへ動くかの判断がやり直しになるため）。
+   ============================================================================ */
+const Mirror = {
+  /* 譜面の1エントリ（type:'MIRRORZ'）を実体へ展開する。
+     params.mir = { side: 'floor'|'ceil'（省略時は書いた面）, backT: 出口までの秒数 } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.mir) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    const backT = (p.backT === undefined) ? 6 : p.backT;
+    const side = (p.side === 'ceil' || p.side === 'floor') ? p.side : surface;
+    const to = at + backT * unit;
+    const reg = { from: at, to: to, unit: unit, side: side, gates: [at, to], dead: false };
+    reg.gates.forEach((m) => {
+      const o = Obstacles.make('MIRGATE', side, e.lane || 0, m, nowDist, { mir: { unitM: unit, side: side } });
+      o.reg = reg;
+      items.push(o);
+    });
+    if (sink) sink.push(reg);
+    return reg;
+  },
+
+  /* a < ゲート ≤ b を跨いだ回数（side を指定すればその面だけ） */
+  crossed(list, a, b, side) {
+    if (!list || !list.length) return 0;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead || (side && r.side !== side)) continue;
+      for (let k = 0; k < r.gates.length; k++) if (r.gates[k] > a && r.gates[k] <= b) n++;
+    }
+    return n;
+  },
+  /* atM の直前 windowM 以内にゲートがあるか（＝立て直す余裕がないか） */
+  gateNear(list, atM, windowM, side) {
+    if (!list || !list.length) return false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead || (side && r.side !== side)) continue;
+      for (let k = 0; k < r.gates.length; k++) {
+        if (r.gates[k] > atM - windowM && r.gates[k] <= atM) return true;
+      }
+    }
+    return false;
+  },
+  /* その距離でその面が反転しているか（区間の内側か）。HUD・監査の窓口 */
+  activeAt(list, side, m) {
+    if (!list) return false;
+    let on = false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead || r.side !== side) continue;
+      if (m > r.from && m <= r.to) on = !on;
+    }
+    return on;
+  },
+
+  /* 毎フレーム1回（Game.step から）。prevDist → dist の間に跨いだゲートを実行する */
+  update(game) {
+    const list = (game.gen && game.gen.mirrors) ? game.gen.mirrors : null;
+    if (!list || !list.length) return 0;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      for (let k = 0; k < r.gates.length; k++) {
+        if (r.gates[k] <= game.prevDist || r.gates[k] > game.dist) continue;
+        const rn = game.runners.filter((x) => x.surface === r.side)[0];
+        if (rn) rn.mirrored = !rn.mirrored;
+        n++;
+      }
+    }
+    return n;
+  },
+
+  /* 中断・チェックポイント再開で「片道だけ通った状態」を作らない */
+  dropOrphans(list, cutM) { return list.filter((o) => !(o.reg && o.reg.from < cutM)); },
+  killBefore(regs, cutM) {
+    if (!regs) return;
+    for (let i = 0; i < regs.length; i++) if (regs[i].from < cutM) regs[i].dead = true;
+  },
+  snapshot(game) {
+    const list = (game.gen && game.gen.mirrors) ? game.gen.mirrors : [];
+    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
+               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1), side: r.side }));
+  }
+};
+
+/* ============================================================================
+   Swap — 入れ替えワープ（契約§4.5 / §4.4 S7）の**時刻規則の唯一の出所**
+
+   ■ 形
+     紫のゲートが2枚で1組。跨ぐたびに **担当が入れ替わる**（Game.handSwap をトグル）。
+     本作のタッチは「画面の上下＝担当」（§4.2）なので、契約の
+     「左手/右手の担当が入れ替わる」は **上下の担当が入れ替わる** と読む:
+       通常   下半分＝床を走る方（LUMEN） ／ 上半分＝天井を走る方（UMBRA）
+       入替後 下半分＝天井を走る方（UMBRA）／ 上半分＝床を走る方（LUMEN）
+     ＝ Game.runnerForZone が面を反転し、キーボード／ボットは
+        Game.runnerForHand が手を反転する（どちらも handSwap の1か所を読む）。
+   ■ 規則
+     ・入れ替えは **走行距離がゲートを跨いだ瞬間** に1回だけ（フレーム非依存）。
+     ・ゲートの直後 CFG.HANDSWAP.GRACE_T 秒（1.0秒）は障害物を置かない。
+     ・Fair は余白を検査し、生存レーンの到達可能性を **両面ともリセット**する。
+   ============================================================================ */
+const Swap = {
+  /* 譜面の1エントリ（type:'HANDSWAP'）を実体へ展開する。
+     params.swp = { backT: 戻りのゲートまでの秒数 } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.swp) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    const backT = (p.backT === undefined) ? 6 : p.backT;
+    const to = at + backT * unit;
+    const reg = { from: at, to: to, unit: unit, gates: [at, to], dead: false };
+    reg.gates.forEach((m) => {
+      const o = Obstacles.make('SWAPGATE', 'floor', 0, m, nowDist, { swp: { unitM: unit } });
+      o.reg = reg;
+      items.push(o);
+    });
+    if (sink) sink.push(reg);
+    return reg;
+  },
+
+  crossed(list, a, b) { return Mirror.crossed(list, a, b, null); },
+  gateNear(list, atM, windowM) { return Mirror.gateNear(list, atM, windowM, null); },
+  activeAt(list, m) {
+    if (!list) return false;
+    let on = false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      if (m > r.from && m <= r.to) on = !on;
+    }
+    return on;
+  },
+
+  update(game) {
+    const list = (game.gen && game.gen.swaps) ? game.gen.swaps : null;
+    if (!list || !list.length) return 0;
+    const n = Swap.crossed(list, game.prevDist, game.dist);
+    for (let i = 0; i < n; i++) game.setHandSwap(!game.handSwap);
+    return n;
+  },
+
+  dropOrphans(list, cutM) { return list.filter((o) => !(o.reg && o.reg.from < cutM)); },
+  killBefore(regs, cutM) { Mirror.killBefore(regs, cutM); },
+  snapshot(game) {
+    const list = (game.gen && game.gen.swaps) ? game.gen.swaps : [];
+    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
+               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1) }));
+  }
+};
+
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
 
@@ -799,6 +994,17 @@ const Obstacles = {
          そこから先は GAP と同じ穴になる。時刻の規則はこの2行がすべて。 */
       if (dist < MOT.bridgeFallAt(o) - 1e-9) return out;
       put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET, t.y0, t.y1);
+      return out;
+    }
+
+    if (t.motion === 'shard') {
+      /* 割れた鏡の床（契約§4.4 S7）: 全幅が抜けていて、**揺れる鏡片1枚ぶんの幅だけ**が
+         足場。足場の外は GAP と同じ寸法の穴＝跳べば越えられる。
+         足場の位置は到達時刻の位置（MOT.shardLane）＝譜面に書いたレーン。 */
+      const sx = MOT.shardLane(o, dist) * CFG.LANE_W, hw = CFG.SHARD.HW;
+      const lim = CFG.HALF_W;
+      put(-lim, Math.min(lim, sx - hw), t.y0, t.y1);
+      put(Math.max(-lim, sx + hw), lim, t.y0, t.y1);
       return out;
     }
 
@@ -916,6 +1122,12 @@ const Obstacles = {
     if (o.type === 'SYNCGAP') {
       if (o.grp && o.grp.ok === true) return null;
       return { from: o.at - OBS.SYNCGAP.depth / 2, to: o.at + OBS.SYNCGAP.depth / 2 };
+    }
+    /* 割れた鏡の床（契約§4.4 S7）: その面の路面が **3レーンとも** 抜ける。
+       足場（揺れる鏡片）は障害物のビューが描くので、路面は残さない。 */
+    if (o.type === 'SHARDGAP') {
+      return { from: o.at - OBS.SHARDGAP.depth / 2, to: o.at + OBS.SHARDGAP.depth / 2,
+               side: o.surface, lanes: CFG.LANES };
     }
     /* 落ちる天井: 天井から外れたら、その**天井側**の路面が抜ける（床側は抜けない） */
     if (o.type === 'DROPCEIL') {
@@ -1570,6 +1782,27 @@ const Obstacles = {
           const a = i / 8 * Math.PI * 2;
           mk.push({ g: ZoneKit.box(0.12, 0.12, 0.12), p: [Math.cos(a) * 0.5, H / 2 + Math.sin(a) * 0.5, 0.1] });
         }
+      } else if (type === 'MIRGATE') {
+        /* 鏡ゾーン（契約§4.5 / S7）: **効くのは置かれた面だけ**なので、
+           記号はその面の側（ローカルの下半分）にだけ彫る。天井側のビューは
+           place() が Z軸まわりに180度回すので、画面では天井側に出る。
+           記号は「左右が入れ替わる」＝向かい合う2本の矢印。 */
+        [-1, 1].forEach((s2) => {
+          mk.push({ g: ZoneKit.box(0.52, 0.13, 0.12), p: [s2 * 0.34, 0.95, 0.1] });
+          mk.push({ g: ZoneKit.box(0.26, 0.26, 0.12), p: [s2 * 0.60, 0.95, 0.1], r: [0, 0, Math.PI / 4] });
+        });
+        mk.push({ g: ZoneKit.box(0.10, 0.90, 0.12), p: [0, 0.95, 0.1] });
+        /* その面を横切る銀の敷居（どちらの面のゲートかが一目で分かる） */
+        mk.push({ g: ZoneKit.box(HW * 2, 0.10, 0.22), p: [0, 0.07, 0.08] });
+      } else if (type === 'SWAPGATE') {
+        /* 入れ替えワープ（契約§4.5 / S7）: 上下が入れ替わる＝交差する2本の矢印 */
+        [[0.85, 1], [H - 0.85, -1]].forEach((q) => {
+          mk.push({ g: ZoneKit.box(0.14, 0.70, 0.12), p: [q[1] * 0.42, q[0], 0.1], r: [0, 0, q[1] * 0.42] });
+          mk.push({ g: ZoneKit.box(0.30, 0.30, 0.12), p: [q[1] * 0.42 + q[1] * 0.28, q[0] - q[1] * 0.34, 0.1],
+                    r: [0, 0, Math.PI / 4] });
+        });
+        mk.push({ g: ZoneKit.box(HW * 2, 0.10, 0.22), p: [0, 0.07, 0.08] });
+        mk.push({ g: ZoneKit.box(HW * 2, 0.10, 0.22), p: [0, H - 0.07, 0.08] });
       } else {
         /* レーザーネットの枠: **記号は小さく**（回廊を塞いでいるように見せない）。
            左右の柱に「網」の意匠を貼るだけにする。 */
@@ -1645,11 +1878,83 @@ const Obstacles = {
       g.userData.netMats = own;
     };
 
+    /* ------------------------------------------------------------------------
+       S7 の新ギミックの骨組み（ゾーン共通・2026-09-22 P5a）
+       ------------------------------------------------------------------------ */
+    /* 割れた鏡の床（飛び石）: 裂け目（虚空）と、**揺れる鏡片の足場**。
+       足場の位置と幅は place() が bands() から引く＝ 見た目＝判定。
+       予告（ghost）は「到達した瞬間の足場」＝譜面に書いた位置。 */
+    const shardKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const HW = CFG.HALF_W, L = t.depth;
+      const pitM = mats.pit || Obstacles._material('sdPit', C.pit);
+      const bodyM = mats.body || Obstacles._material('sdBody', C.body);
+      const darkM = mats.dark || Obstacles._material('sdDark', C.dark);
+      /* 裂け目の底と側面（下は虚空） */
+      const pit = new THREE.Group();
+      pit.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(HW * 2 + 0.6, 0.06, L + 0.6), p: [0, -1.58, 0] },
+        { g: ZoneKit.box(0.06, 1.7, L + 0.6), p: [-(HW + 0.28), -0.8, 0] },
+        { g: ZoneKit.box(0.06, 1.7, L + 0.6), p: [HW + 0.28, -0.8, 0] }
+      ]), pitM));
+      /* 裂け目の縁（割れた鏡の歯） */
+      const teeth = [];
+      for (let i = 0; i < 12; i++) {
+        const px = -HW + (HW * 2) * (i + 0.5) / 12;
+        [-1, 1].forEach((s2) => {
+          teeth.push({ g: ZoneKit.box(HW * 2 / 12 * 0.8, 0.05, 0.34),
+                       p: [px, 0.02 + (i % 3) * 0.03, s2 * (L / 2 - 0.16)],
+                       r: [s2 * 0.4, (i % 2 ? 0.2 : -0.2), 0] });
+        });
+      }
+      pit.add(new THREE.Mesh(ZoneKit.merge(teeth), bodyM));
+      teeth.forEach((q) => q.g.dispose());
+      const edge = new THREE.MeshBasicMaterial({ color: C.warn, fog: true });
+      own.push(edge);
+      pit.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(HW * 2, 0.06, 0.09), p: [0, 0.03, -(L / 2 - 0.03)] },
+        { g: ZoneKit.box(HW * 2, 0.06, 0.09), p: [0, 0.03, L / 2 - 0.03] }
+      ]), edge));
+      g.add(pit);
+      /* 足場（揺れる鏡片）。幅1で作り、place() が CFG.SHARD.HW*2 へ伸ばす */
+      const pad = new THREE.Group();
+      pad.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(1, 0.10, L + 0.5), p: [0, -0.05, 0] },
+        { g: ZoneKit.box(1, 0.05, 0.20), p: [0, 0.02, -(L / 2 + 0.2)] },
+        { g: ZoneKit.box(1, 0.05, 0.20), p: [0, 0.02, L / 2 + 0.2] }
+      ]), bodyM));
+      const rim = new THREE.MeshBasicMaterial({ color: C.cyan, fog: true });
+      own.push(rim);
+      pad.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.10, 0.045, L + 0.4), p: [-0.45, 0.03, 0] },
+        { g: ZoneKit.box(0.10, 0.045, L + 0.4), p: [0.45, 0.03, 0] },
+        { g: ZoneKit.box(1, 0.03, L * 0.3), p: [0, 0.03, 0] }
+      ]), rim));
+      /* 足場の下の支え（浮いていることが分かる） */
+      pad.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.7, 0.24, 0.24), p: [0, -0.22, -L * 0.3], r: [0, 0.4, 0.2] },
+        { g: ZoneKit.box(0.6, 0.20, 0.20), p: [0, -0.26, L * 0.3], r: [0, -0.3, -0.2] }
+      ]), darkM));
+      g.add(pad);
+      /* 予告: 到達した瞬間の足場の位置（薄い輪郭） */
+      const gm = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.22,
+                                               depthWrite: false, fog: true });
+      own.push(gm);
+      const ghost = new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, L + 0.6), gm);
+      ghost.position.y = 0.16;
+      ghost.renderOrder = 3;
+      g.add(ghost);
+      g.userData.shard = { pad: pad, ghost: ghost, pit: pit, mats: own };
+      g.userData.shardMats = own;
+    };
+
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
                 padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit,
                 beltKit: beltKit, doorKit: doorKit, liftKit: liftKit, fishKit: fishKit,
-                gateKit: gateKit, zeroFieldKit: zeroFieldKit, netKit: netKit };
+                gateKit: gateKit, zeroFieldKit: zeroFieldKit, netKit: netKit,
+                shardKit: shardKit };
     const childs0 = g.children.length, blink0 = g.userData.blink.length, parts0 = parts.length;
     const lamps0 = lampParts.length;
     skin.build(type, x);
@@ -1660,7 +1965,8 @@ const Obstacles = {
                     (t.belt && !g.userData.belt) || (t.door && !g.userData.door) ||
                     (type === 'LIFTPAD' && !g.userData.lift) || (t.fish && !g.userData.fish) ||
                     (t.gate && !g.userData.gate) || (t.net && !t.gate && !g.userData.net) ||
-                    (type === 'ZEROFIELD' && !g.userData.zfield);
+                    (type === 'ZEROFIELD' && !g.userData.zfield) ||
+                    (type === 'SHARDGAP' && !g.userData.shard);
     if (needKit) {
       for (let i = g.children.length - 1; i >= childs0; i--) { const c = g.children[i]; g.remove(c); ZoneKit.free(c); }
       g.userData.blink.length = blink0;
@@ -1668,6 +1974,7 @@ const Obstacles = {
       for (let i = parts.length - 1; i >= parts0; i--) if (parts[i].g.dispose) parts[i].g.dispose();
       parts.length = parts0;
       if (t.gate) gateKit(null);
+      else if (type === 'SHARDGAP') shardKit(null);
       else if (t.net) netKit(null);
       else if (type === 'ZEROFIELD') zeroFieldKit(null);
       else if (t.pad) padKit(null);
@@ -1876,6 +2183,22 @@ const Obstacles = {
         nt.link.instanceMatrix.needsUpdate = true;
         if (nt.link.instanceColor) nt.link.instanceColor.needsUpdate = true;
       }
+    }
+
+    /* 割れた鏡の床（契約§4.4 S7）: 足場は **判定と同じ MOT.shardLane** の位置へ。
+       予告（ghost）は「到達した瞬間の足場」＝譜面に書いた位置。 */
+    if (mot === 'shard' && ud.shard) {
+      const sd = ud.shard, W2 = CFG.SHARD.HW * 2;
+      const now = MOT.shardLane(o, dist) * CFG.LANE_W;
+      const at2 = MOT.shardLane(o, o.at) * CFG.LANE_W;
+      sd.pad.position.x = lx(now);
+      sd.pad.scale.x = W2;
+      sd.ghost.position.x = lx(at2);
+      sd.ghost.scale.x = W2 + 0.12;
+      if (sd.mats) sd.mats.forEach((m) => {
+        if (m.__base === undefined) m.__base = m.opacity;
+        if (m.transparent) m.opacity = m.__base * (0.7 + 0.3 * Math.sin(dist * 0.7 + (t || 0) * 4));
+      });
     }
 
     /* 海流ベルト（契約§4.5 / S5）: 矢印の帯は「1秒ぶん」の長さに伸ばし、

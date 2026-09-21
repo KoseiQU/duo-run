@@ -77,6 +77,10 @@
              実体は ZEROGATE+ZEROFIELD / WARPGATE×2 で、規則は Zero / Warp が持つ。 */
           if (e.type === 'ZEROG') { t.ok(typeof In.Zero.expand === 'function', d.id + ': ZEROG は Zero が展開する'); return; }
           if (e.type === 'GRAVWARP') { t.ok(typeof In.Warp.expand === 'function', d.id + ': GRAVWARP は Warp が展開する'); return; }
+          /* MIRRORZ / HANDSWAP も同じ「譜面上の型」（P5a / 契約§4.5）。
+             実体は MIRGATE×2 / SWAPGATE×2 で、規則は Mirror / Swap が持つ。 */
+          if (e.type === 'MIRRORZ') { t.ok(typeof In.Mirror.expand === 'function', d.id + ': MIRRORZ は Mirror が展開する'); return; }
+          if (e.type === 'HANDSWAP') { t.ok(typeof In.Swap.expand === 'function', d.id + ': HANDSWAP は Swap が展開する'); return; }
           t.ok(!!In.OBS[e.type], d.id + ': 未定義の障害物型を使っていない (' + e.type + ')');
           t.ok(e.type !== 'WALLSOLID', d.id + ': WALLSOLID はチャンクに直接書かない');
         });
@@ -168,6 +172,8 @@
            LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
            FISH_TAIL       … 動く部品（bands から毎フレーム置く / LASER_SCAN と同じ理由） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
+                     /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
+                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                     WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
                      ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
                      LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],

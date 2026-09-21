@@ -936,6 +936,260 @@ const CHUNK_DEFS = [
             { at: 9.8, lane: 1, type: 'PILLAR' }, { at: 14.6, lane: -1, type: 'LASER_V' },
             { at: 19.4, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 24.2, lane: 1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+
+  /* ==========================================================================
+     S7「鏡の世界」（契約§4.4 / §4.5 / P5a）
+     ------------------------------------------------------------------------
+     新ギミック:
+       MIRRORZ   鏡ゾーン。銀の枠2枚で1組。**ゲートが置かれた面**を走るキャラの
+                 左右操作が反転する（右フリック＝画面左へ）。出口ゲートで戻る。
+                 params.mir = { side:'floor'|'ceil', backT: 出口までの秒数 }
+                 ゲートの直後 1.0秒（= 10.9 基準m）はその面にウォールを置けない。
+       HANDSWAP  入れ替えワープ。紫の枠2枚で1組。**上下の担当が入れ替わる**
+                 （下半分＝天井の UMBRA／上半分＝床の LUMEN）。再通過で戻る。
+                 params.swp = { backT: 戻りまでの秒数 }
+                 ゲートの直後 1.0秒は **両面とも** ウォールを置けない。
+       レーザーネットの密度アップ（契約§4.4 S7）: 1区画あたり 4〜5本。
+     ------------------------------------------------------------------------
+     ■ 間合いの決まり（基準速度＝1秒 = 10 基準m。§4.7 の下限に **+9%の余裕**）
+       速度が 30→38 と大きく上がるので、S6 よりさらに余裕を取る。
+         ウォール間隔（レーン→なんでも）   0.45秒 → 4.9 基準m
+         ジャンプ → ジャンプ（同じ面）     0.70秒 → 7.7
+         ジャンプ → レーン移動（同じ面）   0.92秒 → 10.0
+         鏡ゲート／入れ替えゲート → 次     1.00秒 → 10.9
+     ■ 密度（決定ログの実質上限 約10回/100m）と比率（レーン≤62%）の両立
+       跳2・レーン3 の繰り返し（J J L L L）を主役に据える
+       ＝ 20要求 / 59.9 基準m → 速度34で 約9.8回/100m、ジャンプ比率 40%。
+     ========================================================================== */
+  /* --- 主役: 跳2・レーン3 の繰り返し（密度と比率を同時に作る） -------------- */
+  { id: 's7_mix_a', zone: 'mirror', lengthM: 74, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, leap: 1,
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'GAP' },
+            { at: 25.7, lane: 0, type: 'PILLAR' }, { at: 30.6, lane: 1, type: 'LASER_V' },
+            { at: 35.5, lane: -1, type: 'PILLAR' },
+            { at: 40.4, lane: 0, type: 'ROVER' }, { at: 48.1, lane: 1, type: 'LASER_LOW' },
+            { at: 58.1, lane: -1, type: 'PILLAR' }, { at: 63, lane: 0, type: 'LASER_V' },
+            { at: 67.9, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: 0, type: 'LASER_LOW' },
+            { at: 40.4, lane: -1, type: 'ROVER' }, { at: 48.1, lane: 0, type: 'GAP' }], events: [] },
+  { id: 's7_mix_b', zone: 'mirror', lengthM: 74, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, leap: 1, net: 1, moving: 1,
+    floor: [{ at: 8, lane: 1, type: 'LASER_LOW' }, { at: 15.7, lane: 0, type: 'ROVER' },
+            { at: 25.7, lane: -1, type: 'LASER_V' },
+            { at: 30.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 35.5, lane: 1, type: 'PILLAR' },
+            { at: 40.4, lane: -1, type: 'GAP' }, { at: 48.1, lane: 0, type: 'ROVER' },
+            { at: 58.1, lane: 1, type: 'PILLAR' }, { at: 63, lane: -1, type: 'LASER_V' },
+            { at: 67.9, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } }],
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.7, lane: 1, type: 'GAP' },
+            { at: 40.4, lane: 0, type: 'ROVER' }, { at: 48.1, lane: -1, type: 'LASER_LOW' }], events: [] },
+  { id: 's7_mix_c', zone: 'mirror', lengthM: 74, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, leap: 1, net: 1,
+    /* 横ビーム（床寄り＝LUMEN が跳ぶ／天井寄り＝UMBRA が跳ぶ）を跳の枠に混ぜる */
+    floor: [{ at: 8, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
+            { at: 15.7, lane: 0, type: 'ROVER' },
+            { at: 25.7, lane: 1, type: 'PILLAR' }, { at: 30.6, lane: -1, type: 'LASER_V' },
+            { at: 35.5, lane: 0, type: 'PILLAR' },
+            { at: 40.4, lane: 1, type: 'GAP' }, { at: 48.1, lane: 0, type: 'ROVER' },
+            { at: 58.1, lane: -1, type: 'LASER_V' }, { at: 63, lane: 1, type: 'PILLAR' },
+            { at: 67.9, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'LASER_LOW' },
+            { at: 40.4, lane: 0, type: 'ROVER' },
+            { at: 48.1, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_HIGH, y1: CFG.NET.Y_LOW, phase: 0 } } }],
+    events: [] },
+
+  /* --- 鏡の柱の縫い（レーン移動だけを 4.9 基準m おきに連ねる＝密度の上限） --- */
+  { id: 's7_weave_a', zone: 'mirror', lengthM: 68, difficulty: 4, minSpeed: 0, s7: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 12.9, lane: 1, type: 'LASER_V' },
+            { at: 17.8, lane: -1, type: 'PILLAR' }, { at: 22.7, lane: 0, type: 'LASER_V' },
+            { at: 27.6, lane: 1, type: 'PILLAR' }, { at: 32.5, lane: -1, type: 'LASER_V' },
+            { at: 37.4, lane: 0, type: 'PILLAR' }, { at: 42.3, lane: 1, type: 'LASER_V' },
+            { at: 47.2, lane: -1, type: 'PILLAR' }, { at: 52.1, lane: 0, type: 'LASER_V' },
+            { at: 57, lane: 1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 's7_weave_b', zone: 'mirror', lengthM: 68, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, moving: 1, net: 1,
+    floor: [{ at: 8, lane: 1, type: 'LASER_V' },
+            { at: 12.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0.5 } } },
+            { at: 17.8, lane: 1, type: 'PILLAR' },
+            { at: 22.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 27.6, lane: -1, type: 'LASER_V' },
+            { at: 32.5, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0.5 } } },
+            { at: 37.4, lane: -1, type: 'PILLAR' },
+            { at: 42.3, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 47.2, lane: 1, type: 'LASER_V' }, { at: 52.1, lane: 0, type: 'PILLAR' },
+            { at: 57, lane: -1, type: 'LASER_V' }],
+    ceil: [], events: [] },
+
+  /* --- 跳び継ぎ（両者が 0.77秒おきに跳ぶ。§4.7 ジャンプ連続 0.70秒の下限） -- */
+  { id: 's7_leap', zone: 'mirror', lengthM: 64, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, leap: 1,
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'GAP' },
+            { at: 23.4, lane: 1, type: 'LASER_LOW' }, { at: 31.1, lane: 0, type: 'ROVER' },
+            { at: 38.8, lane: -1, type: 'GAP' }, { at: 46.5, lane: 1, type: 'ROVER' },
+            { at: 54.2, lane: 0, type: 'LASER_LOW' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: 0, type: 'LASER_LOW' },
+            { at: 23.4, lane: -1, type: 'GAP' }, { at: 31.1, lane: 1, type: 'ROVER' },
+            { at: 38.8, lane: 0, type: 'LASER_LOW' }, { at: 46.5, lane: -1, type: 'GAP' },
+            { at: 54.2, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's7_leap_b', zone: 'mirror', lengthM: 64, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, leap: 1, net: 1,
+    floor: [{ at: 8, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
+            { at: 15.7, lane: 0, type: 'ROVER' }, { at: 23.4, lane: 1, type: 'LASER_LOW' },
+            { at: 31.1, lane: -1, type: 'GAP' }, { at: 38.8, lane: 0, type: 'ROVER' },
+            { at: 46.5, lane: 1, type: 'ROVER' }, { at: 54.2, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'GAP' },
+            { at: 23.4, lane: 0, type: 'ROVER' }, { at: 31.1, lane: 1, type: 'LASER_LOW' },
+            { at: 38.8, lane: -1, type: 'GAP' },
+            { at: 46.5, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_HIGH, y1: CFG.NET.Y_LOW, phase: 0 } } },
+            { at: 54.2, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- レーザーネット（契約§4.4 S7「密度アップ」＝1区画に 4〜5本） --------- */
+  { id: 's7_net_a', zone: 'mirror', lengthM: 70, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, net: 1, moving: 1,
+    /* 区画の中に 4本（横ビーム1・斜め2・縦光柱1） */
+    floor: [{ at: 5, lane: 0, type: 'NETGATE' },
+            { at: 12, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
+            { at: 22, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 26.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 31.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 36.7, lane: 1, type: 'PILLAR' },
+            { at: 41.6, lane: 0, type: 'ROVER' },
+            { at: 51.6, lane: -1, type: 'LASER_V' }, { at: 56.5, lane: 0, type: 'PILLAR' },
+            { at: 61.4, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 12, lane: 1, type: 'ROVER' }, { at: 41.6, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's7_net_b', zone: 'mirror', lengthM: 70, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, net: 1, moving: 1,
+    /* 区画（ゲート＋30基準m）の中に **5本**（横ビーム2・斜め2・縦光柱1）
+       ＝契約§4.4 S7 の「レーザーネットの密度アップ」 */
+    floor: [{ at: 4, lane: 0, type: 'NETGATE' },
+            { at: 10, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 14.9, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_MID, y1: CFG.NET.Y_MID2, phase: 0 } } },
+            { at: 14.9, lane: 1, type: 'PILLAR' },
+            { at: 19.8, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
+            { at: 24.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 29.6, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
+            { at: 39.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: 0 } } },
+            { at: 44.5, lane: -1, type: 'PILLAR' },
+            { at: 49.4, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: -1 } } },
+            { at: 54.3, lane: 1, type: 'LASER_V' }, { at: 59.2, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 29.6, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's7_net_c', zone: 'mirror', lengthM: 76, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, net: 1, leap: 1, moving: 1,
+    /* 区画の中に **5本**（斜め3・横ビーム1・縦光柱1）＋ そのあと跳び継ぎ */
+    floor: [{ at: 4, lane: 0, type: 'NETGATE' },
+            { at: 10, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 14.9, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_MID, y1: CFG.NET.Y_MID2, phase: 0 } } },
+            { at: 14.9, lane: 1, type: 'PILLAR' },
+            { at: 19.8, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.5 } } },
+            { at: 24.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 29.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: 1 } } },
+            { at: 34.5, lane: 1, type: 'ROVER' }, { at: 42.2, lane: -1, type: 'GAP' },
+            { at: 52.2, lane: 0, type: 'PILLAR' }, { at: 57.1, lane: 1, type: 'LASER_V' },
+            { at: 62, lane: -1, type: 'PILLAR' }, { at: 66.9, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 34.5, lane: -1, type: 'ROVER' }, { at: 42.2, lane: 0, type: 'LASER_LOW' }], events: [] },
+
+  /* --- 鏡ゾーン（契約§4.5「通った側のキャラの左右が反転」） ----------------
+     ゲートの前後 1.0秒（10.9 基準m）はその面にウォールを置けないので、
+     その空きぶんだけ密度が落ちる。譜面は主役と同じ「跳2・レーン3」を保って
+     §4.3 の比率（ジャンプ 35%前後）を崩さないようにする。 */
+  { id: 's7_mir_a', zone: 'mirror', lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
+    /* 床側が反転する（下半分の左右が逆になる） */
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 5.2 } } },
+            { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: -1, type: 'GAP' },
+            { at: 34.7, lane: 0, type: 'PILLAR' }, { at: 39.6, lane: 1, type: 'LASER_V' },
+            { at: 44.5, lane: -1, type: 'PILLAR' },
+            { at: 49.4, lane: 0, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' },
+            { at: 69, lane: -1, type: 'PILLAR' }, { at: 73.9, lane: 0, type: 'LASER_V' },
+            { at: 78.8, lane: 1, type: 'PILLAR' }, { at: 83.7, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'LASER_LOW' },
+            { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'GAP' }], events: [] },
+  { id: 's7_mir_b', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, net: 1, leap: 1,
+    /* 天井側が反転する（上半分の左右が逆になる）＋ 斜めビーム */
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 5.2 } } },
+            { at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'GAP' },
+            { at: 34.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 39.6, lane: -1, type: 'PILLAR' },
+            { at: 44.5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'LASER_LOW' },
+            { at: 69, lane: 1, type: 'PILLAR' }, { at: 73.9, lane: -1, type: 'LASER_V' },
+            { at: 78.8, lane: 0, type: 'PILLAR' }, { at: 83.7, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'LASER_LOW' },
+            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: -1, type: 'GAP' }], events: [] },
+  { id: 's7_mir_c', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 5.2 } } },
+            { at: 17, lane: -1, type: 'LASER_LOW' }, { at: 24.7, lane: 0, type: 'ROVER' },
+            { at: 34.7, lane: 1, type: 'PILLAR' }, { at: 39.6, lane: -1, type: 'LASER_V' },
+            { at: 44.5, lane: 0, type: 'PILLAR' },
+            { at: 49.4, lane: 1, type: 'GAP' }, { at: 57.1, lane: 0, type: 'ROVER' },
+            { at: 69, lane: 1, type: 'LASER_V' }, { at: 73.9, lane: -1, type: 'PILLAR' },
+            { at: 78.8, lane: 0, type: 'LASER_V' }, { at: 83.7, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'GAP' },
+            { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' }], events: [] },
+
+  /* --- 入れ替えワープ（契約§4.5「担当が入れ替わる」＝上下の担当） -----------
+     入れ替えは **両面**に効くので、ゲートの前後はどちらの面にも置けない。 */
+  { id: 's7_swap_a', zone: 'mirror', lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, swap: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 5.2 } } },
+            { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'GAP' },
+            { at: 34.7, lane: 0, type: 'PILLAR' }, { at: 39.6, lane: -1, type: 'LASER_V' },
+            { at: 44.5, lane: 1, type: 'PILLAR' },
+            { at: 49.4, lane: 0, type: 'ROVER' }, { at: 57.1, lane: -1, type: 'LASER_LOW' },
+            { at: 69, lane: 1, type: 'PILLAR' }, { at: 73.9, lane: 0, type: 'LASER_V' },
+            { at: 78.8, lane: -1, type: 'PILLAR' }, { at: 83.7, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'LASER_LOW' },
+            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'GAP' }], events: [] },
+  { id: 's7_swap_b', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, swap: 1, net: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 5.2 } } },
+            { at: 17, lane: 1, type: 'LASER_LOW' }, { at: 24.7, lane: -1, type: 'ROVER' },
+            { at: 34.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 39.6, lane: 1, type: 'PILLAR' },
+            { at: 44.5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 49.4, lane: 1, type: 'GAP' }, { at: 57.1, lane: 0, type: 'ROVER' },
+            { at: 69, lane: -1, type: 'PILLAR' }, { at: 73.9, lane: 1, type: 'LASER_V' },
+            { at: 78.8, lane: 0, type: 'PILLAR' }, { at: 83.7, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'GAP' },
+            { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' }], events: [] },
+
+  /* --- 重ね掛け（契約§6 P5a「S7後半＝脳の負荷の最高点」） -------------------
+     鏡ゾーンの中で入れ替えワープを1回だけ通す。**両方同時に効くのは1区画に1回**で、
+     必ず先に入れ替えを解除し、そのあと鏡を解除してからチャンクを終える。
+     minSpeed 34 ＝ 速度が 34 を超える後半（約750m以降）でしか置かれない。
+     ゲートが4枚ぶん（＝43.6 基準m）空くので密度は下がる＝既知の妥協点。 */
+  { id: 's7_both_a', zone: 'mirror', lengthM: 102, difficulty: 5, minSpeed: 34, s7: 1, dense: 1, mir: 1, swap: 1, dual: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 6.8 } } },
+            { at: 17, lane: 0, type: 'ROVER' },
+            { at: 22, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 3.4 } } },
+            { at: 33, lane: 1, type: 'LASER_V' }, { at: 37.9, lane: -1, type: 'PILLAR' },
+            { at: 42.8, lane: 0, type: 'LASER_V' }, { at: 47.7, lane: 1, type: 'PILLAR' },
+            { at: 52.6, lane: -1, type: 'ROVER' }, { at: 67, lane: 0, type: 'GAP' },
+            { at: 85, lane: 1, type: 'PILLAR' }, { at: 89.9, lane: -1, type: 'LASER_V' },
+            { at: 94.8, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 52.6, lane: 0, type: 'ROVER' },
+            { at: 67, lane: 1, type: 'LASER_LOW' }], events: [] },
+  { id: 's7_both_b', zone: 'mirror', lengthM: 102, difficulty: 5, minSpeed: 34, s7: 1, dense: 1, mir: 1, swap: 1, dual: 1, net: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 6.8 } } },
+            { at: 17, lane: 1, type: 'ROVER' },
+            { at: 22, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 3.4 } } },
+            { at: 33, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 37.9, lane: 1, type: 'PILLAR' },
+            { at: 42.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 47.7, lane: -1, type: 'PILLAR' }, { at: 52.6, lane: 0, type: 'ROVER' },
+            { at: 67, lane: 1, type: 'GAP' },
+            { at: 85, lane: 0, type: 'PILLAR' }, { at: 89.9, lane: 1, type: 'LASER_V' },
+            { at: 94.8, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 52.6, lane: 1, type: 'ROVER' },
+            { at: 67, lane: -1, type: 'LASER_LOW' }], events: [] },
+
+  /* --- 壁の穴・つなぎ ------------------------------------------------------ */
+  { id: 's7_wallhole', zone: 'mirror', lengthM: 68, difficulty: 4, minSpeed: 0, s7: 1, wallhole: 1, dense: 1,
+    floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 20, lane: 0, type: 'PILLAR' },
+            { at: 24.9, lane: -1, type: 'LASER_V' }, { at: 29.8, lane: 1, type: 'PILLAR' },
+            { at: 34.7, lane: 0, type: 'ROVER' }, { at: 42.4, lane: -1, type: 'GAP' },
+            { at: 52.4, lane: 1, type: 'PILLAR' }, { at: 57.3, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 34.7, lane: 1, type: 'ROVER' },
+            { at: 42.4, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's7_fill_a', zone: 'mirror', lengthM: 28, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, fill: 1,
+    floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 9.9, lane: 1, type: 'LASER_V' },
+            { at: 14.8, lane: -1, type: 'PILLAR' }, { at: 19.7, lane: 0, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 's7_fill_b', zone: 'mirror', lengthM: 32, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, fill: 1, net: 1,
+    floor: [{ at: 5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: 1 } } },
+            { at: 9.9, lane: 1, type: 'PILLAR' }, { at: 14.8, lane: -1, type: 'LASER_V' },
+            { at: 19.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 24.6, lane: 1, type: 'PILLAR' }],
     ceil: [], events: [] }
 ];
 
@@ -963,7 +1217,7 @@ const STAGE_DEFS = {
   S0: {
     id: 'S0', name: '仮ステージ S0', zone: 'neon', lengthM: 900,
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
-    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id)
   },
   /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
      冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
@@ -975,7 +1229,7 @@ const STAGE_DEFS = {
     /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
        「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
        ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id)
       .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
       .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b'])
   },
@@ -1007,12 +1261,12 @@ const STAGE_DEFS = {
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
                 'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
       /* S3 の顔ぶれ（!c.s3）は混ぜない。ゾーンが変わればギミックも変わる（契約§4.4） */
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id))     // 動くレーザーを厚く
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && c.difficulty <= 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id))      // 密集チャンク
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))     // 動くレーザーを厚く
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && c.difficulty <= 2).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))      // 密集チャンク
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))
       /* 横に避けるチャンクを厚くしたぶん、点滅レーザーが薄まらないよう補う（P2c） */
       .concat(['c2_blink_v', 'c2_blink_low', 'c3_blink_scan',
                'c2_blink_v', 'c2_blink_low', 'c3_blink_scan'])
@@ -1116,12 +1370,57 @@ const STAGE_DEFS = {
       .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s6 && c.wallhole).map((c) => c.id))
   },
+  /* S7 鏡の世界（契約 §4.4）: 1500m / 30→38 / チェックポイント 500・1000 /
+     新ギミック＝鏡ゾーン（片方の左右が反転）・入れ替えワープ（上下の担当が入れ替わる）＋
+     レーザーネットの密度アップ（1区画 4〜5本）。終盤200mは「鏡の砕け散り」。ランク4〜5。
+     ■ 密度: 契約§4.7 の目安は 10→14回/100m だが、30〜38 m/s では
+       「ジャンプ連続 0.70秒」「ウォール間隔 0.45秒」の下限から
+       **約11.7回/100m（全部レーン移動）が理論上限**で、§4.3 の比率
+       （ジャンプ 35%前後）と両立する実質上限は決定ログどおり **約10回/100m**。
+       そこでステージの目安を 9→11 に置く（契約§4.7 との差は既知の妥協点）。 */
+  S7: {
+    id: 'S7', name: 'S7 鏡の世界', zone: 'mirror', lengthM: 1500,
+    speedFrom: 30, speedTo: 38, minRank: 4, maxRank: 5, setpiece: 'shatter',
+    density: [8, 10],
+    reactBoth: CFG.FAIR.REACT_BOTH_LATE,
+    ratioPull: 10,
+    mix: { lane: 0.52, jump: 0.45, slide: 0.03 },
+    /* 新ギミック（鏡ゾーン・入れ替えワープ）を1回の走行で必ず顔出しさせる */
+    tipBoost: true,
+    /* ゲートのチャンクは猶予のぶん密度が低く、密度の重みに強く負けるので
+       S6（×3）より強く引き上げる。まだ出していないギミックだけに掛かる。 */
+    tipMul: 9,
+    /* 重ね掛け（dual）も「新ギミック」として1回の走行で必ず顔を出させる
+       ＝ 契約§6 P5a「S7後半＝脳の負荷の最高点」 */
+    tipOnce: { mir: 'mirrorzone', swap: 'handswap', dual: 'dualzone' },
+    /* 顔ぶれ: S7 の新チャンクだけ。他ゾーン専用のギミックは混ぜない（契約§4.4）。
+       主役（跳2・レーン3 の s7_mix / ネットの s7_net）を厚く積む。
+       ゲートを持つチャンク（鏡・入れ替え）は猶予のぶん密度が落ちるので、
+       **1本ずつだけ** 積み増す（顔出しは tipBoost が受け持つ）。
+       重ね掛け（mir かつ swap）はさらに空くので積み増さない。 */
+    chunkPool: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id)
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.net && !c.mir && !c.swap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.net && !c.mir && !c.swap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.leap && !c.mir && !c.swap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.leap && !c.mir && !c.swap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.mir && !c.swap).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.swap && !c.mir).map((c) => c.id))
+      /* 重ね掛け（S7後半の山場）は長くて密度も低いので、置ける機会そのものが少ない。
+         後半にしか候補にならない（minSpeed 34）ぶん、厚めに積む。 */
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.wallhole).map((c) => c.id))
+  },
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
     /* 最初から入っているのは S1 の顔ぶれ（基本セット）だけ。
        遺跡の新ギミックは S3 をクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id)
   }
 };
 
@@ -1129,11 +1428,12 @@ const STAGE_DEFS = {
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
   S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
-  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5 && !c.s6).map((c) => c.id),
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id),
   S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id),       // 崩れる橋・振り子の刃
   S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id),       // 同時スイッチ・落ちる天井
   S5: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),       // 海流ベルト・浮上足場・色の扉
-  S6: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id)        // 重力反転・無重力・レーザーネット
+  S6: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id),       // 重力反転・無重力・レーザーネット
+  S7: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id)        // 鏡ゾーン・入れ替えワープ
 };
 function endlessPool(cleared) {
   let pool = STAGE_DEFS.endless.chunkPool.slice();
@@ -1186,7 +1486,12 @@ const Fair = {
   _maxDepth: 0,
   maxDepth() {
     if (!Fair._maxDepth) {
-      Object.keys(OBS).forEach((k) => { Fair._maxDepth = Math.max(Fair._maxDepth, OBS[k].depth); });
+      /* noPass（割れた鏡の床＝裂け目そのもの）は「通り抜けに時間が要る実体」ではないので
+         外す。ここを伸ばすと **全ステージ**の到達可能性の見積りが縮むため（P5a）。 */
+      Object.keys(OBS).forEach((k) => {
+        if (OBS[k].noPass) return;
+        Fair._maxDepth = Math.max(Fair._maxDepth, OBS[k].depth);
+      });
     }
     return Fair._maxDepth;
   },
@@ -1341,6 +1646,31 @@ const Fair = {
       });
     }
 
+    /* 鏡ゾーン（契約§4.5 / S7）: **ゲートの直後 1.0秒は障害物を置かない**。
+       左右が入れ替わった直後は、どちらへ動くかの判断がやり直しになるため。 */
+    if (opt.mirrors && opt.mirrors.length) {
+      Fair.SIDES.forEach((side) => {
+        walls.forEach((w) => {
+          if (!w.demand[side]) return;
+          const sp = speedAt(w.at);
+          if (Mirror.gateNear(opt.mirrors, w.at, sp * CFG.MIRRORZ.GRACE_T, side)) {
+            errs.push('鏡ゲートの直後にウォール(' + side + ') @' + w.at.toFixed(1) +
+                      '（' + CFG.MIRRORZ.GRACE_T + '秒の猶予が要る）');
+          }
+        });
+      });
+    }
+    /* 入れ替えワープ（契約§4.5 / S7）: 担当そのものが入れ替わるので **両面**に効く */
+    if (opt.swaps && opt.swaps.length) {
+      walls.forEach((w) => {
+        const sp = speedAt(w.at);
+        if (Swap.gateNear(opt.swaps, w.at, sp * CFG.HANDSWAP.GRACE_T)) {
+          errs.push('入れ替えの直後にウォール @' + w.at.toFixed(1) +
+                    '（' + CFG.HANDSWAP.GRACE_T + '秒の猶予が要る）');
+        }
+      });
+    }
+
     /* 生存経路（各ウォールで生存レーンが1つ以上＋前ウォールから到達可能） */
     Fair.SIDES.forEach((side) => {
       let reach = opt.startLanes === 'any' ? CFG.LANES.slice() : (opt.startLanes || [0]).slice();
@@ -1352,6 +1682,10 @@ const Fair = {
            **相手のレーン**から始まる。どこから来るか分からないので到達可能性を
            リセットする（直後 1.0秒は障害物なしなので、どのレーンへも動ける）。 */
         if (opt.warps && Warp.crossed(opt.warps, prevAt, w.at)) reach = CFG.LANES.slice();
+        /* 鏡ゾーン・入れ替えワープ（§4.5 / S7）でも同じ（直後 1.0秒は障害物なしなので
+           どのレーンへも動ける）。判断がやり直しになる区切りで到達可能性を戻す。 */
+        if (opt.mirrors && Mirror.crossed(opt.mirrors, prevAt, w.at, side)) reach = CFG.LANES.slice();
+        if (opt.swaps && Swap.crossed(opt.swaps, prevAt, w.at)) reach = CFG.LANES.slice();
         /* 前のウォールを「通り抜けきる」までは横に動けない（動くと真横の障害物に刺さる）。
            その通過距離を引いた残りで何レーンぶん動けるかを数える。 */
         const passM = Fair.maxDepth() + Math.max(CFG.BODY_D, CFG.SLIDE_D);
@@ -1485,7 +1819,9 @@ const MOTION_SCALE = {
   lift:   { key: 'periodM', def() { return CFG.LIFT.PERIOD; } },
   /* レーザーネット（S6）の横ビーム・斜めビームも同じ（1往復の秒数が一定） */
   hbeam:  { key: 'periodM', def() { return CFG.NET.PERIOD; } },
-  diag:   { key: 'periodM', def() { return CFG.NET.PERIOD; } }
+  diag:   { key: 'periodM', def() { return CFG.NET.PERIOD; } },
+  /* 割れた鏡の床（S7）の足場の揺れも同じ（1往復の秒数が速度によらず一定） */
+  shard:  { key: 'periodM', def() { return CFG.SHARD.PERIOD; } }
 };
 /* 崩れる橋は必ず bridge パラメータを、浮上足場は必ず lift パラメータを持つ。
    書き忘れても生成時に既定値が入るようにしておく（＝位相の規則が常に効く）。 */
@@ -1542,6 +1878,10 @@ function expandEntry(items, e, surface, at, nowDist, scale, sink) {
   if (e.type === 'ZEROG') { Zero.expand(items, e, surface, at, nowDist, scale, sink && sink.zeros); return; }
   /* 重力反転ワープ（契約§4.5 / S6）: 入口と戻りの2枚のゲート。通るたびに面が入れ替わる */
   if (e.type === 'GRAVWARP') { Warp.expand(items, e, surface, at, nowDist, scale, sink && sink.warps); return; }
+  /* 鏡ゾーン（契約§4.5 / S7）: 銀の枠2枚。通った面のキャラの左右が反転する */
+  if (e.type === 'MIRRORZ') { Mirror.expand(items, e, surface, at, nowDist, scale, sink && sink.mirrors); return; }
+  /* 入れ替えワープ（契約§4.5 / S7）: 紫の枠2枚。上下の担当が入れ替わる */
+  if (e.type === 'HANDSWAP') { Swap.expand(items, e, surface, at, nowDist, scale, sink && sink.swaps); return; }
   if (e.type === 'DROPCEIL') {
     /* 落ちる天井の時刻規則（予告→落下→着地）は「その地点の1秒ぶんの距離」で持つ */
     const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
@@ -1581,7 +1921,10 @@ function createGenerator(stage, seed) {
   const currents = [];          // 海流ベルトの区間（Current が押し出しを判定する / P4a）
   const zeros = [];             // 無重力の区間（Zero が滞空倍率を出す / P4b）
   const warps = [];             // 重力反転ワープの組（Warp が面の入れ替えを判定する / P4b）
-  const sink = { syncs: syncs, currents: currents, zeros: zeros, warps: warps };
+  const mirrors = [];           // 鏡ゾーンの組（Mirror が左右反転を判定する / P5a）
+  const swaps = [];             // 入れ替えワープの組（Swap が担当の入れ替えを判定する / P5a）
+  const sink = { syncs: syncs, currents: currents, zeros: zeros, warps: warps,
+                 mirrors: mirrors, swaps: swaps };
   const events = [];            // チャンクの events（P2以降のフック）
   const log = [];               // {id, startM, lengthM}
   let seedMix = null;           // 大演出が持ち込む必須動作の内訳（比率の是正に使う）
@@ -1678,7 +2021,7 @@ function createGenerator(stage, seed) {
       if (stage.tipOnce && stage.tipBoost) {
         const ks = Object.keys(stage.tipOnce);
         for (let k = 0; k < ks.length; k++) {
-          if (cands[i][ks[k]] && !tipDone[ks[k]]) { wt *= 3; break; }
+          if (cands[i][ks[k]] && !tipDone[ks[k]]) { wt *= (stage.tipMul || 3); break; }
         }
       }
       w.push(wt); sum += wt;
@@ -1698,7 +2041,7 @@ function createGenerator(stage, seed) {
   function instantiate(def, startM, nowDist) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
     const items = [];
-    const local = { syncs: [], currents: [], zeros: [], warps: [] };
+    const local = { syncs: [], currents: [], zeros: [], warps: [], mirrors: [], swaps: [] };
     (def.floor || []).forEach((e) => put(items, e, 'floor', startM + e.at * scale, nowDist, scale, local));
     (def.ceil || []).forEach((e) => put(items, e, 'ceil', startM + e.at * scale, nowDist, scale, local));
     items.sort((a, b) => a.at - b.at);
@@ -1712,6 +2055,8 @@ function createGenerator(stage, seed) {
     inst.local.currents.forEach((c) => currents.push(c));
     inst.local.zeros.forEach((z) => zeros.push(z));
     inst.local.warps.forEach((wp) => warps.push(wp));
+    inst.local.mirrors.forEach((mr) => mirrors.push(mr));
+    inst.local.swaps.forEach((sw) => swaps.push(sw));
     inst.local = null;
   }
 
@@ -1744,7 +2089,7 @@ function createGenerator(stage, seed) {
     const tail = out.slice(-8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
                                { startLanes: 'any', reactBoth: stage.reactBoth, currents: currents,
-                                 zeros: zeros, warps: warps });
+                                 zeros: zeros, warps: warps, mirrors: mirrors, swaps: swaps });
     if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
     inst.items.forEach((o) => out.push(o));
     noteItems(inst.items);
@@ -1805,7 +2150,9 @@ function createGenerator(stage, seed) {
                                    { startLanes: 'any', reactBoth: stage.reactBoth,
                                      currents: currents.concat(inst.local.currents),
                                      zeros: zeros.concat(inst.local.zeros),
-                                     warps: warps.concat(inst.local.warps) });
+                                     warps: warps.concat(inst.local.warps),
+                                     mirrors: mirrors.concat(inst.local.mirrors),
+                                     swaps: swaps.concat(inst.local.swaps) });
         if (!errs.length) {
           commit(inst);
           inst.items.forEach((o) => out.push(o));
@@ -1847,6 +2194,8 @@ function createGenerator(stage, seed) {
     currents: currents,
     zeros: zeros,
     warps: warps,
+    mirrors: mirrors,
+    swaps: swaps,
     events: events,
     log: log,
     /* untilM まで生成しておく。nowDist は視認距離の記録用 */

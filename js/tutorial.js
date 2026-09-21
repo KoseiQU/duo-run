@@ -38,7 +38,15 @@ const Tutorial = {
                      '<b class="k">下半分</b>は<b>床を走る方</b>のまま'] },
     zerog: { ph: ['<span class="finger">👆</span>無重力区間は', '<b>ジャンプが長い</b>'] },
     lasernet: { ph: ['<span class="finger">👈</span>レーザー網は', '<b class="k">下</b>と<b class="k2">上</b>で',
-                     '<b>よけるレーンが違う</b>'] }
+                     '<b>よけるレーンが違う</b>'] },
+    /* S7 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
+    mirrorzone: { ph: ['<span class="finger">🪞</span>銀の枠をくぐった側は', '<b>左右が逆</b>になる',
+                       '（出口の枠で戻る）'] },
+    handswap: { ph: ['<span class="finger">🔄</span>紫の枠で<b>担当が入れ替わる</b>',
+                     '<b class="k">下半分</b>が<b class="k2">上のキャラ</b>を動かす'] },
+    shardstep: { ph: ['<span class="finger">👆</span>鏡の床が砕けた', '<b>揺れる足場</b>へ跳べ'] },
+    dualzone: { ph: ['<span class="finger">🌀</span>鏡と入れ替えが<b>同時</b>に効く',
+                     '担当も左右も入れ替わっている'] }
   },
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },

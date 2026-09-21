@@ -52,10 +52,19 @@ const Game = {
     return Game.runners.filter((r) => r.hand === want)[0] || null;
   },
   /* タッチ: 画面の下半分＝床を走るキャラ / 上半分＝天井を走るキャラ（§4.2 改訂）。
-     重力反転ワープ（§4.5）で面が入れ替わっても「画面の位置＝担当」は保たれる。 */
+     重力反転ワープ（§4.5）で面が入れ替わっても「画面の位置＝担当」は保たれる。
+     **入れ替えワープ（§4.5 / S7）のときだけ、その対応が入れ替わる**:
+       下半分＝天井を走る方（UMBRA）／上半分＝床を走る方（LUMEN）。
+     handSwap の読み手はここと runnerForHand（キーボード・ボット）の2か所だけ。 */
   runnerForZone(zone) {
-    const surface = Input.surfaceOfZone(zone);
+    let surface = Input.surfaceOfZone(zone);
+    if (Game.handSwap) surface = (surface === 'floor') ? 'ceil' : 'floor';
     return Game.runners.filter((r) => r.surface === surface)[0] || null;
+  },
+  /* 画面の上下 → いま担当しているキャラの面（HUD・監査の窓口） */
+  surfaceForZone(zone) {
+    const s = Input.surfaceOfZone(zone);
+    return Game.handSwap ? ((s === 'floor') ? 'ceil' : 'floor') : s;
   },
   setHandSwap(on) { Game.handSwap = !!on; },
   setMirror(id, on) { Game.runners.forEach((r) => { if (r.id === id) r.mirrored = !!on; }); },
@@ -141,6 +150,9 @@ const Game = {
     Game.flipT = 0;
     Game.flipN = 0;
     Zero.cur = 1;
+    /* 鏡ゾーン・入れ替えワープ（§4.5 / S7）も必ず既定へ戻す
+       （左右の反転は Runners.reset が、担当の入れ替えはここが受け持つ）。 */
+    Game.handSwap = false;
     Game.speed = Game.stage.speedAt(fromM);
     /* 重力反転（§4.5 / S6）: 面は必ず既定（LUMEN=床 / UMBRA=天井）から始める */
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
@@ -158,9 +170,12 @@ const Game = {
     /* 重力反転ワープ・無重力も同じ（片道だけ通った状態・区間の途中から始まる状態を作らない） */
     Warp.killBefore(Game.gen.warps, fromM + runway);
     Zero.killBefore(Game.gen.zeros, fromM + runway);
-    Game.active = Warp.dropOrphans(Zero.dropOrphans(Current.dropOrphans(
+    /* 鏡ゾーン・入れ替えワープも同じ（片道だけ通った状態を作らない / P5a） */
+    Mirror.killBefore(Game.gen.mirrors, fromM + runway);
+    Swap.killBefore(Game.gen.swaps, fromM + runway);
+    Game.active = Swap.dropOrphans(Mirror.dropOrphans(Warp.dropOrphans(Zero.dropOrphans(Current.dropOrphans(
       Sync.dropOrphans(Game.gen.obstacles.filter((o) => o.at >= fromM + runway), fromM + runway),
-      fromM + runway), fromM + runway), fromM + runway);
+      fromM + runway), fromM + runway), fromM + runway), fromM + runway), fromM + runway);
     Game.active.forEach((o) => { o.spawnDist = fromM; });
     Game.genPtr = Game.gen.obstacles.length;
     /* 再開位置より手前のイベントだけ「済み」にする。
@@ -233,6 +248,14 @@ const Game = {
       /* 重力反転ワープ（契約§4.5 / S6）: prevDist → dist の間に跨いだゲートを実行する。
          判定（collide）より先に置く＝入れ替わった面で当たり判定される。 */
       Warp.update(Game);
+      /* 鏡ゾーン（§4.5 / S7）: 跨いだ面のキャラの左右を反転する。
+         入力の適用（applyInput）より後・判定より前に置くと、そのフレームの入力が
+         古い向きで処理されてしまう。**入力より先**に置くのが正しい…が、
+         ゲートは距離で跨ぐので prevDist→dist の更新後でなければ判定できない。
+         直後 1.0秒は障害物が無いため、1フレームのズレは公平性に影響しない。 */
+      Mirror.update(Game);
+      /* 入れ替えワープ（§4.5 / S7）: 上下の担当を入れ替える */
+      Swap.update(Game);
       if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
       Game.fireEvents();
       Setpieces.update(Game, d);
@@ -455,6 +478,12 @@ const Game = {
       flipN: Game.flipN,
       flipT: +Game.flipT.toFixed(3),
       warps: Warp.snapshot(Game),
+      /* 鏡ゾーン・入れ替えワープ（§4.5 / S7） */
+      mirrors: Mirror.snapshot(Game),
+      swaps: Swap.snapshot(Game),
+      /* 画面の上下が今どちらのキャラを担当しているか（§4.2 / 入れ替えワープ） */
+      zoneOwner: { bottom: (Game.runnerForZone('bottom') || {}).id || null,
+                   top: (Game.runnerForZone('top') || {}).id || null },
       /* 巨大魚の通過（§4.4 S5）: 画面占有と目玉 */
       fish: Setpieces.fishActive()
         ? { phase: Setpieces.fishPos(Game.dist).phase,

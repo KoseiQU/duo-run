@@ -40,7 +40,7 @@ const ZoneMirror = {
     /* 鏡の世界の配色 */
     silver:    0x7d8799,      // 鏡面（面）
     silverLit: 0xdde6f4,      // 稜線・縁（明部の主役。面積を小さく保つ）
-    silverDim: 0x2e3648,      // 影の側の銀
+    silverDim: 0x323b50,      // 影の側の銀
     frame:     0x0c0f16,      // 黒い枠・目地（暗部の主役）
     glass:     0xa9c0dc,      // 鏡のガラス（半透明）
     crystal:   0xbfe4ef,      // 結晶
@@ -59,6 +59,9 @@ const ZoneMirror = {
   },
   /* 薄い銀白の霧（契約§5）。近景は締まり、遠景は銀へ溶ける */
   fog: { color: 0x1d2433, near: 24, far: 84 },
+
+  /* 壁の鏡の「奥行きの詰め方」（1 = 本物の反射 / 0.5 = 半分。理由は _syncDoubles） */
+  MIRROR_DEPTH: 0.5,
 
   /* 虹の6色（帯・縁光・万華鏡が同じ配列を読む＝色の意味がぶれない） */
   RAINBOW: [0xff6a9c, 0xffb02e, 0x7ef08a, 0x4fd8ff, 0x6a7cff, 0xc07aff],
@@ -325,10 +328,10 @@ const ZoneMirror = {
     };
     add('lumen', 'floor', 0, 0.44);
     add('umbra', 'ceil', 0, 0.44);
-    add('lumen', 'wall', -1, 0.34);
-    add('umbra', 'wall', -1, 0.34);
-    add('lumen', 'wall', 1, 0.34);
-    add('umbra', 'wall', 1, 0.34);
+    add('lumen', 'wall', -1, 0.50);
+    add('umbra', 'wall', -1, 0.50);
+    add('lumen', 'wall', 1, 0.50);
+    add('umbra', 'wall', 1, 0.50);
     ZoneMirror._doubleGeo = [geoL, geoU];
   },
 
@@ -360,10 +363,14 @@ const ZoneMirror = {
         d.mesh.rotation.set(0, 0, 0);
         d.mesh.scale.set(1, 1, 1);
       } else {
-        /* 壁の鏡（壁区間だけ）。x を壁面で折り返し、左右を反転する */
+        /* 壁の鏡（壁区間だけ）。x を壁面で折り返し、左右を反転する。
+           ■ 奥行きは **半分に詰める**（MIRROR_DEPTH）。本物の反射（x' = 2·XW − x）だと
+             鏡像が回廊のずっと外に立ち、画面では「壁の外に浮かぶ人」に見えてしまう。
+             半分に詰めると鏡像が鏡面パネルの中に収まり、「鏡に映った自分」として読める。
+             本物の反射は禁止（負荷 / 契約§5）なので、ここは見え方を優先する。 */
         d.mesh.visible = wall;
         if (!wall) continue;
-        const px = d.side * XW * 2 - x;
+        const px = d.side * XW + (d.side * XW - x) * ZoneMirror.MIRROR_DEPTH;
         d.mesh.position.set(px, up ? off : (CFG.H - off), 0);
         d.mesh.rotation.set(0, 0, up ? 0 : Math.PI);
         d.mesh.scale.set(-1, up ? 1 : -1, 1);
@@ -456,7 +463,7 @@ const ZoneMirror = {
     const RB = ZoneMirror.RAINBOW;
 
     /* 共通の材質（虹の帯は加算・鏡面は半透明のガラス） */
-    const matGlass = new THREE.MeshBasicMaterial({ color: P.glass, transparent: true, opacity: 0.30,
+    const matGlass = new THREE.MeshBasicMaterial({ color: P.glass, transparent: true, opacity: 0.42,
                                                    depthWrite: false, fog: true, side: THREE.DoubleSide });
     ZoneMirror.glassMat = matGlass;
     const matSilver = ZoneKit.lam(P.silver);
@@ -982,7 +989,7 @@ const ZoneMirror = {
     hue(ZoneMirror.ringGlowMat, 0.85, 0.21);
     hue(ZoneMirror.wallGlowMat, 0.85, 0.17);
     hue(ZoneMirror.edgeBarMat, 0.85, 0.13);
-    if (ZoneMirror.glassMat) ZoneMirror.glassMat.opacity = 0.26 + 0.07 * Math.sin(t * 1.3);
+    if (ZoneMirror.glassMat) ZoneMirror.glassMat.opacity = 0.38 + 0.08 * Math.sin(t * 1.3);
 
     /* 大演出「鏡の砕け散り」（§4.4 S7）: 砕けた鏡片と大鏡が回廊を照らす */
     if (ZoneMirror.shatterKey) {
@@ -1127,7 +1134,8 @@ ZoneMirror.obstacleSkin = {
       const y0 = t.y0, y1 = t.y1, hh = y1 - y0, yc = (y0 + y1) / 2;
       const matDev = Obstacles._material('lvNode', C.dark);
       [[y0, 1], [y1, -1]].forEach((e) => {
-        solid(new THREE.CylinderGeometry(w * 0.26, w * 0.32, 0.22, 6), matDev, 0, e[0] + e[1] * 0.11, 0);
+        /* 口金は箱で作る（円柱だと z が判定 0.30 より太くなる＝見た目と判定がずれる） */
+        box(w * 0.86, 0.22, D * 1.1, matDev, 0, e[0] + e[1] * 0.11, 0);
         box(w * 0.62, 0.07, D * 1.16, Obstacles._emissive('lvLip', C.cyan), 0, e[0] + e[1] * 0.24, 0);
       });
       box(w * 0.72, hh, D * 0.7, beamMat(Obstacles._material('lvHalo', C.shield, 0.22)), 0, yc, 0);
