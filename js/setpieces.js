@@ -125,7 +125,13 @@ const Setpieces = {
     SWAY: 1.1,            // 距離のゆらぎ（生き物らしさ）
     DEATH: 1.7,           // ここまで詰まると押し潰される（＝死）
     RECOVER: 0.55,        // 遅れの回復（m/秒）。1回の被弾（約8m）は取り返せない
-    LOOKBACK: [[6, 26], [168, 186]]   // 振り返りカットの区間（障害物を置かない）
+    LOOKBACK: [[6, 26], [168, 186]],  // 振り返りカットの区間（障害物を置かない）
+    /* 振り返りカットでカメラを前へ出す量（2体の前から振り返る＝岩の輪郭が画面に入る）。
+       カット2は岩が近い（gap 11m）ので大きく引く。2026-09-22 実機評「茶色の塊に見える」 */
+    CUT_BACK: [6.4, 13.5],
+    /* 岩を照らす明かり（カット1は近景が飛ぶので弱く、カット2は輪郭を起こすので強く） */
+    EMBER: [30, 60],
+    EMBER_D: 24         // 明かりの届く距離（手前の遺跡を飛ばさない）
   },
 
   /* ---- 大ジャンプのキーフレーム（距離 m。すべてここから引く） ------------- */
@@ -208,6 +214,17 @@ const Setpieces = {
       if (rel > w[0] && rel < w[1]) k = Math.max(k, Math.sin(Math.PI * (rel - w[0]) / (w[1] - w[0])));
     }
     return k;
+  },
+  /* 今どちらの振り返りカットか（-1 = カット外）。カットごとに構図を変える */
+  lookBackCut(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'rockchase') return -1;
+    const rel = m - s.startM;
+    for (let i = 0; i < Setpieces.ROCK.LOOKBACK.length; i++) {
+      const w = Setpieces.ROCK.LOOKBACK[i];
+      if (rel > w[0] && rel < w[1]) return i;
+    }
+    return -1;
   },
   /* 巨岩との距離（m）。詰まりきると押し潰される */
   rockGap() { const s = Setpieces.state; return (s && s.id === 'rockchase') ? s.gap : Infinity; },
@@ -446,6 +463,7 @@ const Setpieces = {
         fogColor: 0x6a4a22,                               // 舞い上がる土煙
         glide: 0,
         lookBack: lb,
+        lookBackCut: Setpieces.lookBackCut(s.dist || s.startM),
         prox: p
       };
     }
@@ -493,14 +511,29 @@ const Setpieces = {
     const R = Setpieces.ROCK.R;
     const g = new THREE.Group();
     g.visible = false;
-    /* 岩肌: 正20面体を砕いて凹凸をつける（テクスチャ画像は使わない / 契約§3） */
-    const geo = new THREE.IcosahedronGeometry(R, 2);
+    /* 岩肌: 正20面体を細かく割り、**頂点を乱して凹凸を彫る**（テクスチャ画像は使わない / 契約§3）。
+       ・大きなうねり（塊感）＋ 細かいざらつき（岩肌）
+       ・**帯状の溝**を3本（軸違い）彫る＝球の緯線に見えるので、転がりが目で追える
+       2026-09-22 実機評「茶色の塊に見えて球と読めない」への対応。 */
+    const geo = new THREE.IcosahedronGeometry(R, 4);
     const pos = geo.attributes.position;
     const v = new THREE.Vector3();
+    /* 溝の軸（この軸まわりの緯線を凹ませる） */
+    const axes = [new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0.35, 0).normalize(),
+                  new THREE.Vector3(0.2, -0.4, 1).normalize()];
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i);
-      const h = Math.abs(Math.sin(v.x * 3.1 + v.y * 5.7 + v.z * 2.3)) % 1;
-      v.multiplyScalar(0.86 + h * 0.2);
+      const n = v.clone().normalize();
+      const big = Math.sin(n.x * 2.1 + n.y * 1.7) * Math.cos(n.z * 2.4 - n.y * 1.1);   // うねり
+      const fine = Math.abs(Math.sin(n.x * 11.3 + n.y * 17.1 + n.z * 13.7)) % 1;       // ざらつき
+      let k = 0.90 + big * 0.055 + fine * 0.045;   // 最大 1.0（判定の半径を超えない）
+      /* 帯状の溝: 軸からの角度が帯に近いところを深く削る */
+      for (let a = 0; a < axes.length; a++) {
+        const c = n.dot(axes[a]);
+        const band = Math.exp(-Math.pow((Math.abs(c) - 0.42) / 0.10, 2));
+        k -= 0.105 * band;
+      }
+      v.copy(n).multiplyScalar(R * k);
       pos.setXYZ(i, v.x, v.y, v.z);
     }
     geo.computeVertexNormals();
@@ -509,17 +542,30 @@ const Setpieces = {
     g.add(spin);
     const body = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x6b5734, flatShading: true }));
     spin.add(body);
-    /* 抉れた面（色違いの岩）と、転がるのが分かる帯 */
-    const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.92, R * 0.10, 5, 12),
-                                new THREE.MeshLambertMaterial({ color: 0x6d5836, flatShading: true }));
-    band.rotation.y = Math.PI / 2;
-    spin.add(band);
+    /* 溝に沿って走る色の違う帯（転がりが一目で分かる） */
+    axes.forEach((ax, i) => {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(R * 0.90, R * 0.085, 5, 24),
+                                  new THREE.MeshLambertMaterial({ color: i ? 0xa78d58 : 0x3a2d1b, flatShading: true }));
+      /* トーラスは xy 平面にできるので、その法線(z)を溝の軸に向ける */
+      band.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), ax);
+      spin.add(band);
+    });
+    /* 抉れた面（色違いの岩塊）と、えぐれたクレーター（暗い凹み） */
     [[0.6, 0.5, 0.4], [-0.5, -0.4, 0.6], [0.2, -0.7, -0.5]].forEach((q, i) => {
       const c = new THREE.Mesh(new THREE.BoxGeometry(R * 0.6, R * 0.5, R * 0.55),
                                new THREE.MeshLambertMaterial({ color: i ? 0xa38c5e : 0x76613c, flatShading: true }));
       c.position.set(q[0] * R * 0.8, q[1] * R * 0.8, q[2] * R * 0.8);
       c.rotation.set(q[0] * 2, q[1] * 2, q[2] * 2);
       spin.add(c);
+    });
+    [[0.9, 0.2, 0.35], [-0.3, 0.85, -0.4], [0.35, -0.6, 0.72], [-0.8, -0.2, -0.55]].forEach((q, i) => {
+      const n2 = new THREE.Vector3(q[0], q[1], q[2]).normalize();
+      const cr = new THREE.Mesh(new THREE.SphereGeometry(R * (0.20 + 0.06 * (i % 2)), 10, 8),
+                                new THREE.MeshLambertMaterial({ color: 0x3f3220, flatShading: true }));
+      cr.position.copy(n2).multiplyScalar(R * 0.90);
+      cr.scale.set(1, 1, 0.55);
+      cr.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n2);
+      spin.add(cr);
     });
     /* 砕けた石が周りに舞う（巨岩と一緒に転がってくる破片） */
     const deb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
@@ -588,6 +634,7 @@ const Setpieces = {
     d.mat.color.copy(d.base);
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 26 * (0.75 + 0.25 * Math.sin(s.t * 7.3));
+      Setpieces.emberLight.distance = 42;
       Setpieces.emberLight.position.z = 10;
     }
     d.mat.opacity = 0.34;
@@ -677,9 +724,14 @@ const Setpieces = {
     }
     /* 巨岩を照らす明かり（岩の手前に置いて面を起こす＝振り返ったときに形が読める） */
     if (Setpieces.emberLight) {
+      /* カット1は手前の遺跡が飛ぶので弱く、カット2は岩の輪郭を起こすので強く（2026-09-22） */
+      const cut = Setpieces.lookBackCut(dist);
+      const base = Setpieces.ROCK.EMBER[cut < 0 ? 0 : cut];
       Setpieces.emberLight.color.setHex(0xffb066);
-      Setpieces.emberLight.intensity = 60 * (0.85 + 0.15 * Math.sin(s.t * 9.1));
-      Setpieces.emberLight.position.set(0, CFG.H / 2, s.gap - Setpieces.ROCK.R - 3.2);
+      Setpieces.emberLight.intensity = base * (0.85 + 0.15 * Math.sin(s.t * 9.1));
+      /* 岩のすぐ手前に置き、届く距離を絞る＝岩の面だけを起こし、手前の遺跡は飛ばさない */
+      Setpieces.emberLight.distance = Setpieces.ROCK.EMBER_D;
+      Setpieces.emberLight.position.set(0, CFG.H / 2, s.gap - Setpieces.ROCK.R - 1.4);
     }
   },
 
@@ -693,6 +745,7 @@ const Setpieces = {
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 0;
       Setpieces.emberLight.color.setHex(0xff5a2a);
+      Setpieces.emberLight.distance = 42;
       Setpieces.emberLight.position.set(0, CFG.H / 2, 14);
     }
     Zones.setGlide(0);

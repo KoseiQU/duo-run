@@ -517,7 +517,10 @@ const World = {
     const lb = (fx && fx.lookBack) ? fx.lookBack : 0;
     if (lb > 0.001) {
       const k = U.smooth(lb);
-      World.camera.position.set(avgX * 0.10 + sx, CFG.CAM.Y + 0.9 * k + sy + camUp, CFG.CAM.Z - 6.4 * k - push);
+      /* カットごとに引く量が違う（近いカット2ほど前へ出て、岩の輪郭を画面に収める） */
+      const cut = (fx.lookBackCut === undefined) ? 0 : fx.lookBackCut;
+      const back = Setpieces.ROCK.CUT_BACK[Math.max(0, cut)] || Setpieces.ROCK.CUT_BACK[0];
+      World.camera.position.set(avgX * 0.10 + sx, CFG.CAM.Y + 0.9 * k + sy + camUp, CFG.CAM.Z - back * k - push);
       World.camera.lookAt(sx * 0.5, CFG.CAM.LOOK_Y + 0.45 * k + sy * 0.5 + lookUp,
                           U.lerp(CFG.CAM.LOOK_Z, 26, k));
     } else {

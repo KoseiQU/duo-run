@@ -384,6 +384,62 @@
   });
 
   /* ==========================================================================
+     5.5 P2c-2: 巨岩（S3）の判読性 — 振り返りカット2の構図
+     ========================================================================== */
+  DUO.__suites.push({
+    name: 'P2c-2: 巨岩の振り返りカット2は岩の輪郭が画面に入る（占有 55〜80%）',
+    quick: true,
+    run(t) {
+      const In = I(), Sp = In.Setpieces, W = In.World, R = Sp.ROCK;
+      W.setViewport(812, 375, 1);
+      t.eq(R.CUT_BACK.length, R.LOOKBACK.length, 'カットごとにカメラの引き量が定義されている');
+      t.ok(R.CUT_BACK[1] > R.CUT_BACK[0], 'カット2のほうが大きく引く（岩が近いので）');
+      const peak = (cut) => {
+        DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(960);
+        let g = 0, best = 0, bestLb = 0;
+        /* カットの手前までは更新だけ（描画は重い）。カットに入ってから描いて測る。 */
+        const from = R.LOOKBACK[cut][0] - 6;
+        while (Game.status === 'playing' && g++ < 9000 &&
+               (!Sp.state || Game.dist < Sp.state.startM + from)) DUO.__step(1 / 60);
+        g = 0;
+        while (Game.status === 'playing' && g++ < 9000) {
+          DUO.pump(1 / 60);
+          const i = Sp.lookBackCut(Game.dist), lb = Sp.lookBack(Game.dist);
+          if (i === cut && lb > bestLb) { bestLb = lb; best = Sp.rockOnScreen(); }
+          if (i < cut && bestLb > 0) break;
+          if (Sp.state && Game.dist > Sp.state.startM + 200) break;
+        }
+        return { cover: best, lb: bestLb };
+      };
+      const c2 = peak(1);
+      t.ok(c2.lb > 0.9, 'カット2の頂点まで到達（振り返り ' + c2.lb.toFixed(2) + '）');
+      t.ok(c2.cover >= 0.55 && c2.cover <= 0.80,
+           'カット2の巨岩が画面の ' + (c2.cover * 100).toFixed(0) + '%（55〜80%＝輪郭が画面に入る）');
+      /* 岩の造形: 球を割って頂点を乱し、溝の帯を彫ってある（転がりが読める） */
+      const geo = Sp.rock.body.geometry;
+      t.ok(geo.attributes.position.count >= 1000, '岩は細かく割ってある（頂点 ' + geo.attributes.position.count + '）');
+      let rMin = 1e9, rMax = 0;
+      const p = geo.attributes.position;
+      for (let i = 0; i < p.count; i += 7) {
+        const d = Math.sqrt(p.getX(i) * p.getX(i) + p.getY(i) * p.getY(i) + p.getZ(i) * p.getZ(i));
+        rMin = Math.min(rMin, d); rMax = Math.max(rMax, d);
+      }
+      t.ok(rMax - rMin > R.R * 0.12, '半径が ' + (rMax - rMin).toFixed(2) + 'm ぶら付く＝凹凸と溝が彫られている');
+      t.ok(rMax <= R.R + 1e-6, '彫った結果が半径 ' + R.R + 'm を超えない（判定と食い違わない）');
+      /* 転がりに合わせて模様が回る（走行距離の関数） */
+      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(960);
+      let g2 = 0;
+      while (Sp.id() !== 'rockchase' && g2++ < 9000) DUO.__step(1 / 60);
+      const rot0 = Sp.rock.spin.rotation.x;
+      for (let i = 0; i < 40; i++) DUO.pump(1 / 60);
+      t.ok(Math.abs(Sp.rock.spin.rotation.x - rot0) > 0.5, '進むと岩が転がる（模様が回る）');
+      /* 明かりは近景を飛ばさない強さに（カット1 < カット2） */
+      t.ok(R.EMBER[0] < R.EMBER[1], 'カット1の明かりはカット2より弱い（近景が飛ばない）');
+      DUO.reset(); W.resize();
+    }
+  });
+
+  /* ==========================================================================
      6. エンドレスの加速（契約§4.4 2026-09-21 改訂）
      ========================================================================== */
   DUO.__suites.push({
