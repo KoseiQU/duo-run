@@ -193,6 +193,44 @@ const Setpieces = {
         { at: 146, type: 'fish.eye' },
         { at: 200, type: 'fish.end' }
       ]
+    },
+
+    /* ====================================================================
+       S6「区画爆発」（契約§4.4 / P4b）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0      予告（HUD「BLAST!」）＋ 隔壁の向こうで警告灯が回り始める
+         6〜54  減圧警報の中を走る（崩れた支柱・落ちた防護フィールド・瓦礫）
+         64〜94 **カメラカット**（隔壁側＝左へ 1秒カメラを振る）。
+                その向こうで区画が爆ぜ、炎と破片が広がるのを見せる
+                （契約§8 の決定ログ: 巨大演出はカメラを向けるカット方式）。
+                この窓には障害物を置かない＝§4.7 の視認距離も守れる
+         80     火球が最大（カットの真ん中）
+         100    **爆風で吹き飛ばされる** → 合体（DUO体）→ 自由飛行（§4.5 を流用）
+         100〜176 回転しながら破片（コンテナ・パネル・配管）を避ける
+         176    次の区画へ**着地**（分離・2.0秒の猶予＝障害物なし）
+         200    減圧警報の中を走り抜けてゴール
+       §4.7 は通常どおり（演出でも理不尽な死を作らない）。
+       ==================================================================== */
+    blastout: {
+      id: 'blastout',
+      lengthM: 200,
+      floor: [
+        { at: 6,  lane: -1, type: 'PILLAR' },    // 崩れた支柱（both＝両者レーン移動）
+        { at: 22, lane: 1,  type: 'LASER_V' },   // 落ちてきた防護フィールド（both）
+        { at: 38, lane: 0,  type: 'PILLAR' },    // 通路を塞ぐ瓦礫
+        { at: 54, lane: 0,  type: 'ROVER' }      // 転がったコンテナ（跳ぶ）
+      ],
+      ceil: [
+        { at: 54, lane: 1, type: 'ROVER' }
+      ],
+      air: true,                     // 自由飛行の区間を持つ演出（§4.5 を流用）
+      landRel: 176,                  // 着地（＝この後 GRACE_T 秒は障害物なし）
+      events: [
+        { at: 0,   type: 'blast.start' },
+        { at: 64,  type: 'blast.cut' },
+        { at: 176, type: 'blast.land' },
+        { at: 200, type: 'blast.end' }
+      ]
     }
   },
 
@@ -269,6 +307,40 @@ const Setpieces = {
     SETTLE_D: 0.55        // 沈み込み量
   },
 
+  /* ---- 区画爆発のキーフレーム（距離 m。すべてここから引く） ---------------
+     大ジャンプ（BJ）と同じ形の表なので、自由飛行の仕組みをそのまま流用できる。
+     発射台の勾配は無い（爆風で吹き飛ばされるので RAMP_H / KICK は 0）。 */
+  BL: {
+    RAMP0: 0, RAMP1: 0, LIP: 100, LAND: 176, END: 200,
+    RAMP_H: 0,            // 勾配なし（吹き飛ばされる）
+    KICK: 0,
+    ARC: 2.4,             // 吹き飛ばされた弧
+    ARC_PEAK: 0.30,
+    SETTLE: 10,           // 着地の沈み込みが収まるまでの距離
+    SETTLE_D: 0.70,
+    /* 爆発のカット（契約§8 の決定ログ「カメラを向けるカット」） */
+    SIDE0: 64, SIDE1: 94,
+    BOOM: 80,             // 火球が最大になる相対距離（カットの真ん中）
+    BLAST_X: -58,         // 隔壁の向こう（開放区間の外）で爆ぜる位置。
+                          //   近すぎると画面が炎で埋まって「何が爆ぜたか」が読めない
+                          //   （契約§8 の決定ログ: 背景を空けて輪郭で見せる）
+    BLAST_Y: 2.0,
+    R: 20,                // 火球の最大半径（コリドー 3.6×4.0 よりはるかに大きい）
+    DEB_N: 34,            // 飛び散る破片の数
+    SPIN: 2.6             // 吹き飛ばされて回る量（rad・見た目だけ）
+  },
+
+  /* 自由飛行を持つ大演出の「キーフレーム表」。id から引く唯一の窓口。
+     ＝ 大ジャンプ（S2）と区画爆発（S6）が同じ仕組みを共有する。 */
+  keys(st) {
+    const s = (st === undefined) ? Setpieces.state : st;
+    if (!s) return null;
+    if (s.id === 'bigjump') return Setpieces.BJ;
+    if (s.id === 'blastout') return Setpieces.BL;
+    return null;
+  },
+  airActive() { return !!Setpieces.keys(); },
+
   /* ---- 生成（createGenerator から呼ばれる） ------------------------------- */
   /* scale …「その地点の速度 / 基準速度」。演出の at は実寸だが、落ちる天井や
      同時スイッチの**時刻規則**はここを通して実寸の秒へ直す（§4.7 と同じ考え方）。 */
@@ -333,6 +405,19 @@ const Setpieces = {
       if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('EXIT', '崩れる出口を潜り抜けろ');
     } else if (e.type === 'temple.end') {
       if (Setpieces.state) Setpieces.state.ending = true;
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'blast.start') {
+      Setpieces.state = { id: 'blastout', startM: e.at, t: 0, phase: 'ramp', land: 0,
+                          speed: (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN,
+                          course: null, split: -1 };
+      Setpieces.makeAir(e.at);
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('BLAST!', '区画が爆ぜる ／ 吹き飛ばされる', 'high');
+    } else if (e.type === 'blast.cut') {
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'blast.land') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('ALARM', '減圧警報の中を走り抜けろ');
+    } else if (e.type === 'blast.end') {
+      if (Setpieces.state) Setpieces.state.phase = 'done';
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     } else if (e.type === 'fish.start') {
       Setpieces.state = { id: 'megafish', startM: e.at, t: 0 };
@@ -446,6 +531,82 @@ const Setpieces = {
     return b ? World.projectCoverage(b) : 0;
   },
 
+  /* ---- 区画爆発（距離の関数。フレームに依存しない / 契約§4.4 S6） --------- */
+  blastActive() { const s = Setpieces.state; return !!(s && s.id === 'blastout'); },
+  /* 火球の大きさ 0..1。膨らんで、広がって、消える */
+  blastK(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'blastout') return 0;
+    const B = Setpieces.BL, rel = m - s.startM;
+    const up = U.clamp((rel - (B.BOOM - 14)) / 14, 0, 1);
+    const down = U.clamp(1 - (rel - (B.BOOM + 18)) / 44, 0, 1);
+    return U.smooth(up) * down;
+  },
+  /* 火球の位置（世界座標。z は 2体から見た奥行き＝手前が +z）。
+     見た目・照明・監査（画面占有の測定）がすべてこの1本から引く。 */
+  blastPos(m) {
+    const s = Setpieces.state, B = Setpieces.BL;
+    if (!s || s.id !== 'blastout') return { vis: false, x: 0, y: 0, z: 0, r: 0 };
+    const k = Setpieces.blastK(m);
+    /* カットの間は（まだ爆ぜる前でも）区画そのものを見せる＝「何が爆ぜたか」が読める */
+    return { vis: k > 0.001 || Setpieces.blastSideK(m) > 0.01, k: k,
+             x: B.BLAST_X, y: B.BLAST_Y,
+             z: -((s.startM + B.BOOM) - m), r: B.R * (0.25 + 0.75 * k) };
+  },
+  /* 火球の外接箱（契約§4.4 S6「爆発の巨大さが画面で分かる」の測定窓口） */
+  blastBox(m) {
+    const p = Setpieces.blastPos((m === undefined) ? (Setpieces.state ? Setpieces.state.dist : 0) : m);
+    if (!p.vis) return null;
+    return { x0: p.x - p.r, x1: p.x + p.r, y0: p.y - p.r, y1: p.y + p.r,
+             z0: p.z - p.r, z1: p.z + p.r };
+  },
+  /* 炎と破片が画面をどれだけ覆っているか 0..1（描いていないときは 0） */
+  blastOnScreen(m) {
+    const b = Setpieces.blast;
+    if (!b || !b.group.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    const bx = Setpieces.blastBox(m);
+    return bx ? World.projectCoverage(bx) : 0;
+  },
+  /* 横向きカットの強さ 0..1（0→1→0）。World.syncCamera がこれを読んで首を左へ振る。
+     巨岩の lookBack・巨大魚の fishSideK と同じ仕組み・同じ約束（契約§8 の決定ログ）。 */
+  blastSideK(m) {
+    const s = Setpieces.state, B = Setpieces.BL;
+    if (!s || s.id !== 'blastout') return 0;
+    const rel = m - s.startM;
+    if (rel <= B.SIDE0 - 4 || rel >= B.SIDE1 + 4) return 0;
+    return Math.sin(Math.PI * U.clamp((rel - (B.SIDE0 - 4)) / ((B.SIDE1 + 4) - (B.SIDE0 - 4)), 0, 1));
+  },
+  /* カットのあいだ、回廊の小物を間引く割合 0..1（ゾーンが読む）。
+     火球の輪郭を見せるには背景が要る。 */
+  blastClearK(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'blastout') return 0;
+    const B = Setpieces.BL, rel = m - s.startM;
+    return 0.88 * U.smooth(U.clamp((rel - (B.SIDE0 - 10)) / 10, 0, 1)) *
+                  U.smooth(U.clamp(((B.SIDE1 + 6) - rel) / 12, 0, 1));
+  },
+  /* 火球が回廊を照らす強さ 0..1（ゾーンが読む） */
+  blastLightK(m) { return Setpieces.blastK(m); },
+  /* 大演出の間はゾーンの区間パターンを **開放区間** に固定する（ゾーンが読む）。
+     壁があると、隣の区画で起きる爆発が隠れて画面に映らない。 */
+  blastOpenSection(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'blastout') return false;
+    const rel = m - s.startM;
+    return rel > -24 && rel < Setpieces.BL.END + 24;
+  },
+  /* 吹き飛ばされた DUO体の回転（見た目だけ・契約§4.4「回転しながら」） */
+  blastSpin(m) {
+    const s = Setpieces.state, B = Setpieces.BL;
+    if (!s || s.id !== 'blastout') return 0;
+    const rel = m - s.startM;
+    if (rel < B.LIP) return 0;
+    const u = U.clamp((rel - B.LIP) / (B.LAND - B.LIP), 0, 1);
+    /* 飛び出しで一気に回り、着地に向けて姿勢が戻る */
+    return B.SPIN * Math.sin(Math.PI * u) * (1 - u * 0.25);
+  },
+
   /* ---- 神殿崩壊（距離の関数。フレームに依存しない） ----------------------- */
   templeActive() { const s = Setpieces.state; return !!(s && s.id === 'templefall'); },
   /* 出口の光 0..1（霧が晴れて外の光が差す） */
@@ -552,20 +713,21 @@ const Setpieces = {
   /* 演出開始からの相対距離 */
   _rel(m) {
     const s = Setpieces.state;
-    return (s && s.id === 'bigjump') ? (m - s.startM) : null;
+    return (s && Setpieces.keys(s)) ? (m - s.startM) : null;
   },
   /* 滑空中か（＝レーンも床/天井も無い自由飛行の区間・契約§4.5 改訂） */
   glideActive() {
     const s = Setpieces.state;
-    return !!(s && s.id === 'bigjump' && s.phase === 'glide');
+    return !!(s && Setpieces.keys(s) && s.phase === 'glide');
   },
 
   /* ---- DUO体（2人が手を繋いだ1体 / 契約§4.5 2026-09-21 改訂） ------------
      0 = 別々の2体 ／ 1 = 完全に合体。発射台の手前 0.4秒で 0→1、着地後 0.3秒で 1→0。 */
   duoK(m) {
     const s = Setpieces.state;
-    if (!s || s.id !== 'bigjump') return 0;
-    const B = Setpieces.BJ, rel = m - s.startM, sp = Math.max(4, s.speed || CFG.SPEED_MIN);
+    const B = Setpieces.keys(s);
+    if (!s || !B) return 0;
+    const rel = m - s.startM, sp = Math.max(4, s.speed || CFG.SPEED_MIN);
     if (rel < B.LIP) return U.clamp(1 - (B.LIP - rel) / (sp * FF.MERGE_T), 0, 1);
     if (rel < B.LAND) return 1;
     return U.clamp(1 - (rel - B.LAND) / (sp * FF.SPLIT_T), 0, 1);
@@ -577,7 +739,7 @@ const Setpieces = {
 
   /* ---- 自由飛行の譜面（シード固定・ゾーン非依存） ------------------------ */
   buildAir(seed, startM, speedAt) {
-    const B = Setpieces.BJ;
+    const B = Setpieces.keys() || Setpieces.BJ;
     return FF.build(seed, startM + B.LIP, startM + B.LAND, speedAt);
   },
   makeAir(startM) {
@@ -609,7 +771,7 @@ const Setpieces = {
   viewLift(m) {
     const rel = Setpieces._rel(m);
     if (rel === null) return 0;
-    const B = Setpieces.BJ;
+    const B = Setpieces.keys();
     if (rel <= B.RAMP0) return 0;
     if (rel <= B.RAMP1) return B.RAMP_H * U.smooth((rel - B.RAMP0) / (B.RAMP1 - B.RAMP0));
     if (rel <= B.LIP) return B.RAMP_H + B.KICK * (rel - B.RAMP1) / (B.LIP - B.RAMP1);
@@ -629,12 +791,16 @@ const Setpieces = {
   tileHidden(m) {
     const rel = Setpieces._rel(m);
     if (rel === null) return false;
-    return rel > Setpieces.BJ.LIP && rel < Setpieces.BJ.LAND;
+    const B = Setpieces.keys();
+    return rel > B.LIP && rel < B.LAND;
   },
-  /* 発射台の点滅ライン（予告）の強さ 0..1 */
+  /* 発射台の点滅ライン（予告）の強さ 0..1。
+     区画爆発（S6）には発射台が無い（爆風で飛ばされる）ので出さない。 */
   rampCue(m) {
     const rel = Setpieces._rel(m);
     if (rel === null) return 0;
+    const s = Setpieces.state;
+    if (s && s.id !== 'bigjump') return 0;
     const B = Setpieces.BJ;
     if (rel < -6 || rel > B.LIP) return 0;
     return U.clamp(1 - Math.abs(rel - B.RAMP1) / 46, 0, 1);
@@ -646,8 +812,8 @@ const Setpieces = {
     if (!s) return;
     s.t += dt;
     s.dist = game.dist;                       // 距離基準の判定に使う（glideActive など）
-    if (s.id === 'bigjump') {
-      const B = Setpieces.BJ;
+    if (Setpieces.keys(s)) {
+      const B = Setpieces.keys(s);
       const rel = game.dist - s.startM;
       s.speed = game.speed;
       const prev = s.phase;
@@ -727,6 +893,13 @@ const Setpieces = {
       if (ahead < -4 || ahead > 40) return 0;
       return (0.012 + 0.05 * p) * (1 - U.clamp(ahead / 40, 0, 1)) * Math.sin(s.t * 31 + atM * 2.1);
     }
+    if (s && s.id === 'blastout') {
+      /* 爆発の衝撃で回廊が震える（落とさないので公平性には影響しない） */
+      const k = Setpieces.blastK(dist);
+      const ahead = atM - dist;
+      if (ahead < -6 || ahead > 60) return 0;
+      return (0.010 + 0.075 * k) * (1 - U.clamp(ahead / 60, 0, 1)) * Math.sin(s.t * 34 + atM * 2.0);
+    }
     if (s && s.id === 'megafish') {
       /* 巨大魚が追い抜くとき、押された水で床と天井が波打つ（落とさない） */
       const side = Setpieces.fishSideK(dist);
@@ -782,6 +955,34 @@ const Setpieces = {
         fogFar: U.lerp(104, 210, g),                      // 遠くまで見える＝高さが出る
         fogColor: g > 0.02 ? 0x2b3a86 : 0x1e2a5e,
         glide: g
+      };
+    }
+    if (s.id === 'blastout') {
+      const B = Setpieces.BL, m = s.dist || s.startM, rel = m - s.startM;
+      const lift = Setpieces.viewLift(m);
+      /* 滑空の強さ（吹き飛ばされてから着地まで）と、着地の衝撃 */
+      const g = (s.phase === 'glide')
+        ? U.clamp((rel - B.LIP) / 14, 0, 1) * U.clamp((B.LAND - rel) / 10, 0, 1)
+        : 0;
+      const impact = (s.phase === 'land') ? Math.max(0, 1 - s.land / B.SETTLE) : 0;
+      const k = Setpieces.blastK(m);
+      const side = Setpieces.blastSideK(m);
+      /* 爆発の熱で霧の色がわずかに焦げる（宇宙の闇＋炎の照り返し） */
+      const col = new THREE.Color(0x03040a).lerp(new THREE.Color(0x2c1208), U.clamp(k * 0.9, 0, 1));
+      return {
+        shake: 0.016 + 0.125 * k * (0.6 + 0.4 * Math.sin(s.t * 33))
+             + 0.17 * impact * (0.6 + 0.4 * Math.sin(s.t * 41)) + 0.012 * g,
+        fovAdd: 3 + 7 * g + 4 * impact + 5 * k,
+        camBack: 1.4 * g,
+        camUp: lift + 0.50 * g + 0.18 * side,
+        lookUp: lift - 0.70 * g,
+        /* 宇宙は透明＝遠くまで開ける（カット中と滑空中はさらに開く） */
+        fogFar: U.lerp(96, 210, Math.max(g, side * 0.8)),
+        fogColor: col.getHex(),
+        glide: g,
+        /* 横向きカット（§4.4 S6）: World.syncCamera がこれを読んで首を左へ振る */
+        lookSide: side,
+        blast: k
       };
     }
     if (s.id === 'rockchase') {
@@ -880,6 +1081,7 @@ const Setpieces = {
     Setpieces._buildRock(scene);
     Setpieces._buildTemple(scene);
     Setpieces._buildFish(scene);
+    Setpieces._buildBlast(scene);
   },
 
   /* ---- 巨大魚（S5「巨大魚の通過」）の造形 --------------------------------
@@ -1325,6 +1527,181 @@ const Setpieces = {
     }
   },
 
+  /* ---- 区画爆発（S6「区画爆発」）の造形 ----------------------------------
+     ・隣の区画（回廊の外・左）で起きる爆発。火球はコリドーよりはるかに大きい。
+     ・**普段は描かない**。カメラを向けるカット（blastSideK）の間だけ画面に入る
+       （契約§8 の決定ログ: 巨大演出はカメラを向けるカット方式）。
+     ・テクスチャ画像は使わない（契約§3）。加算合成の球と輪、飛ぶ破片で作る。 */
+  _buildBlast(scene) {
+    const B = Setpieces.BL;
+    const g = new THREE.Group();
+    g.visible = false;
+    const add = (color, op) => new THREE.MeshBasicMaterial({
+      color: color, transparent: true, opacity: op, depthWrite: false,
+      blending: THREE.AdditiveBlending, fog: false
+    });
+    /* 火球（内側の白熱 → 橙 → 外側の煙）。3層の球で「奥行きのある塊」にする */
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), add(0xfff2c8, 0.95));
+    const mid = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), add(0xff8a1e, 0.60));
+    const out = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), add(0xff3a10, 0.32));
+    const smoke = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1),
+                                 new THREE.MeshBasicMaterial({ color: 0x241612, transparent: true,
+                                                               opacity: 0.55, depthWrite: false, fog: false }));
+    smoke.renderOrder = -1;
+    g.add(smoke, out, mid, core);
+    /* 衝撃波の輪（平たいトーラスが広がる） */
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.055, 6, 28), add(0xffd9a0, 0.85));
+    ring.rotation.y = Math.PI / 2;
+    g.add(ring);
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 6, 24), add(0x9fd8ff, 0.6));
+    ring2.rotation.y = Math.PI / 2;
+    g.add(ring2);
+    /* 吹き飛ぶ破片（隔壁・パネル・配管の欠片）。爆心から放射状に飛ぶ */
+    const deb = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1),
+                                        new THREE.MeshLambertMaterial({ color: 0x9aa3b2, flatShading: true }),
+                                        B.DEB_N);
+    deb.frustumCulled = false;
+    deb.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    g.add(deb);
+    /* **爆ぜる区画そのもの**（隣のモジュール）。火球の向こうに見える暗い構造体で、
+       「station の1区画が吹き飛んだ」と読めるようにする（契約§8 の決定ログ）。 */
+    const mod = new THREE.Group();
+    const hull = new THREE.MeshLambertMaterial({ color: 0x6d7687, flatShading: true });
+    const dark = new THREE.MeshLambertMaterial({ color: 0x2b3038, flatShading: true });
+    mod.add(new THREE.Mesh(ZoneKit.merge([
+      { g: new THREE.CylinderGeometry(9, 9, 26, 12), p: [0, 0, -22], r: [Math.PI / 2, 0, 0] },
+      { g: new THREE.CylinderGeometry(11, 11, 3, 12), p: [0, 0, -34], r: [Math.PI / 2, 0, 0] },
+      { g: ZoneKit.box(3, 3, 22), p: [9, 5, -22] },
+      { g: ZoneKit.box(26, 2, 2), p: [0, 11, -16] }
+    ]), hull));
+    /* 反対側は千切れて骨組みだけ（爆心の側） */
+    mod.add(new THREE.Mesh(ZoneKit.merge([
+      { g: ZoneKit.box(2, 2, 16), p: [6, 6, 16] },
+      { g: ZoneKit.box(2, 2, 14), p: [-7, 4, 14], r: [0.2, 0, 0.3] },
+      { g: ZoneKit.box(2, 2, 12), p: [3, -7, 13], r: [-0.3, 0, 0] },
+      { g: new THREE.CylinderGeometry(9.4, 9.4, 1.6, 12), p: [0, 0, 8], r: [Math.PI / 2, 0, 0] },
+      { g: ZoneKit.box(12, 0.6, 9), p: [4, 8, 20], r: [0.5, 0.2, 0] },
+      { g: ZoneKit.box(9, 0.6, 8), p: [-6, -8, 22], r: [-0.4, 0.3, 0.2] }
+    ]), dark));
+    g.add(mod);
+    /* 火の粉（小さな加算の板） */
+    const sparks = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.5, 0.5), add(0xffc06a, 0.9), 40);
+    sparks.frustumCulled = false;
+    sparks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    sparks.renderOrder = 6;
+    g.add(sparks);
+    scene.add(g);
+    /* 回廊の中を横切る閃光（爆発の瞬間、画面全体が白く飛ぶ） */
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffe6b4, transparent: true, opacity: 0,
+                                                   depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const flash = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2 + 3.4, CFG.H + 3.4), flashMat);
+    flash.renderOrder = 8;
+    flash.visible = false;
+    scene.add(flash);
+    Setpieces.blast = { group: g, core: core, mid: mid, out: out, smoke: smoke, mod: mod,
+                        ring: ring, ring2: ring2, deb: deb, sparks: sparks,
+                        flash: flash, flashMat: flashMat, n: B.DEB_N,
+                        dummy: new THREE.Object3D() };
+  },
+
+  _hideBlast() {
+    const b = Setpieces.blast;
+    if (!b) return;
+    if (b.group.visible) b.group.visible = false;
+    if (b.flash.visible) { b.flash.visible = false; b.flashMat.opacity = 0; }
+  },
+
+  /* 火球・衝撃波・破片・閃光の更新（すべて距離の関数） */
+  _syncBlast(dist, t) {
+    const s = Setpieces.state, b = Setpieces.blast, B = Setpieces.BL, d = Setpieces.dust;
+    if (!b) return;
+    const k = Setpieces.blastK(dist);
+    const p = Setpieces.blastPos(dist);
+    b.group.visible = p.vis;
+    if (p.vis) {
+      b.group.position.set(p.x, p.y, p.z);
+      /* 爆ぜる区画は少し前から見えている（カットが始まった時点で「何が」が分かる） */
+      b.mod.rotation.set(Math.sin(t * 0.3) * 0.02, 0.2, Math.sin(t * 0.25) * 0.03);
+      const r = p.r;
+      const puff = 1 + 0.05 * Math.sin(t * 9.3);
+      b.core.scale.setScalar(r * 0.42 * puff);
+      b.mid.scale.setScalar(r * 0.72 * puff);
+      b.out.scale.setScalar(r * 1.00);
+      b.smoke.scale.setScalar(r * 1.24);
+      b.core.rotation.set(t * 0.5, t * 0.35, 0);
+      b.mid.rotation.set(-t * 0.3, t * 0.5, 0);
+      b.smoke.rotation.set(t * 0.12, -t * 0.2, 0);
+      b.core.material.opacity = 0.95 * k;
+      b.mid.material.opacity = 0.60 * k;
+      b.out.material.opacity = 0.32 * k;
+      b.smoke.material.opacity = 0.55 * Math.min(1, k * 1.4);
+      /* 衝撃波は爆心から広がって薄くなる */
+      const rel = dist - s.startM;
+      const w = U.clamp((rel - (B.BOOM - 12)) / 46, 0, 1);
+      b.ring.scale.setScalar(2 + w * B.R * 2.4);
+      b.ring2.scale.setScalar(2 + w * B.R * 3.1);
+      b.ring.material.opacity = 0.85 * (1 - w) * Math.min(1, k * 2);
+      b.ring2.material.opacity = 0.60 * (1 - w) * Math.min(1, k * 2);
+      /* 破片: 爆心から放射状に飛び、回廊の方（+x / 手前）へも流れてくる */
+      const o = b.dummy;
+      for (let i = 0; i < b.n; i++) {
+        const h1 = ZoneKit.hash(i, 301), h2 = ZoneKit.hash(i, 307), h3 = ZoneKit.hash(i, 311);
+        const u = U.clamp((rel - (B.BOOM - 10)) / 70 + h1 * 0.2, 0, 1.4);
+        const sp = (6 + h2 * 26) * u;
+        const a1 = h1 * Math.PI * 2, a2 = (h3 - 0.5) * 2.2;
+        o.position.set(Math.cos(a1) * Math.cos(a2) * sp * 1.3,
+                       Math.sin(a2) * sp * 0.7,
+                       Math.sin(a1) * Math.cos(a2) * sp);
+        o.rotation.set(t * (0.8 + h1 * 2) + i, t * (0.6 + h2 * 2), t * (0.4 + h3 * 2));
+        const sz = (0.5 + h2 * 1.9) * (1 - u * 0.25);
+        o.scale.set(sz, sz * (0.4 + h3 * 0.9), sz * (0.5 + h1 * 0.8));
+        o.updateMatrix();
+        b.deb.setMatrixAt(i, o.matrix);
+      }
+      b.deb.instanceMatrix.needsUpdate = true;
+      for (let i = 0; i < 40; i++) {
+        const h1 = ZoneKit.hash(i, 401), h2 = ZoneKit.hash(i, 409), h3 = ZoneKit.hash(i, 419);
+        const u = ((h1 + t * 0.3) % 1);
+        const sp = (4 + h2 * 30) * u;
+        const a1 = h1 * 6.283, a2 = (h3 - 0.5) * 2.4;
+        o.position.set(Math.cos(a1) * Math.cos(a2) * sp * 1.2, Math.sin(a2) * sp * 0.8,
+                       Math.sin(a1) * Math.cos(a2) * sp);
+        o.rotation.set(0, 0, t * 2 + i);
+        o.scale.setScalar((0.5 + h2 * 1.4) * (1 - u) * (0.4 + k));
+        o.updateMatrix();
+        b.sparks.setMatrixAt(i, o.matrix);
+      }
+      b.sparks.instanceMatrix.needsUpdate = true;
+    }
+    /* 閃光（爆発の瞬間だけ・カットの真ん中で最大） */
+    const fl = Math.max(0, k - 0.55) * 1.6;
+    b.flash.visible = fl > 0.01;
+    if (b.flash.visible) {
+      b.flashMat.opacity = 0.34 * fl;
+      b.flash.position.set(0, CFG.H / 2, -8);
+    }
+    /* 吹き飛ばされた DUO体は回転する（契約§4.4「回転しながら次の区画へ」） */
+    if (FF.view && FF.view.duo) FF.view.duo.rotation.z = Setpieces.blastSpin(dist);
+    /* 煙と塵（既存の粒子を焦げ色で使い回す） */
+    if (d) {
+      d.mat.color.setHex(0xd8a074);
+      d.mat.opacity = 0.10 + 0.26 * k;
+      const o2 = d.dummy;
+      for (let i = 0; i < d.count; i++) {
+        const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+        const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+        const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+        const u = (h1 + (t * 0.30 + i * 0.013)) % 1;
+        o2.position.set((h2 - 0.5) * 7.0, (h3 < 0.5 ? 0.3 : CFG.H - 0.3) + (h3 - 0.5) * 3.0, -6 - u * 60);
+        o2.rotation.set(t * (0.7 + h1) + i, t * 0.5 + i, t * (0.3 + h2));
+        o2.scale.setScalar((0.4 + h3 * 1.4) * (1 - u * 0.3));
+        o2.updateMatrix();
+        d.mesh.setMatrixAt(i, o2.matrix);
+      }
+      d.mesh.instanceMatrix.needsUpdate = true;
+    }
+  },
+
   /* ---- 神殿崩壊（S4）の造形 ----------------------------------------------
      ・**倒れる柱**: 走行空間（|x| ≤ 1.45）の外・壁パネルの内側（|x| = 2.42）に立ち、
        根元を軸に前方へ倒れる。当たり判定は持たない見た目だが、判定を持つ
@@ -1567,6 +1944,12 @@ const Setpieces = {
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
       FF.syncView(dist, t, Setpieces.viewLift(dist), Setpieces.duoK(dist));
     }
+    if (s && s.id === 'blastout') {
+      Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._hideFish();
+      Setpieces._syncBlast(dist, t);
+      return;
+    }
+    Setpieces._hideBlast();
     if (s && s.id === 'megafish') { Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._syncFish(dist, t); return; }
     Setpieces._hideFish();
     if (s && s.id === 'templefall') { Setpieces._hideRock(); Setpieces._syncTemple(dist, t); return; }
@@ -1695,6 +2078,7 @@ const Setpieces = {
     Setpieces._hideRock();
     Setpieces._hideTemple();
     Setpieces._hideFish();
+    Setpieces._hideBlast();
     if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 0;

@@ -404,6 +404,17 @@ const World = {
       const dk = U.smooth(duoK);
       const side = (r.id === 'lumen') ? -1 : 1;
       let px = x, py = footY, rz = (up === 1) ? 0 : Math.PI;
+      /* 重力反転ワープ（契約§4.5 / S6「0.4秒の回転演出」）: 体ごと上下が入れ替わる。
+         判定はゲートを跨いだ瞬間に切り替わっている（直後 1.0秒は障害物なし）ので、
+         ここは **見た目が追いつくだけ**。距離ではなく時間で回すのは演出だから。 */
+      const fk = (typeof Game !== 'undefined' && Game.flipT > 0)
+        ? U.smooth(1 - Game.flipT / CFG.WARP.SPIN_T) : 1;
+      if (fk < 1) {
+        const off0 = Runners.footOffset(r);
+        const prevY = ((r.surface === 'floor') ? (CFG.H - off0) : off0) + lift;
+        py = U.lerp(prevY, footY, fk);
+        rz = U.lerp((up === 1) ? Math.PI : 0, rz, fk);
+      }
       if (duoK > 0.001) {
         px = U.lerp(x, FF.body.x + side * FF.PAIR_DX, dk);
         py = U.lerp(footY, FF.body.y + lift - 0.45, dk);     // 体の中心を断面の y に合わせる
@@ -482,7 +493,8 @@ const World = {
       if (v.parts.cape) v.parts.cape.rotation.x = -0.12 - Math.sin(t * 9) * 0.12 - (r.act === 'jump' ? 0.45 : 0);
 
       /* 丸影は常に面の上。跳ぶほど小さく薄く（DUO体の間は足場が無いので消す） */
-      v.glow.position.set(x, ((r.surface === 'floor') ? 0.022 : CFG.H - 0.022) + lift, 0);
+      const gy = (r.surface === 'floor') ? 0.022 : CFG.H - 0.022;
+      v.glow.position.set(x, U.lerp(CFG.H - gy, gy, fk) + lift, 0);
       v.glow.rotation.x = (r.surface === 'floor') ? -Math.PI / 2 : Math.PI / 2;
       const off = Runners.footOffset(r);
       v.glow.scale.setScalar(U.clamp(1 - off * 0.45, 0.35, 1));

@@ -15,6 +15,10 @@ const Runners = {
       mirrored: false,           // 左右反転中か（鏡ゾーン）
       laneFrom: 0, laneTo: 0, laneVal: 0, laneT: CFG.LANE_T,
       act: 'run', actT: 0,       // 'run' | 'jump' | 'slide'
+      /* 踏み切った瞬間の滞空時間（秒）。無重力区間（§4.5 / S6）では 1.5倍になる。
+         **高さは変えない**ので、通過の瞬間の姿勢（位相 = 経過/滞空）は通常と同じ。
+         ＝ 判定（occ）の表は書き換わらず、変わるのは「時間」だけ。 */
+      jumpT: CFG.JUMP_T,
       laneBuf: 0,                // 空中で入った横入力（着地の瞬間に1回だけ実行 / §4.2）
       alive: true,
       view: null
@@ -27,6 +31,7 @@ const Runners = {
     r.mirrored = false;
     r.laneFrom = 0; r.laneTo = 0; r.laneVal = 0; r.laneT = CFG.LANE_T;
     r.act = 'run'; r.actT = 0; r.laneBuf = 0; r.alive = true;
+    r.jumpT = CFG.JUMP_T;
   },
 
   /* 1動作ぶんの入力（keydownのエッジ／フリック1回ぶん） */
@@ -46,6 +51,9 @@ const Runners = {
     if (act === 'jump') {
       if (r.act === 'jump') return false;          // 空中ジャンプ不可
       r.act = 'jump'; r.actT = 0;                  // スライド中のジャンプは可（キャンセル）
+      /* 滞空時間は **踏み切った場所** で決まる（無重力区間なら 1.5倍 / 契約§4.5）。
+         Zero.cur は Game.step が毎フレーム現在地から更新する唯一の出所。 */
+      r.jumpT = CFG.JUMP_T * ((typeof Zero !== 'undefined') ? Zero.cur : 1);
       r.laneBuf = 0;                               // 踏切の瞬間に古いバッファは捨てる
       return true;                                 // 補間中のジャンプは可（補間はそのまま続く）
     }
@@ -82,7 +90,7 @@ const Runners = {
     if (r.act !== 'run') {
       const wasJump = (r.act === 'jump');
       r.actT += dt;
-      const dur = wasJump ? CFG.JUMP_T : CFG.SLIDE_T;
+      const dur = wasJump ? (r.jumpT || CFG.JUMP_T) : CFG.SLIDE_T;
       if (r.actT >= dur) {
         r.act = 'run'; r.actT = 0;
         /* 着地の瞬間に、空中で入っていた横入力を1回だけ実行する（§4.2） */
@@ -98,7 +106,7 @@ const Runners = {
   /* 面からの足元の浮き（ジャンプの軌道）。天井側は「床へ向かって」離れる */
   footOffset(r) {
     if (r.act !== 'jump') return 0;
-    const u = U.clamp(r.actT / CFG.JUMP_T, 0, 1);
+    const u = U.clamp(r.actT / (r.jumpT || CFG.JUMP_T), 0, 1);
     return CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * u), CFG.JUMP_SHAPE);
   },
   height(r) { return r.act === 'slide' ? CFG.SLIDE_H : CFG.RUN_H; },
@@ -106,9 +114,11 @@ const Runners = {
 
   /* 当たり判定ボックス（絶対座標。2体は常に z=0）
      ── 実物も「未来の予測」も必ずこの1か所を通す（ボットが実寸で判断するため） */
-  boxOf(surface, laneVal, act, actT) {
+  /* jumpT を省くと通常の滞空（CFG.JUMP_T）で測る。占有（occ）の probe は
+     **位相**で測っているので、無重力でも同じ表になる（時間だけが伸びる）。 */
+  boxOf(surface, laneVal, act, actT, jumpT) {
     const off = (act === 'jump')
-      ? CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * U.clamp(actT / CFG.JUMP_T, 0, 1)), CFG.JUMP_SHAPE)
+      ? CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * U.clamp(actT / (jumpT || CFG.JUMP_T), 0, 1)), CFG.JUMP_SHAPE)
       : 0;
     const h = (act === 'slide') ? CFG.SLIDE_H : CFG.RUN_H;
     const d = (act === 'slide') ? CFG.SLIDE_D : CFG.BODY_D;   // 倒れ込むぶん前後に伸びる
@@ -122,12 +132,12 @@ const Runners = {
       z0: -d / 2, z1: d / 2
     };
   },
-  box(r) { return Runners.boxOf(r.surface, r.laneVal, r.act, r.actT); },
+  box(r) { return Runners.boxOf(r.surface, r.laneVal, r.act, r.actT, r.jumpT); },
 
   /* t秒後の動作状態（入力がなければどうなるか）。ボットの予測に使う */
   actAfter(r, t) {
     if (r.act === 'run') return { act: 'run', actT: 0 };
-    const dur = (r.act === 'jump') ? CFG.JUMP_T : CFG.SLIDE_T;
+    const dur = (r.act === 'jump') ? (r.jumpT || CFG.JUMP_T) : CFG.SLIDE_T;
     const tt = r.actT + t;
     return (tt >= dur) ? { act: 'run', actT: 0 } : { act: r.act, actT: tt };
   },

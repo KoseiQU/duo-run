@@ -18,6 +18,8 @@ const Game = {
   killer: null,          // {runner, obstacle}
   botMode: null,         // null | 'perfect' | 'delay250'
   handSwap: false,       // 入れ替えワープのフック（§4.5）
+  flipT: 0,              // 重力反転の回転演出の残り（秒・見た目だけ / §4.5 S6）
+  flipN: 0,              // この走行で面が入れ替わった回数（偶数＝既定の向き）
   runners: [],
   active: [],            // 表示・判定の対象になっている障害物
   gen: null,
@@ -61,6 +63,19 @@ const Game = {
   swapSurfaces() {
     Game.runners.forEach((r) => { r.surface = (r.surface === 'floor') ? 'ceil' : 'floor'; });
   },
+  /* 重力反転ワープ（契約§4.5 / S6）: 面を入れ替え、0.4秒の回転演出を始める。
+     **操作は「画面の位置＝担当」のまま**（§4.2）＝ 下半分は常に「床を走っている方」。
+     HUD の手アイコンも面から引いているので、そのまま入れ替わる。
+     入れ替えの「いつ」は Warp（距離の関数）が唯一の出所で、ここは受け取るだけ。 */
+  flip() {
+    Game.swapSurfaces();
+    Game.flipT = CFG.WARP.SPIN_T;
+    Game.flipN++;
+    if (typeof HUD !== 'undefined' && HUD.gravCue) HUD.gravCue(Game.flipN % 2 === 1);
+    return Game.flipN;
+  },
+  /* 面が既定（LUMEN=床 / UMBRA=天井）から入れ替わっているか */
+  flipped() { return Game.runners[0].surface !== 'floor'; },
 
   /* --- 開始・再開 --------------------------------------------------------- */
   start(stageId, seed) {
@@ -96,7 +111,11 @@ const Game = {
     Game.clearWorld();
     Game.dist = 0;
     Game.killer = null;
+    Game.flipT = 0;
+    Game.flipN = 0;
+    Zero.cur = 1;
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
+    if (typeof HUD !== 'undefined' && HUD.gravCue) HUD.gravCue(false);
     UI.show('title');
   },
 
@@ -119,8 +138,13 @@ const Game = {
     Game.dyingT = 0;
     Game.killer = null;
     Game.slowT = 0;
+    Game.flipT = 0;
+    Game.flipN = 0;
+    Zero.cur = 1;
     Game.speed = Game.stage.speedAt(fromM);
-    Game.runners.forEach((r) => Runners.reset(r));
+    /* 重力反転（§4.5 / S6）: 面は必ず既定（LUMEN=床 / UMBRA=天井）から始める */
+    Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
+    if (typeof HUD !== 'undefined' && HUD.gravCue) HUD.gravCue(false);
     Input.clear();
     Game.gen = createGenerator(Game.stage, Game.seed);
     Game.gen.ensure(fromM + CFG.SPAWN_AHEAD, fromM);
@@ -130,9 +154,13 @@ const Game = {
        助走の中にパッドがあるグループは橋ごと取り込まない。 */
     /* 海流ベルトも同じ（入口を通り過ぎたのに流れだけ残る、を作らない / P4a） */
     Current.killBefore(Game.gen.currents, fromM + runway);
-    Game.active = Current.dropOrphans(
+    Sync.killBefore(Game.gen.syncs, fromM + runway);
+    /* 重力反転ワープ・無重力も同じ（片道だけ通った状態・区間の途中から始まる状態を作らない） */
+    Warp.killBefore(Game.gen.warps, fromM + runway);
+    Zero.killBefore(Game.gen.zeros, fromM + runway);
+    Game.active = Warp.dropOrphans(Zero.dropOrphans(Current.dropOrphans(
       Sync.dropOrphans(Game.gen.obstacles.filter((o) => o.at >= fromM + runway), fromM + runway),
-      fromM + runway);
+      fromM + runway), fromM + runway), fromM + runway);
     Game.active.forEach((o) => { o.spawnDist = fromM; });
     Game.genPtr = Game.gen.obstacles.length;
     /* 再開位置より手前のイベントだけ「済み」にする。
@@ -162,6 +190,10 @@ const Game = {
     if (Game.status === 'playing' || Game.status === 'dying') {
       const scale = (Game.status === 'dying') ? CFG.DEATH_SLOW_SCALE : 1;
       const d = dt * scale;
+
+      /* 無重力（契約§4.5 / S6）: **踏み切る瞬間の倍率**を現在地から決める。
+         入力より先に置く＝このフレームのジャンプが正しい滞空で始まる。 */
+      Zero.update(Game);
 
       if (Game.status === 'playing') {
         if (Game.botMode) Bot.update(Game, d);
@@ -198,6 +230,10 @@ const Game = {
       /* 海流ベルト（契約§4.5 / S5）: prevDist → dist の間に跨いだ押し出しを実行する。
          判定（bands）より先に置く＝押された結果の位置で当たり判定される。 */
       Current.update(Game);
+      /* 重力反転ワープ（契約§4.5 / S6）: prevDist → dist の間に跨いだゲートを実行する。
+         判定（collide）より先に置く＝入れ替わった面で当たり判定される。 */
+      Warp.update(Game);
+      if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
       Game.fireEvents();
       Setpieces.update(Game, d);
       Tutorial.update(dt);
@@ -411,6 +447,14 @@ const Game = {
       current: Game.gen ? Current.inBelt(Game.gen.currents, 'floor', Game.dist) : 0,
       currentCeil: Game.gen ? Current.inBelt(Game.gen.currents, 'ceil', Game.dist) : 0,
       currents: Current.snapshot(Game),
+      /* 無重力ジャンプ（§4.5 / S6）: 今この瞬間の滞空倍率と区間 */
+      zeroK: Zero.cur,
+      zeros: Zero.snapshot(Game),
+      /* 重力反転ワープ（§4.5 / S6）: 面が入れ替わっているか・回転演出の残り */
+      flipped: Game.flipped(),
+      flipN: Game.flipN,
+      flipT: +Game.flipT.toFixed(3),
+      warps: Warp.snapshot(Game),
       /* 巨大魚の通過（§4.4 S5）: 画面占有と目玉 */
       fish: Setpieces.fishActive()
         ? { phase: Setpieces.fishPos(Game.dist).phase,

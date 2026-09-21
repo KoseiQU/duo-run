@@ -46,7 +46,7 @@ const Bot = {
       const p = U.smooth(Math.min(1, t / CFG.LANE_T));
       const a = Runners.actAfter(r, t);
       return {
-        box: Runners.boxOf(r.surface, U.lerp(r.laneVal, targetLane, p), a.act, a.actT),
+        box: Runners.boxOf(r.surface, U.lerp(r.laneVal, targetLane, p), a.act, a.actT, r.jumpT),
         d: game.dist + sp * t
       };
     };
@@ -155,7 +155,13 @@ const Bot = {
     if (!target) return null;
     const perceived = (target.at - game.dist) + sp * delaySec;
 
-    if (a.jump && r.act !== 'jump' && perceived <= sp * CFG.BOT.JUMP_LEAD) return { act: 'jump' };
+    /* 無重力区間（契約§4.5 / S6）では滞空が伸びるので、踏切も同じ倍率だけ早める。
+       ＝ 通過の瞬間の姿勢（位相）が通常と同じになり、占有（occ）の表と一致する。
+       ■ 倍率は **踏み切る場所（＝今いる場所）** で見る。滞空はそこで決まるので
+         （Runners.input が Zero.cur を焼き付ける）、目標地点の倍率で早めると
+         区間の境目で「早すぎる踏切」になって落ちる（2026-09-22 P4b で実測）。 */
+    const zk = (typeof Zero !== 'undefined' && game.gen) ? Zero.kAt(game.gen.zeros, game.dist) : 1;
+    if (a.jump && r.act !== 'jump' && perceived <= sp * CFG.BOT.JUMP_LEAD * zk) return { act: 'jump' };
     if (a.slide && r.act === 'run' && perceived <= sp * CFG.BOT.SLIDE_LEAD) return { act: 'slide' };
     return null;
   },

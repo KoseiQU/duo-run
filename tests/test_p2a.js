@@ -73,6 +73,10 @@
           /* SYNCSW は「対のパッド＋その先の橋」へ展開される譜面上の型（P3b / 契約§4.5）。
              実体は SYNCPAD / SYNCGAP なので OBS には載っていない。 */
           if (e.type === 'SYNCSW') { t.ok(typeof In.Sync.expand === 'function', d.id + ': SYNCSW は Sync が展開する'); return; }
+          /* ZEROG / GRAVWARP も同じ「譜面上の型」（P4b / 契約§4.5）。
+             実体は ZEROGATE+ZEROFIELD / WARPGATE×2 で、規則は Zero / Warp が持つ。 */
+          if (e.type === 'ZEROG') { t.ok(typeof In.Zero.expand === 'function', d.id + ': ZEROG は Zero が展開する'); return; }
+          if (e.type === 'GRAVWARP') { t.ok(typeof In.Warp.expand === 'function', d.id + ': GRAVWARP は Warp が展開する'); return; }
           t.ok(!!In.OBS[e.type], d.id + ': 未定義の障害物型を使っていない (' + e.type + ')');
           t.ok(e.type !== 'WALLSOLID', d.id + ': WALLSOLID はチャンクに直接書かない');
         });
@@ -164,6 +168,9 @@
            LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
            FISH_TAIL       … 動く部品（bands から毎フレーム置く / LASER_SCAN と同じ理由） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
+                    WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
+                     ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
+                     LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],
                      BRIDGE: ['x', 'y', 'z'],
                      SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],
                      CURRENT: ['x', 'y', 'z'], CURGATE: ['x', 'y', 'z'], DOOR: ['x', 'y', 'z'],

@@ -37,9 +37,12 @@ const DUO = {
   reset() {
     Game.botMode = null;
     Game.handSwap = false;
-    Game.runners.forEach((r) => { r.mirrored = false; });
+    Game.runners.forEach((r) => { r.mirrored = false; r.jumpT = CFG.JUMP_T; });
     Game.runners[0].surface = 'floor';
     Game.runners[1].surface = 'ceil';
+    Game.flipT = 0;
+    Game.flipN = 0;
+    Zero.cur = 1;
     Input.clear();
     Game.toTitle();
     return DUO.state();
@@ -52,11 +55,13 @@ const DUO = {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
     Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF, Sync: Sync, Current: Current,
+    Warp: Warp, Zero: Zero,
     expandEntry: expandEntry,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
     endlessPool: endlessPool, scaleParams: scaleParams,
     Zones: Zones, ZoneKit: ZoneKit, ZoneNeon: ZoneNeon, ZoneRuins: ZoneRuins, ZoneSea: ZoneSea,
+    ZoneSpace: ZoneSpace,
     /* テストで単体の障害物を置く */
     spawnOne(type, surface, lane, atAheadM) {
       const o = Obstacles.make(type, surface, lane, Game.dist + atAheadM, Game.dist);

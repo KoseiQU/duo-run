@@ -128,6 +128,9 @@
            LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
            FISH_TAIL       … 動く部品（bands から毎フレーム置く / LASER_SCAN と同じ理由） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
+                    WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
+                     ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
+                     LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],
                      LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
                      /* P3b の新ギミック（理由は tests/test_p2a.js の同じ表と同じ） */
                      SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],

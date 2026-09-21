@@ -12,7 +12,8 @@ const HUD = {
   init() {
     const ids = ['hud-dist', 'hud-speed', 'hud-stage', 'hand-left', 'hand-right',
                  'hand-left-name', 'hand-right-name', 'hand-left-keys', 'hand-right-keys',
-                 'flag-mirror', 'flag-swap', 'dead-dist', 'dead-cp', 'dead-best',
+                 'flag-mirror', 'flag-swap', 'flag-grav', 'flag-zero',
+                 'dead-dist', 'dead-cp', 'dead-best',
                  'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub',
                  'sync', 'sync-main', 'sync-sub', 'cur', 'cur-f', 'cur-c'];
     ids.forEach((id) => { HUD.el[id] = document.getElementById(id); });
@@ -94,6 +95,15 @@ const HUD = {
     return true;
   },
 
+  /* 重力反転ワープ（契約§4.5 / S6）: 面が入れ替わっている間だけ表示する。
+     手アイコンは surface から引いているので、表示そのものは勝手に入れ替わる。 */
+  gravCue(on) {
+    const e = HUD.el['flag-grav'] || (HUD.el['flag-grav'] = document.getElementById('flag-grav'));
+    if (!e) return false;
+    e.style.display = on ? '' : 'none';
+    return !!on;
+  },
+
   _set(id, txt) {
     if (HUD._last[id] === txt) return;
     HUD._last[id] = txt;
@@ -114,6 +124,15 @@ const HUD = {
       HUD._set('hand-' + c[0] + '-name', r.id.toUpperCase());
       HUD._set('hand-' + c[0] + '-keys', c[2]);
     });
+    /* S6: 重力反転中／無重力区間（契約§4.5）。どちらも「今どうなっているか」を面と
+       滞空倍率（Zero.cur）から引くだけ＝表示と判定が必ず一致する。 */
+    if (HUD.el['flag-grav']) {
+      HUD.el['flag-grav'].style.display = (g.flipped && g.flipped()) ? '' : 'none';
+    }
+    if (HUD.el['flag-zero']) {
+      HUD.el['flag-zero'].style.display =
+        (typeof Zero !== 'undefined' && Zero.cur > 1 && g.status === 'playing') ? '' : 'none';
+    }
     const anyMirror = g.runners.some((r) => r.mirrored);
     if (HUD.el['flag-mirror']) HUD.el['flag-mirror'].style.display = anyMirror ? '' : 'none';
     if (HUD.el['flag-swap']) HUD.el['flag-swap'].style.display = g.handSwap ? '' : 'none';
@@ -130,7 +149,7 @@ const UI = {
     { id: 'S3', name: '古代遺跡・外周', ready: true },
     { id: 'S4', name: '古代遺跡・内部', ready: true },
     { id: 'S5', name: '深海', ready: true },
-    { id: 'S6', name: '宇宙ステーション', ready: false },
+    { id: 'S6', name: '宇宙ステーション', ready: true },
     { id: 'S7', name: '鏡の世界', ready: false },
     { id: 'S8', name: 'コア', ready: false }
   ],

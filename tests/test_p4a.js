@@ -115,6 +115,9 @@
            LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
            FISH_TAIL       … 動く部品（bands から毎フレーム置く） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
+                    WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
+                     ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
+                     LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],
                      LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
                      SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],
                      CURRENT: ['x', 'y', 'z'], CURGATE: ['x', 'y', 'z'], DOOR: ['x', 'y', 'z'],
@@ -554,7 +557,7 @@
          「魚」と「その裏にあった背景」で比べる（契約 P4a-4 の数値ゲート）。 */
       const cv = document.createElement('canvas');
       cv.width = 203; cv.height = 94;
-      const cx = cv.getContext('2d');
+      const cx = cv.getContext('2d', { willReadFrequently: true });
       const shot = () => {
         Game.render();
         cx.clearRect(0, 0, cv.width, cv.height);

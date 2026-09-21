@@ -131,6 +131,37 @@ const OBS = {
   FISH_TAIL:  { span: 1, depth: 0.40, y0: 0.00, y1: CFG.H, both: true, safe: [],
                 motion: 'scan', fish: true, label: '巨大魚の尾' },
 
+  /* ------------------------------------------------------------------------
+     S6「宇宙ステーション」の新ギミック（契約§4.4 / §4.5 / P4b）
+     ------------------------------------------------------------------------ */
+  /* 重力反転ワープの黄のゲート: **当たり判定を持たない**（通るだけ）。
+     面の入れ替えの規則は Warp が唯一の出所。 */
+  WARPGATE: { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, gate: true, warp: true, label: '重力反転ゲート' },
+  /* 無重力区間の入口ゲートと、区間を示す青い浮遊粒子（どちらも当たり判定なし）。
+     滞空が 1.5倍になる規則は Zero が唯一の出所。 */
+  ZEROGATE: { span: 1, depth: 0.50, y0: 0.00, y1: 0.02, both: false, safe: [],
+              ghost: true, harmless: true, gate: true, zero: true, label: '無重力の入口' },
+  ZEROFIELD: { span: 1, depth: 1.00, y0: 0.00, y1: 0.02, both: false, safe: [],
+               ghost: true, harmless: true, zero: true, label: '無重力の粒子' },
+  /* レーザーネットの区画枠（予告・当たり判定なし） */
+  NETGATE: { span: 1, depth: 0.45, y0: 0.00, y1: 0.02, both: false, safe: [],
+             ghost: true, harmless: true, gate: true, net: true, label: 'レーザーネットの枠' },
+  /* 横ビーム（全幅・上下スキャン / 契約§4.5）。**到達時刻の高さ**で役割が変わる:
+       床寄り（CFG.NET.Y_LOW）  … 床の体（走る 0〜0.90／潜る 0〜0.40）に当たり、
+                                  跳んだ体（1.30〜2.20）には当たらない → LUMEN がジャンプ
+       天井寄り（CFG.NET.Y_HIGH）… 同じことが天井側で起きる → UMBRA がジャンプ
+       中央（CFG.NET.Y_MID / Y_MID2）… どの姿勢にも当たらない → **どちらも無関係**
+     これ以外の高さ（跳んだ体だけに当たる帯）は Fair が「跳躍帯を塞ぐ」として弾く。 */
+  LASER_H: { span: 3, depth: 0.30, y0: 0.00, y1: CFG.H, both: true, safe: [],
+             motion: 'hscan', net: true, label: '横ビーム' },
+  /* 斜めビーム（契約§4.5「床のレーンLから天井のレーンRへ渡る」）。
+     床側の柱（0〜1.66）と天井側の柱（H-1.66〜H）の2枚。
+     床の跳躍（最高 2.20）は床側の柱に必ず当たり、天井の跳躍（最低 1.80）は
+     床側の柱に絶対に当たらない ＝ **床と天井で避けるレーンが違う**。 */
+  LASER_DIAG: { span: 1, depth: 0.34, y0: 0.00, y1: CFG.H, both: true, safe: [],
+                motion: 'diag', net: true, label: '斜めビーム' },
+
   /* 減速帯（瓦礫の山）: 巨岩の追跡で使う**死なない**障害物。
      ジャンプで越えなければ速度が一時的に -20%（契約§4.4 S3 の大演出）。
      公平性（§4.7）の扱いは通常のジャンプ要求と同じ＝間隔も生存経路も守られる。 */
@@ -232,6 +263,30 @@ const MOT = {
     const TR = CFG.LIFT.RISE;
     if (f > 1 - TR) return U.lerp(a, b, U.smooth((f - (1 - TR)) / TR));
     return a;
+  },
+
+  /* ------------------------------------------------------------------------
+     レーザーネット（契約§4.5 / §4.4 S6）の時刻規則。**ここが唯一の出所**。
+     横スキャン（scanLane）と同じ「到達した瞬間（dist = at）の位相が phase」という作り。
+       hbeamY(o, dist)    … 横ビームの高さ（絶対 y）
+       diagLanes(o, dist) … 斜めビームの 床側／天井側のレーン（連続値）
+     ------------------------------------------------------------------------ */
+  hbeamY(o, dist) {
+    const p = o.params && o.params.hbeam;
+    if (!p) return CFG.NET.Y_LOW;
+    const a = (p.y0 === undefined) ? CFG.NET.Y_LOW : p.y0;
+    const b = (p.y1 === undefined) ? CFG.NET.Y_HIGH : p.y1;
+    return a + (b - a) * MOT._tri(MOT._u(p, o, dist, CFG.NET.PERIOD));
+  },
+  diagLanes(o, dist) {
+    const p = (o.params && o.params.diag) || null;
+    if (!p) return { f: o.lane, c: -o.lane };
+    const u = MOT._tri(MOT._u(p, o, dist, CFG.NET.PERIOD));
+    const f0 = (p.f0 === undefined) ? o.lane : p.f0;
+    const c0 = (p.c0 === undefined) ? -f0 : p.c0;
+    const f1 = (p.f1 === undefined) ? f0 : p.f1;
+    const c1 = (p.c1 === undefined) ? c0 : p.c1;
+    return { f: f0 + (f1 - f0) * u, c: c0 + (c1 - c0) * u };
   },
 
   /* 次に ON になるまでの距離（予告灯用。ON 中は 0） */
@@ -353,6 +408,13 @@ const Sync = {
      再開位置より手前にパッドがあるグループは、橋ごと取り込まない。 */
   dropOrphans(list, cutM) {
     return list.filter((o) => !(o.grp && o.grp.padAt < cutM));
+  },
+  /* グループの一覧そのものからも外す。**HUD（SYNC! の予告）は一覧を見ている**ので、
+     実体だけ落としても「見えない踏み板の予告」が出続けてしまう
+     （2026-09-22 P4b で発覚: リトライ直後に帯が点いたままになる）。 */
+  killBefore(list, cutM) {
+    if (!list) return;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].padAt < cutM) list.splice(i, 1);
   },
 
   /* テスト・監査の窓口 */
@@ -497,6 +559,167 @@ const Current = {
   }
 };
 
+/* ============================================================================
+   Warp — 重力反転ワープ（契約§4.5 / §4.4 S6）の**時刻規則の唯一の出所**
+
+   ■ 形
+     黄のゲートが2枚で1組（入口と出口）。通過するたびに
+     **LUMEN と UMBRA の走る面（床/天井）が入れ替わる**（Game.swapSurfaces）。
+     操作は「画面の位置＝担当」のままなので（§4.2）、ワープ後は
+     下半分が UMBRA を、上半分が LUMEN を動かすことになる（HUD も面から引く）。
+
+   ■ 規則（崩れる橋・海流ベルトと同じ流儀で、距離＝時刻として書く）
+     ・入れ替えは **走行距離がゲートを跨いだ瞬間** に1回だけ起きる（フレーム非依存）。
+     ・ゲートの直後 CFG.WARP.GRACE_T 秒（1.0秒）は障害物を置かない。
+       ＝ 相手のレーンから走り始めることになるので、立て直す時間を必ず渡す。
+     ・Fair はこの余白を検査し、さらに **生存レーンの到達可能性をリセット**する
+       （面が入れ替わると、その面を走る体のレーンが変わるため）。
+   ============================================================================ */
+const Warp = {
+  /* 譜面の1エントリ（type:'GRAVWARP'）を実体へ展開する。
+     params.warp = { backT: 戻りのゲートまでの距離（秒。省略時 6秒） } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.warp) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    const backT = (p.backT === undefined) ? 6 : p.backT;
+    const to = at + backT * unit;
+    const reg = { from: at, to: to, unit: unit, gates: [at, to], done: [], dead: false };
+    reg.gates.forEach((m) => {
+      const o = Obstacles.make('WARPGATE', 'floor', 0, m, nowDist, { warp: { unitM: unit } });
+      o.reg = reg;
+      items.push(o);
+    });
+    if (sink) sink.push(reg);
+    return reg;
+  },
+
+  /* a < ゲート ≤ b を跨いだ回数（奇数なら面が入れ替わっている） */
+  crossed(list, a, b) {
+    if (!list || !list.length) return 0;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      for (let k = 0; k < r.gates.length; k++) if (r.gates[k] > a && r.gates[k] <= b) n++;
+    }
+    return n;
+  },
+  /* atM の直前 windowM 以内にゲートがあるか（＝立て直す余裕がないか） */
+  gateNear(list, atM, windowM) {
+    if (!list || !list.length) return false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      for (let k = 0; k < r.gates.length; k++) {
+        if (r.gates[k] > atM - windowM && r.gates[k] <= atM) return true;
+      }
+    }
+    return false;
+  },
+  /* 次のゲートまでの距離（予告の見た目に使う。無ければ Infinity） */
+  nextGate(list, m) {
+    let best = Infinity;
+    if (!list) return best;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      for (let k = 0; k < r.gates.length; k++) if (r.gates[k] >= m && r.gates[k] - m < best) best = r.gates[k] - m;
+    }
+    return best;
+  },
+
+  /* 毎フレーム1回（Game.step から）。prevDist → dist の間に跨いだゲートを実行する */
+  update(game) {
+    const list = (game.gen && game.gen.warps) ? game.gen.warps : null;
+    if (!list || !list.length) return 0;
+    const n = Warp.crossed(list, game.prevDist, game.dist);
+    for (let i = 0; i < n; i++) game.flip();
+    return n;
+  },
+
+  /* 中断・チェックポイント再開で「片道だけ通った状態」を作らない。
+     入口が再開位置より手前にある組は、戻りのゲートごと取り込まない。 */
+  dropOrphans(list, cutM) { return list.filter((o) => !(o.reg && o.reg.from < cutM)); },
+  killBefore(regs, cutM) {
+    if (!regs) return;
+    for (let i = 0; i < regs.length; i++) if (regs[i].from < cutM) regs[i].dead = true;
+  },
+  snapshot(game) {
+    const list = (game.gen && game.gen.warps) ? game.gen.warps : [];
+    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
+               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1) }));
+  }
+};
+
+/* ============================================================================
+   Zero — 無重力ジャンプ（契約§4.5 / §4.4 S6）の**滞空係数の唯一の出所**
+
+   区間の中で踏み切ったジャンプは滞空が CFG.ZEROG.MUL 倍（0.55 → 0.83秒）になる。
+   **高さは変えない**ので、通過の瞬間の姿勢（位相 u = 経過/滞空）は通常と同じ
+   ＝ 占有（occ）の表は無重力でも書き換わらない。変わるのは「時間」だけ:
+     ・体      … Runners が踏切の瞬間に r.jumpT へ焼き付ける
+     ・ボット  … 踏切の距離 speed × JUMP_LEAD × 係数
+     ・不変条件… ジャンプ連続 / ジャンプ→レーン移動（Fair が同じ係数を掛ける）
+   ============================================================================ */
+const Zero = {
+  /* 今この瞬間の倍率（踏切のときだけ読む）。Game.step が毎フレーム更新する */
+  cur: 1,
+
+  /* 譜面の1エントリ（type:'ZEROG'）を実体へ展開する。
+     params.zero = { n: 区間の長さ（秒。省略時 4秒） } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.zero) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    const n = (p.n === undefined) ? 4 : p.n;
+    const reg = { from: at, to: at + n * unit, unit: unit, n: n, dead: false };
+    const gate = Obstacles.make('ZEROGATE', 'floor', 0, at, nowDist, { zero: { unitM: unit } });
+    gate.reg = reg;
+    items.push(gate);
+    /* 青い浮遊粒子（予告・当たり判定なし）。1秒ぶんずつ床と天井に敷く */
+    for (let i = 0; i < n; i++) {
+      ['floor', 'ceil'].forEach((side) => {
+        const o = Obstacles.make('ZEROFIELD', side, 0, at + (i + 0.5) * unit * CFG.ZEROG.SEG_T,
+                                 nowDist, { zero: { unitM: unit } });
+        o.reg = reg;
+        items.push(o);
+      });
+    }
+    if (sink) sink.push(reg);
+    return reg;
+  },
+
+  /* その距離の滞空倍率（1 = 通常 / CFG.ZEROG.MUL = 無重力） */
+  kAt(list, m) {
+    if (!list || !list.length) return 1;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.dead && m >= r.from && m <= r.to) return CFG.ZEROG.MUL;
+    }
+    return 1;
+  },
+  /* その距離での滞空時間（秒）。判定・ボット・不変条件はここだけを読む */
+  jumpT(list, m) { return CFG.JUMP_T * Zero.kAt(list, m); },
+  inZone(list, m) { return Zero.kAt(list, m) > 1; },
+
+  /* 毎フレーム1回（Game.step から）。踏切に使う倍率を現在地から決める */
+  update(game) {
+    const list = (game.gen && game.gen.zeros) ? game.gen.zeros : null;
+    Zero.cur = Zero.kAt(list, game.dist);
+    return Zero.cur;
+  },
+
+  dropOrphans(list, cutM) { return list.filter((o) => !(o.reg && o.reg.from < cutM)); },
+  killBefore(regs, cutM) {
+    if (!regs) return;
+    for (let i = 0; i < regs.length; i++) if (regs[i].from < cutM) regs[i].dead = true;
+  },
+  snapshot(game) {
+    const list = (game.gen && game.gen.zeros) ? game.gen.zeros : [];
+    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
+               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1), n: r.n }));
+  }
+};
+
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
 
@@ -576,6 +799,28 @@ const Obstacles = {
          そこから先は GAP と同じ穴になる。時刻の規則はこの2行がすべて。 */
       if (dist < MOT.bridgeFallAt(o) - 1e-9) return out;
       put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET, t.y0, t.y1);
+      return out;
+    }
+
+    if (t.motion === 'hscan') {
+      /* 横ビーム（契約§4.5 / S6）: 到達時刻の高さに全幅の帯を1枚。
+         絶対 y なので床と天井の両方に同じ1枚が効く（both 型）。 */
+      const y = MOT.hbeamY(o, dist), hh = CFG.NET.BEAM_HH;
+      const lo = Obstacles.laneLo(o), hi = Obstacles.laneHi(o);
+      put((lo - 0.5) * CFG.LANE_W + OBS_INSET, (hi + 0.5) * CFG.LANE_W - OBS_INSET, y - hh, y + hh);
+      return out;
+    }
+
+    if (t.motion === 'diag') {
+      /* 斜めビーム（契約§4.5 / S6）: 床側の柱と天井側の柱の2枚。
+         **面ごとに別のレーンが塞がる**（床は f、天井は c）。 */
+      const d = MOT.diagLanes(o, dist), hw = CFG.NET.BEAM_HW, E = CFG.NET.DIAG_END;
+      const fx = d.f * CFG.LANE_W, cx = d.c * CFG.LANE_W;
+      const lim = CFG.HALF_W - 0.02;
+      const clip = (x0, x1) => ({ a: Math.max(x0, -lim), b: Math.min(x1, lim) });
+      const f = clip(fx - hw, fx + hw), c = clip(cx - hw, cx + hw);
+      if (f.b > f.a) out.push({ x0: f.a, x1: f.b, y0: -0.02, y1: E });
+      if (c.b > c.a) out.push({ x0: c.a, x1: c.b, y0: CFG.H - E, y1: CFG.H + 0.02 });
       return out;
     }
 
@@ -1284,10 +1529,127 @@ const Obstacles = {
       add([hot]);
     };
 
+    /* ------------------------------------------------------------------------
+       S6 の新ギミックの骨組み（ゾーン共通・2026-09-22 P4b）
+       ここまでと同じ考え方。スキンは色（mats）を渡すだけでよく、
+       スキンが知らないゾーン（エンドレスでネオンに混ざる等）へ出ても壊れない。
+       ------------------------------------------------------------------------ */
+    /* ゲート（重力反転・無重力・レーザーネットの枠）: コリドーを跨ぐ門。
+       当たり判定は持たない＝通るだけ。色で意味を分ける（黄＝重力反転／青＝無重力）。 */
+    const gateKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const col = (mats.col === undefined) ? C.warn : mats.col;
+      const lit = new THREE.MeshBasicMaterial({ color: col, fog: true });
+      own.push(lit);
+      const frame = mats.frame || Obstacles._material('gtFrame', C.dark);
+      const HW = CFG.HALF_W, H = CFG.H;
+      g.add(new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.20, H + 0.44, 0.24), p: [-(HW + 0.12), H / 2, 0] },
+        { g: ZoneKit.box(0.20, H + 0.44, 0.24), p: [HW + 0.12, H / 2, 0] },
+        { g: ZoneKit.box(HW * 2 + 0.44, 0.20, 0.24), p: [0, H + 0.10, 0] },
+        { g: ZoneKit.box(HW * 2 + 0.44, 0.20, 0.24), p: [0, -0.10, 0] }
+      ]), frame));
+      /* 枠の内側を走る色の光（遠くから「何のゲートか」が読める） */
+      const ring = new THREE.Mesh(ZoneKit.merge([
+        { g: ZoneKit.box(0.08, H + 0.1, 0.28), p: [-(HW + 0.02), H / 2, 0] },
+        { g: ZoneKit.box(0.08, H + 0.1, 0.28), p: [HW + 0.02, H / 2, 0] },
+        { g: ZoneKit.box(HW * 2, 0.08, 0.28), p: [0, H + 0.01, 0] },
+        { g: ZoneKit.box(HW * 2, 0.08, 0.28), p: [0, -0.01, 0] }
+      ]), lit);
+      g.add(ring);
+      /* 記号（重力反転＝上下の矢印／無重力＝浮く輪／ネット＝格子） */
+      const mk = [];
+      if (type === 'WARPGATE') {
+        [[0.62, 1], [H - 0.62, -1]].forEach((q) => {
+          mk.push({ g: ZoneKit.box(0.16, 0.66, 0.14), p: [0, q[0], 0.1] });
+          mk.push({ g: ZoneKit.box(0.34, 0.34, 0.14), p: [0, q[0] + q[1] * 0.40, 0.1], r: [0, 0, Math.PI / 4] });
+        });
+      } else if (type === 'ZEROGATE') {
+        for (let i = 0; i < 8; i++) {
+          const a = i / 8 * Math.PI * 2;
+          mk.push({ g: ZoneKit.box(0.12, 0.12, 0.12), p: [Math.cos(a) * 0.5, H / 2 + Math.sin(a) * 0.5, 0.1] });
+        }
+      } else {
+        /* レーザーネットの枠: **記号は小さく**（回廊を塞いでいるように見せない）。
+           左右の柱に「網」の意匠を貼るだけにする。 */
+        [-1, 1].forEach((sx) => {
+          for (let i = 0; i < 3; i++) mk.push({ g: ZoneKit.box(0.30, 0.04, 0.12), p: [sx * (HW - 0.18), H * 0.5 + (i - 1) * 0.22, 0.12] });
+          for (let i = 0; i < 3; i++) mk.push({ g: ZoneKit.box(0.04, 0.48, 0.12), p: [sx * (HW - 0.18) + (i - 1) * 0.12, H * 0.5, 0.12] });
+        });
+      }
+      const mark = new THREE.Mesh(ZoneKit.merge(mk), lit);
+      mark.renderOrder = 3;
+      g.add(mark);
+      g.userData.gate = { lit: lit, ring: ring, mark: mark, mats: own };
+      g.userData.gateMats = own;
+    };
+    /* 無重力の青い浮遊粒子（契約§4.5「予告は青い浮遊粒子」）。当たり判定なし。
+       長さ1で作り、place() が「1秒ぶん」へ伸ばす（海流の帯と同じ流儀）。 */
+    const zeroFieldKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      const m = new THREE.MeshBasicMaterial({ color: mats.col || C.cyan, fog: true,
+                                              transparent: true, opacity: 0.8, depthWrite: false });
+      own.push(m);
+      const N = 14;
+      const im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), m, N);
+      im.frustumCulled = false;
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.renderOrder = 5;
+      g.add(im);
+      g.userData.zfield = { mesh: im, n: N, dummy: new THREE.Object3D(), mats: own };
+      g.userData.zeroMats = own;
+    };
+    /* レーザーネットのビーム（横ビーム・斜めビーム）。
+       **形は bands() から毎フレーム引く**ので、見た目と判定が構造的にずれない。
+       ・beam/halo … 今この瞬間の帯
+       ・ghost     … 到達した瞬間（dist = at）の帯＝契約§4.5「薄い予告線」
+       ・link      … 斜めビームの床側と天井側をつなぐ光の筋（見た目だけ） */
+    const netKit = (mats) => {
+      mats = mats || {};
+      const own = [];
+      /* 材質は白。**帯ごとの色はインスタンスに載せる**（setColorAt）＝
+         床の体に当たる帯は琥珀（LUMEN の色）、天井の体に当たる帯は藍（UMBRA の色）、
+         どちらにも当たらない帯は白。「誰がよけるのか」が色だけで読める。 */
+      const hot = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true });
+      const halo = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true,
+                                                 transparent: true, opacity: 0.34, depthWrite: false });
+      const ghost = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true,
+                                                  transparent: true, opacity: 0.16, depthWrite: false });
+      own.push(hot, halo, ghost);
+      const N = (type === 'LASER_DIAG') ? 2 : 1;
+      const inst = (mat, n, order) => {
+        const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, n);
+        im.frustumCulled = false;
+        im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        if (order !== undefined) im.renderOrder = order;
+        g.add(im);
+        return im;
+      };
+      const link = (type === 'LASER_DIAG') ? inst(halo, CFG.NET.SLATS, 3) : null;
+      const node = [];
+      if (type === 'LASER_DIAG') {
+        /* 発振器（床と天井の口金） */
+        node.push({ g: ZoneKit.box(0.34, 0.12, 0.42), p: [0, 0.06, 0] });
+        node.push({ g: ZoneKit.box(0.34, 0.12, 0.42), p: [0, CFG.H - 0.06, 0] });
+      } else {
+        node.push({ g: ZoneKit.box(0.16, 0.34, 0.42), p: [-(CFG.HALF_W - 0.06), 0, 0] });
+        node.push({ g: ZoneKit.box(0.16, 0.34, 0.42), p: [CFG.HALF_W - 0.06, 0, 0] });
+      }
+      const nodes = new THREE.Mesh(ZoneKit.merge(node), mats.node || Obstacles._material('ntNode', C.steel));
+      g.add(nodes);
+      g.userData.net = { beam: inst(hot, N, 4), halo: inst(halo, N, 3), ghost: inst(ghost, N, 2),
+                         link: link, n: N, nodes: nodes, dummy: new THREE.Object3D(),
+                         col: new THREE.Color(), mats: own };
+      g.userData.netMats = own;
+    };
+
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
                 padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit,
-                beltKit: beltKit, doorKit: doorKit, liftKit: liftKit, fishKit: fishKit };
+                beltKit: beltKit, doorKit: doorKit, liftKit: liftKit, fishKit: fishKit,
+                gateKit: gateKit, zeroFieldKit: zeroFieldKit, netKit: netKit };
     const childs0 = g.children.length, blink0 = g.userData.blink.length, parts0 = parts.length;
     const lamps0 = lampParts.length;
     skin.build(type, x);
@@ -1296,14 +1658,19 @@ const Obstacles = {
     const needKit = (t.pad && !g.userData.pad) || (type === 'SYNCGAP' && !g.userData.sync) ||
                     (type === 'DROPCEIL' && !g.userData.drop) || (type === 'COLUMN' && !g.userData.column) ||
                     (t.belt && !g.userData.belt) || (t.door && !g.userData.door) ||
-                    (type === 'LIFTPAD' && !g.userData.lift) || (t.fish && !g.userData.fish);
+                    (type === 'LIFTPAD' && !g.userData.lift) || (t.fish && !g.userData.fish) ||
+                    (t.gate && !g.userData.gate) || (t.net && !t.gate && !g.userData.net) ||
+                    (type === 'ZEROFIELD' && !g.userData.zfield);
     if (needKit) {
       for (let i = g.children.length - 1; i >= childs0; i--) { const c = g.children[i]; g.remove(c); ZoneKit.free(c); }
       g.userData.blink.length = blink0;
       lampParts.length = lamps0;
       for (let i = parts.length - 1; i >= parts0; i--) if (parts[i].g.dispose) parts[i].g.dispose();
       parts.length = parts0;
-      if (t.pad) padKit(null);
+      if (t.gate) gateKit(null);
+      else if (t.net) netKit(null);
+      else if (type === 'ZEROFIELD') zeroFieldKit(null);
+      else if (t.pad) padKit(null);
       else if (type === 'SYNCGAP') syncKit(null);
       else if (type === 'DROPCEIL') dropKit(null);
       else if (t.belt) beltKit(null);
@@ -1426,6 +1793,89 @@ const Obstacles = {
                 : (mine !== null ? (gp && gp.ok === false ? 0xff7a2a : 0x8fe6c8) : 0xffc14a);
       const blink = (mine !== null) ? 1 : (Math.sin(dist * 0.9 + (t || 0) * 7) > -0.2 ? 1 : 0.28);
       if (ud.padMats) ud.padMats.forEach((m) => { m.color.setHex(col).multiplyScalar(blink); });
+    }
+
+    /* ゲート（重力反転・無重力・レーザーネットの枠 / 契約§4.5 S6）:
+       当たり判定は持たない。近づくほど速く明滅して「くぐる」ことを予告する。 */
+    if (ud.gate) {
+      const rem = Math.max(0, o.at - dist);
+      const sp = Math.max(4, (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN);
+      const near = U.clamp(1 - rem / (sp * CFG.WARP.CUE_T), 0, 1);
+      const k = 0.62 + 0.38 * Math.sin(dist * (0.7 + near * 2.2) + (t || 0) * (5 + near * 9));
+      const m = ud.gate.lit;
+      if (m.__base === undefined) m.__base = m.color.getHex();
+      m.color.setHex(m.__base).multiplyScalar(0.55 + 0.45 * k);
+      ud.gate.mark.rotation.z = (o.type === 'ZEROGATE') ? (t || 0) * 0.6 : 0;
+    }
+
+    /* 無重力の青い浮遊粒子（契約§4.5 / S6）: 面のそばをゆっくり漂う。
+       長さは「1秒ぶん」＝海流の帯と同じ流儀。当たり判定は持たない。 */
+    if (ud.zfield) {
+      const zf = ud.zfield, d2 = zf.dummy;
+      const unit = (o.params && o.params.zero && o.params.zero.unitM) || CFG.REF_SPEED;
+      const L = unit * CFG.ZEROG.SEG_T;
+      for (let i = 0; i < zf.n; i++) {
+        const h1 = ZoneKit.hash(i, 601), h2 = ZoneKit.hash(i, 607), h3 = ZoneKit.hash(i, 613);
+        const drift = Math.sin((t || 0) * (0.5 + h3) + i * 1.7) * 0.22;
+        d2.position.set((h1 - 0.5) * (CFG.HALF_W * 2 - 0.3),
+                        0.18 + h2 * 1.1 + drift,
+                        (h3 - 0.5) * L);
+        d2.rotation.set((t || 0) * (0.3 + h1), (t || 0) * (0.2 + h2), 0);
+        d2.scale.setScalar(0.6 + h2 * 1.1);
+        d2.updateMatrix();
+        zf.mesh.setMatrixAt(i, d2.matrix);
+      }
+      zf.mesh.instanceMatrix.needsUpdate = true;
+    }
+
+    /* レーザーネットのビーム（契約§4.5 / S6）: **bands() の帯をそのまま描く**。
+       予告線（ghost）は「到達した瞬間の帯」＝ 譜面に書いた位置そのもの。 */
+    if ((mot === 'hscan' || mot === 'diag') && ud.net) {
+      const nt = ud.net, dm = nt.dummy;
+      const now = Obstacles.bands(o, dist, Obstacles._bb).slice();
+      const at = Obstacles.bands(o, o.at, []);
+      /* 帯の色＝「誰に当たるか」。走る体（床 0〜0.90 / 天井 3.10〜4.00）に触れるかで決める
+         ＝ 判定と同じ数字から引いているので、色と危険が食い違わない。 */
+      const hue = (b) => (b.y0 < 0.90 ? 0xffb347 : (b.y1 > CFG.H - 0.90 ? 0x8b9bff : 0xffffff));
+      const setAll = (mesh, list, thick) => {
+        for (let i = 0; i < nt.n; i++) {
+          const b = list[i];
+          if (!b) { dm.position.set(0, -9999, 0); dm.scale.set(0.0001, 0.0001, 0.0001); }
+          else {
+            dm.position.set(lx((b.x0 + b.x1) / 2), (b.y0 + b.y1) / 2, 0);
+            dm.scale.set(Math.max(0.02, b.x1 - b.x0), Math.max(0.02, b.y1 - b.y0), thick);
+            mesh.setColorAt(i, nt.col.setHex(hue(b)));
+          }
+          dm.rotation.set(0, 0, 0);
+          dm.updateMatrix();
+          mesh.setMatrixAt(i, dm.matrix);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      };
+      setAll(nt.beam, now, OBS[o.type].depth * 0.45);
+      setAll(nt.halo, now, OBS[o.type].depth * 1.05);
+      setAll(nt.ghost, at, OBS[o.type].depth * 0.22);
+      if (nt.link && now.length >= 2) {
+        /* 斜めビームの「渡り」: 床側の柱の上端 → 天井側の柱の下端をつなぐ光の筋 */
+        const a = now[0], b = now[1];
+        const ax = (a.x0 + a.x1) / 2, bx = (b.x0 + b.x1) / 2;
+        const n = CFG.NET.SLATS;
+        for (let i = 0; i < n; i++) {
+          const u0 = i / n, u1 = (i + 1) / n;
+          const y0 = U.lerp(a.y1, b.y0, u0), y1 = U.lerp(a.y1, b.y0, u1);
+          const xc2 = U.lerp(ax, bx, (u0 + u1) / 2);
+          dm.position.set(lx(xc2), (y0 + y1) / 2, 0);
+          dm.rotation.set(0, 0, 0);
+          dm.scale.set(Math.abs(bx - ax) / n + CFG.NET.BEAM_HW, Math.max(0.02, y1 - y0), OBS[o.type].depth * 0.5);
+          dm.updateMatrix();
+          nt.link.setMatrixAt(i, dm.matrix);
+          /* 渡りは床側の琥珀 → 天井側の藍へ移る（どちらの持ち場かが繋がって見える） */
+          nt.link.setColorAt(i, nt.col.setHex(0xffb347).lerp(new THREE.Color(0x8b9bff), (u0 + u1) / 2));
+        }
+        nt.link.instanceMatrix.needsUpdate = true;
+        if (nt.link.instanceColor) nt.link.instanceColor.needsUpdate = true;
+      }
     }
 
     /* 海流ベルト（契約§4.5 / S5）: 矢印の帯は「1秒ぶん」の長さに伸ばし、
