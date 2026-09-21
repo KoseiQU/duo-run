@@ -332,7 +332,12 @@ const World = {
     for (let i = 0; i < obstacles.length; i++) {
       const o = obstacles[i];
       const rel = o.at - dist;
-      if (rel < far && !o.view) { o.view = Obstacles.acquire(o.type); World.obsRoot.add(o.view); }
+      /* 見た目の変種（コアの「全ゾーン混在」/ P5b）はスキンが障害物ごとに決める。
+         変種はプールの鍵にも入るので、使い回しで別ゾーンの姿に化けない。 */
+      if (rel < far && !o.view) {
+        o.view = Obstacles.acquire(o.type, Obstacles.variantOf(o));
+        World.obsRoot.add(o.view);
+      }
       if (o.view) {
         Obstacles.place(o, dist, World._t);
         o.view.visible = (rel < far) && (back || (-rel < camZ));

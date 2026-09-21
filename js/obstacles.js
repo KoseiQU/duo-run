@@ -1241,6 +1241,10 @@ const Obstacles = {
      ========================================================================== */
   _mat: {},
   _pool: {},
+  /* 材質キーの名前空間（コアのスキンが「他ゾーンのビルダー」を呼ぶ間だけ立てる / P5b）。
+     キーは `skinId + '|' + ns + key` になるので、disposeSkin の前方一致はそのまま効く。
+     ＝ 同じ key 名（'rvBody' など）を別ゾーンの色で作っても取り違えない。 */
+  _matNS: '',
   /* 今のゾーンのスキン（ゾーン未構築でも落ちないようネオンを既定にする） */
   skin() {
     const s = (typeof Zones !== 'undefined') ? Zones.skin() : null;
@@ -1251,7 +1255,7 @@ const Obstacles = {
   get COL() { const s = Obstacles.skin(); return s ? s.COL : {}; },
 
   _material(key, color, opacity) {
-    const k = Obstacles.skinId() + '|' + key;
+    const k = Obstacles.skinId() + '|' + Obstacles._matNS + key;
     if (!Obstacles._mat[k]) {
       Obstacles._mat[k] = (opacity === undefined)
         ? new THREE.MeshLambertMaterial({ color: color, fog: true })
@@ -1260,12 +1264,19 @@ const Obstacles = {
     return Obstacles._mat[k];
   },
   _emissive(key, color) {
-    const k = Obstacles.skinId() + '|E' + key;
+    const k = Obstacles.skinId() + '|E' + Obstacles._matNS + key;
     if (!Obstacles._mat[k]) Obstacles._mat[k] = new THREE.MeshBasicMaterial({ color: color, fog: true });
     return Obstacles._mat[k];
   },
 
-  _build(type) {
+  /* この障害物をどの「見た目の変種」で建てるか（スキンが決める。既定は変種なし）。
+     コアのスキン（P5b）だけが、障害物ごとに寄り親のゾーンを返す。 */
+  variantOf(o) {
+    const s = Obstacles.skin();
+    return (s && s.variant) ? (s.variant(o) || '') : '';
+  },
+
+  _build(type, variant) {
     const skin = Obstacles.skin();
     const t = OBS[type];
     const C = skin.COL;
@@ -1954,7 +1965,7 @@ const Obstacles = {
                 padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit,
                 beltKit: beltKit, doorKit: doorKit, liftKit: liftKit, fishKit: fishKit,
                 gateKit: gateKit, zeroFieldKit: zeroFieldKit, netKit: netKit,
-                shardKit: shardKit };
+                shardKit: shardKit, variant: variant || '' };
     const childs0 = g.children.length, blink0 = g.userData.blink.length, parts0 = parts.length;
     const lamps0 = lampParts.length;
     skin.build(type, x);
@@ -2023,21 +2034,26 @@ const Obstacles = {
   },
 
 
-  /* プールから見た目を取り出す／返す（毎フレーム new しない）。プールはスキンごと。 */
-  _poolOf(type) {
+  /* プールから見た目を取り出す／返す（毎フレーム new しない）。プールはスキンごと。
+     **変種（コアの寄り親ゾーン）もプールの鍵に含める**＝使い回しで
+     「さっきと違うゾーンの柱」に化けることが構造的に起きない（P5b）。 */
+  _poolOf(type, variant) {
     const id = Obstacles.skinId();
     const byType = Obstacles._pool[id] || (Obstacles._pool[id] = {});
-    return byType[type] || (byType[type] = []);
+    const k = variant ? (type + '#' + variant) : type;
+    return byType[k] || (byType[k] = []);
   },
-  acquire(type) {
-    const p = Obstacles._poolOf(type);
-    const g = p.length ? p.pop() : Obstacles._build(type);
+  acquire(type, variant) {
+    const v = variant || '';
+    const p = Obstacles._poolOf(type, v);
+    const g = p.length ? p.pop() : Obstacles._build(type, v);
     g.visible = true;
+    g.userData._vk = v;
     return g;
   },
   release(type, g) {
     g.visible = false;
-    Obstacles._poolOf(type).push(g);
+    Obstacles._poolOf(type, (g.userData && g.userData._vk) || '').push(g);
   },
   /* 見た目を現在の距離に合わせて置く（t は点滅灯の位相に使う）。
      **動くもの・点滅するものは必ず MOT / bands() から引く**（判定と同じ数値で描く） */
