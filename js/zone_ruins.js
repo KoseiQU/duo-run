@@ -17,36 +17,41 @@ const ZoneRuins = {
 
   PAL: {
     /* World が読む共通キー */
-    road:      0x5f5138,      // 砂岩の石畳（2体が浮くよう、床はやや沈めた色にする）
-    roadRough: 0.88,          // 石＝ざらざら（ネオンの濡れた路面と正反対）
+    road:      0x574828,      // 砂岩の石畳（環境光を落としたぶん素の色は少し上げる）
+    roadRough: 0.90,          // 石＝ざらざら（ネオンの濡れた路面と正反対）
     roadMetal: 0.0,
-    skirt:     0x4e4029,
+    skirt:     0x2e2617,
     metal:     0xb9a37b,      // ゲート・門柱の石
     amber:     0xffb347,      // 床＝LUMEN（ゾーンが変わっても意味は同じ）
     indigo:    0x8b9bff,      // 天井＝UMBRA
-    fog:       0x604928,      // 黄土色の霧（契約§5）。明るすぎると全体が白茶けるので沈める
+    fog:       0x2a1d0e,      // 黄土色の霧（契約§5）。暗部を残すため深く沈める
 
-    /* 遺跡の配色 */
-    skyTop:    0x3b3566,
-    skyMid:    0x7c5262,
-    skyLow:    0xd98c48,      // 夕暮れ
-    stone:     0x9d8659,
+    /* 遺跡の配色（色数を増やす: 石の砂〜灰／蔦の緑／松明の橙／金／空の紫） */
+    skyTop:    0x2c2454,      // 夜に近い藍
+    skyMid:    0x5b2f63,      // 紫
+    skyLow:    0xff9f4e,      // 地平線の橙
+    skyHot:    0xffd9a0,      // 太陽まわり（明部）
+    stone:     0x94804f,
     stoneLit:  0xb79c6e,
-    stoneDark: 0x5d4c30,
-    wall:      0x8c7650,
-    wallDark:  0x5a4a30,
-    moss:      0x5e7a46,
-    vine:      0x4e6b3a,
+    stoneDark: 0x53442a,
+    stoneCool: 0x8e8878,      // 灰がかった石（色味の幅）
+    wall:      0x806c49,
+    wallDark:  0x3a2e1a,
+    moss:      0x6b8f45,
+    vine:      0x74a04a,
     fire:      0xff8a2a,
-    fireHot:   0xffd88a,
+    fireHot:   0xfff0cf,
+    flame:     0xffc266,      // 炎の本体（明部として数えられる明るさ）
     ember:     0xff6a1e,
-    water:     0x4a7f84,
-    gold:      0xe8c46a,
-    mountain:  0x4b4064,
-    ruinFar:   0x6f6076,
+    water:     0x4a9aa0,
+    gold:      0xffd870,
+    cloth:     0x9c3a2e,      // 垂れ幕（深紅）
+    cloth2:    0x2f6f74,      // 垂れ幕（青緑）
+    mountain:  0x2f2748,
+    ruinFar:   0x3d3355,
     dust:      0xe8cf9a
   },
-  fog: { color: 0x604928, near: 22, far: 92 },
+  fog: { color: 0x2a1d0e, near: 18, far: 82 },
 
   /* ---- 区間パターン（壁のある区間と開放区間を交互に / 契約§5） ------------ */
   WALL_PERIOD: 110,
@@ -80,29 +85,47 @@ const ZoneRuins = {
      契約§5 の「黒潰れ禁止」は、環境光を暖色で持ち上げ、松明の点光を流すことで作る。 */
   _lights(scene) {
     const P = ZoneRuins.PAL;
-    scene.add(new THREE.AmbientLight(0xbba883, 0.72));
-    scene.add(new THREE.HemisphereLight(0xffc089, 0x3e3018, 0.66));
-    const sun = new THREE.DirectionalLight(0xffb673, 0.82);
-    sun.position.set(-0.6, 0.55, 0.6);          // 低い夕日
+    /* ■ 明暗を作る（P3a-r1 差し戻し: 中間調だけの平坦な絵をやめる）
+       環境光は「陰が残る」ところまで落とし、面の向きで明暗が割れるようにする。
+       明部は **火・天窓から落ちる光・夕日** が受け持つ（発光マテリアル＋点光源）。 */
+    scene.add(new THREE.AmbientLight(0x8a7652, 0.34));
+    scene.add(new THREE.HemisphereLight(0xe0a86a, 0x2a2012, 0.36));
+    /* 手前（カメラ側）から当てる主光。面がこちらを向いた所だけ明るくなる */
+    const sun = new THREE.DirectionalLight(0xffc98c, 0.62);
+    sun.position.set(-0.72, 0.5, 0.75);
     scene.add(sun);
-    /* 松明の火（走行に合わせて流し、揺らぎをつける） */
-    ZoneRuins.torchA = new THREE.PointLight(P.fire, 9.0, 26, 2);
-    ZoneRuins.torchB = new THREE.PointLight(P.ember, 7.0, 24, 2);
+    /* 奥（峡谷の夕日）からの逆光。柱や像の縁が光って輪郭が立つ＝リムライト */
+    const rim = new THREE.DirectionalLight(0xffb27a, 0.46);
+    rim.position.set(0.6, 0.42, -1.0);
+    scene.add(rim);
+    /* 松明の火（走行に合わせて流し、揺らぎをつける）。明るい溜まりを作る主役 */
+    ZoneRuins.torchA = new THREE.PointLight(P.fire, 24.0, 20, 2);
+    ZoneRuins.torchB = new THREE.PointLight(P.ember, 19.0, 18, 2);
     scene.add(ZoneRuins.torchA, ZoneRuins.torchB);
+    /* 巨岩の追跡（§4.4 S3）で、振り返ったときに岩の輪郭が読めるようにする明かり。
+       位置は sync() が Setpieces から引いて毎フレーム置く（演出側は触らない）。 */
+    ZoneRuins.rockKey = new THREE.PointLight(0xffd7ad, 0, 15, 2);   // 岩の面だけを起こす主光（届く範囲を絞る）
+    ZoneRuins.rockRim = new THREE.PointLight(0xffb070, 0, 13, 2);   // 縁だけを起こす逆光
+    scene.add(ZoneRuins.rockKey, ZoneRuins.rockRim);
   },
 
   /* ---- 空（夕暮れのグラデーション。頂点カラー＝画像なし） ----------------- */
   _sky(scene) {
     const P = ZoneRuins.PAL;
-    const g = new THREE.PlaneGeometry(560, 320, 1, 12);
+    const g = new THREE.PlaneGeometry(560, 320, 1, 24);
     const pos = g.attributes.position;
     const col = new Float32Array(pos.count * 3);
-    const top = new THREE.Color(P.skyTop), mid = new THREE.Color(P.skyMid), low = new THREE.Color(P.skyLow);
+    const top = new THREE.Color(P.skyTop), mid = new THREE.Color(P.skyMid);
+    const low = new THREE.Color(P.skyLow), hot = new THREE.Color(P.skyHot);
     const c = new THREE.Color();
     for (let i = 0; i < pos.count; i++) {
-      const u = (pos.getY(i) / 320) + 0.5;
-      if (u > 0.42) c.copy(mid).lerp(top, (u - 0.42) / 0.58);
-      else c.copy(low).lerp(mid, u / 0.42);
+      const u = (pos.getY(i) / 320) + 0.5;      // 0(下) .. 1(上)
+      /* 上＝藍 → 紫 → 橙 → 地平の白熱。一色にしない（P3a-r1） */
+      /* 見える地平は u≈0.49。その少し上に白熱帯 → 橙 → 紫 → 藍 と積む */
+      if (u > 0.66) c.copy(mid).lerp(top, U.clamp((u - 0.66) / 0.34, 0, 1));
+      else if (u > 0.56) c.copy(low).lerp(mid, U.clamp((u - 0.56) / 0.10, 0, 1));
+      else if (u > 0.47) c.copy(hot).lerp(low, U.clamp((u - 0.47) / 0.09, 0, 1));
+      else c.copy(hot);
       col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
@@ -111,63 +134,132 @@ const ZoneRuins = {
     m.renderOrder = -10;
     scene.add(m);
     /* 夕日そのもの（低い位置の大きな円盤＋にじみ） */
-    const sun = new THREE.Mesh(new THREE.CircleGeometry(9, 22),
-                               new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false, depthWrite: false }));
-    sun.position.set(-34, -4, -176);
+    const sun = new THREE.Mesh(new THREE.CircleGeometry(15, 26),
+                               new THREE.MeshBasicMaterial({ color: 0xfff4de, fog: false, depthWrite: false }));
+    sun.position.set(-26, 4, -176);
     sun.renderOrder = -9;
     scene.add(sun);
-    const halo = new THREE.Mesh(new THREE.CircleGeometry(26, 22), ZoneKit.add(0xffb060, 0.30));
-    halo.position.set(-34, -4, -175);
-    halo.renderOrder = -8;
-    scene.add(halo);
+    [[30, 0.55], [58, 0.28], [96, 0.14]].forEach((q, i) => {
+      const halo = new THREE.Mesh(new THREE.CircleGeometry(q[0], 24), ZoneKit.add(0xffc078, q[1]));
+      halo.position.set(-26, 4, -175 + i);
+      halo.renderOrder = -8 + i;
+      scene.add(halo);
+    });
   },
 
-  /* ---- 遠景（峡谷の向こうの山並みと、巨大遺跡のシルエット）2層を視差で流す -- */
+  /* ---- 遠景（峡谷の向こう側）------------------------------------------------
+     P3a-r1: 「箱が浮いている」のをやめ、**読める形**を置く。
+     近い層 = 崩れた塔・段々の遺跡・巨大な石像の顔・吊り橋、遠い層 = 山の稜線と滝。
+     どれも下端を frame の外（y=-40）まで伸ばして地面から生えているようにし、
+     色は空より暗いシルエットにして輪郭を立てる（明暗のコントラストを作る）。 */
   _far(scene) {
     const P = ZoneRuins.PAL;
     ZoneRuins.farLayers = [];
     const LEN = 420;
-    const mk = (opt) => {
-      const grp = new THREE.Group();
-      const body = new THREE.InstancedMesh(opt.geo, ZoneKit.lam(opt.color), opt.count);
-      const d = new THREE.Object3D();
-      for (let i = 0; i < opt.count; i++) {
-        const side = (i % 2) ? 1 : -1;
-        const x = side * (opt.x + ZoneKit.hash(i, opt.salt + 7) * opt.xSpread);
-        const hgt = opt.hMin + ZoneKit.hash(i, opt.salt + 3) * opt.hSpread;
-        const w = opt.wMin + ZoneKit.hash(i, opt.salt) * opt.wSpread;
-        const z = -LEN * 2 * (i / opt.count) - ZoneKit.hash(i, opt.salt + 11) * 8;
-        d.position.set(x, opt.base + hgt / 2, z);
-        d.rotation.set(0, (ZoneKit.hash(i, opt.salt + 5) - 0.5) * 0.7, 0);
-        d.scale.set(w, hgt, w * 0.9);
-        d.updateMatrix();
-        body.setMatrixAt(i, d.matrix);
+    const B = (w, h, d, x, y, z, rot) => ({ g: ZoneKit.box(w, h, d), p: [x, y, z], r: rot || [0, 0, 0] });
+
+    /* --- 形の部品（原点は「地面の高さ」= y 0 とし、下へ 40 伸ばして根を張る） --- */
+    function tower(s2) {                      // 崩れた塔（上が欠けている）
+      const o = [];
+      o.push(B(9 * s2, 80, 9 * s2, 0, -40 + 26 * s2, 0));
+      o.push(B(11 * s2, 3 * s2, 11 * s2, 0, 26 * s2, 0));
+      o.push(B(7 * s2, 9 * s2, 7 * s2, 0.6 * s2, 31 * s2, 0, [0, 0.4, 0.06]));
+      o.push(B(4 * s2, 6 * s2, 4 * s2, -1.4 * s2, 37 * s2, 0.5 * s2, [0.05, 0.2, -0.12]));
+      o.push(B(13 * s2, 2.4 * s2, 13 * s2, 0, -6 * s2, 0));
+      return o;
+    }
+    function terrace(s2) {                    // 段々の遺跡（階段ピラミッド）
+      const o = [];
+      for (let k = 0; k < 5; k++) {
+        o.push(B((30 - k * 5) * s2, 6 * s2, (26 - k * 4.4) * s2, 0, (3 + k * 6) * s2, 0));
       }
-      body.frustumCulled = false;
-      grp.add(body);
-      grp.userData = { par: opt.par, len: LEN };
+      o.push(B(34 * s2, 80, 30 * s2, 0, -40, 0));
+      o.push(B(3 * s2, 10 * s2, 3 * s2, 0, 34 * s2, 0));
+      return o;
+    }
+    function statueHead(s2) {                 // 砂に埋もれた巨大な石像の顔
+      const o = [];
+      o.push(B(16 * s2, 80, 14 * s2, 0, -40 + 5 * s2, 0));      // 埋もれた胴（地面まで）
+      o.push(B(14 * s2, 16 * s2, 12 * s2, 0, 13 * s2, 0));       // 顔
+      o.push(B(16 * s2, 5 * s2, 13 * s2, 0, 21 * s2, 0));        // 冠
+      o.push(B(18 * s2, 3 * s2, 14 * s2, 0, 24 * s2, 0));
+      o.push(B(3.4 * s2, 3.4 * s2, 2 * s2, -3.6 * s2, 15 * s2, -6 * s2));   // 目（凹み）
+      o.push(B(3.4 * s2, 3.4 * s2, 2 * s2, 3.6 * s2, 15 * s2, -6 * s2));
+      o.push(B(3 * s2, 6 * s2, 2.4 * s2, 0, 11 * s2, -6.4 * s2));           // 鼻
+      o.push(B(8 * s2, 2 * s2, 2 * s2, 0, 6 * s2, -6.2 * s2));              // 口
+      [-1, 1].forEach((sx) => o.push(B(3 * s2, 10 * s2, 6 * s2, sx * 8 * s2, 12 * s2, 0)));  // 髪飾り
+      return o;
+    }
+    function bridge(s2) {                     // 峡谷に架かる吊り橋
+      const o = [];
+      [-1, 1].forEach((sx) => {
+        o.push(B(4 * s2, 80, 4 * s2, sx * 26 * s2, -40 + 18 * s2, 0));      // 主塔
+        o.push(B(7 * s2, 3 * s2, 6 * s2, sx * 26 * s2, 19 * s2, 0));
+      });
+      o.push(B(52 * s2, 1.4 * s2, 5 * s2, 0, 6 * s2, 0));                   // 桁
+      for (let k = -5; k <= 5; k++) {                                       // 吊り索
+        const u = Math.abs(k) / 5;
+        o.push(B(0.7 * s2, (3 + u * u * 12) * s2, 0.7 * s2, k * 4.6 * s2, (7 + (3 + u * u * 12) / 2) * s2, 0));
+      }
+      return o;
+    }
+    function ridge(s2, seed) {                // 山の稜線（連なる三角）
+      const o = [];
+      for (let k = 0; k < 7; k++) {
+        const h = (22 + ZoneKit.hash(seed + k, 71) * 30) * s2;
+        const w = (26 + ZoneKit.hash(seed + k, 73) * 22) * s2;
+        o.push({ g: new THREE.ConeGeometry(w / 2, h, 4), p: [(k - 3) * w * 0.72, h / 2 - 6, ZoneKit.hash(seed + k, 79) * 30],
+                 r: [0, 0.6, 0] });
+        o.push(B(w, 80, w, (k - 3) * w * 0.72, -40 - 6, 0));
+      }
+      return o;
+    }
+    function falls(s2) {                      // 崖と滝
+      const o = [];
+      o.push(B(30 * s2, 80, 16 * s2, 0, -40 + 14 * s2, 0));
+      o.push(B(40 * s2, 6 * s2, 20 * s2, 0, 15 * s2, 0));
+      return o;
+    }
+
+    /* --- 近い層: 崩れた塔・段々の遺跡・石像の顔・吊り橋を散らす --- */
+    const mk = (parts, color, par, name) => {
+      /* 遠景は陰影を付けず（basic）・霧もかけない。空（明部）との明暗差だけで
+         輪郭を立てる＝距離ごとに色を変えた「層」になる（大気遠近） */
+      const mesh = new THREE.Mesh(ZoneKit.merge(parts), ZoneKit.bas(color, { fog: false }));
+      mesh.frustumCulled = false;
+      const grp = new THREE.Group();
+      grp.add(mesh);
+      grp.userData = { par: par, len: LEN };
       scene.add(grp);
       ZoneRuins.farLayers.push(grp);
       return grp;
     };
-    /* 近い層＝巨大遺跡（角柱・階段状のピラミッド） */
-    mk({ count: 40, salt: 401, geo: ZoneKit.box(1, 1, 1), color: 0x6b5c45,
-         x: 40, xSpread: 22, hMin: 14, hSpread: 34, wMin: 6, wSpread: 10, base: -30, par: 0.5 });
-    /* 遠い層＝山並み（円錐） */
-    mk({ count: 34, salt: 907, geo: new THREE.ConeGeometry(1, 1, 5), color: P.mountain,
-         x: 74, xSpread: 40, hMin: 34, hSpread: 56, wMin: 20, wSpread: 30, base: -34, par: 0.16 });
-    /* いちばん遠い巨大遺跡（1本だけ大きい塔のシルエット） */
-    const tower = new THREE.Group();
-    const tm = ZoneKit.lam(P.ruinFar);
-    const parts = [];
-    for (let i = 0; i < 6; i++) parts.push({ g: ZoneKit.box(26 - i * 3.6, 7, 26 - i * 3.6), p: [0, i * 7, 0] });
-    parts.push({ g: ZoneKit.box(4, 13, 4), p: [0, 45, 0] });
-    const tmesh = new THREE.Mesh(ZoneKit.merge(parts), tm);
-    tmesh.position.set(76, -26, -300);
-    tower.add(tmesh);
-    tower.userData = { par: 0.07, len: 420 };
-    scene.add(tower);
-    ZoneRuins.farLayers.push(tower);
+    const near = [];
+    const put = (parts, x, z, s2) => {
+      parts.forEach((q) => {
+        near.push({ g: q.g, p: [q.p[0] * 1 + x, q.p[1], q.p[2] + z], r: q.r, s: [s2, s2, s2] });
+      });
+    };
+    /* 位置は決め打ち（同じ距離では必ず同じ景色になる）。左右に振り分ける */
+    put(tower(1), -46, -40, 1);
+    put(terrace(1), 54, -150, 1);
+    put(statueHead(1), -58, -270, 1);
+    put(bridge(0.9), 40, -380, 1);
+    put(tower(0.7), 62, -500, 1);
+    put(terrace(0.8), -52, -610, 1);
+    put(statueHead(0.7), 56, -720, 1);
+    put(bridge(0.7), -44, -820, 1);
+    mk(near, 0x4f4363, 0.42, 'ruinsFar');   // 近い層＝夕日を受けてやや明るい
+
+    /* --- 遠い層: 山の稜線と滝（さらに暗い紫） --- */
+    const far = [];
+    const putF = (parts, x, z) => parts.forEach((q) => far.push({ g: q.g, p: [q.p[0] + x, q.p[1], q.p[2] + z], r: q.r }));
+    putF(ridge(1.1, 3), -120, -120);
+    putF(ridge(1.0, 11), 130, -300);
+    putF(falls(1.0), -96, -460);
+    putF(ridge(1.2, 23), 118, -640);
+    putF(ridge(1.0, 31), -128, -790);
+    mk(far, 0x2a2340, 0.14, 'mountains');   // 遠い層＝空に抜ける暗いシルエット
   },
 
   /* ---- 舞う埃の粒子（契約§5）: 加算ブレンドの小さな板を漂わせる ---------- */
@@ -184,13 +276,15 @@ const ZoneRuins = {
       }
     });
     /* 大きめの綿埃（ゆっくり漂う） */
+    /* 舞う落ち葉（小さく・数を絞り・ゆっくり回る） */
     ZoneRuins._field({
-      name: 'dustBig', onTrack: true, spacing: 3.4, geo: new THREE.PlaneGeometry(0.4, 0.4),
-      mat: ZoneKit.add(P.dust, 0.13), prop: false, order: 5,
+      name: 'dustBig', onTrack: true, spacing: 6.5, geo: new THREE.PlaneGeometry(0.13, 0.10),
+      mat: ZoneKit.add(0xd8bc84, 0.30), prop: false, order: 5,
       place(slot, m, t) {
         const h1 = ZoneKit.hash(slot, 631), h2 = ZoneKit.hash(slot, 637);
         return { x: (h1 - 0.5) * 7.2, y: 0.3 + h2 * (CFG.H - 0.6) + Math.sin(t * 0.7 + slot) * 0.5,
-                 rz: t * 0.2 + slot, sx: 1 + h2, sy: 1 + h1 };
+                 rx: t * (0.5 + h1), ry: t * (0.7 + h2), rz: t * 0.3 + slot,
+                 sx: 0.8 + h2 * 0.6, sy: 0.8 + h1 * 0.6 };
       }
     });
   },
@@ -259,17 +353,16 @@ const ZoneRuins = {
       /* 石の積み目（横の目地）＝のっぺりさせない */
       for (let i = -2; i <= 2; i++) fp.push({ g: ZoneKit.box(0.06, 0.06, 7.9), p: [-0.30, i * 0.84, 0] });
       /* レリーフ（人物・渦巻き・楔形の彫り）を凹凸で作る */
-      for (let i = 0; i < 4; i++) {
-        const z = -3.0 + i * 2.0;
+      for (let i = 0; i < 2; i++) {
+        const z = -2.2 + i * 4.0;
         fp.push({ g: ZoneKit.box(0.10, 0.62, 0.30), p: [-0.33, 0.55, z] });        // 胴
         fp.push({ g: ZoneKit.box(0.09, 0.17, 0.17), p: [-0.34, 0.97, z] });        // 頭
         fp.push({ g: ZoneKit.box(0.09, 0.10, 0.44), p: [-0.34, 0.72, z + 0.1] });  // 腕
         fp.push({ g: ZoneKit.box(0.08, 0.30, 0.10), p: [-0.33, 0.14, z - 0.08] }); // 脚
         fp.push({ g: ZoneKit.box(0.07, 0.26, 0.26), p: [-0.33, -0.75, z], r: [0.8, 0, 0] });  // 渦巻き
-        fp.push({ g: ZoneKit.box(0.07, 0.10, 0.10), p: [-0.33, -1.35, z] });
       }
       /* 崩れ（欠けた石） */
-      [[-1.7, -2.6], [1.4, 1.1], [-0.4, 3.0]].forEach((q) => {
+      [[-1.7, -2.6], [1.4, 1.1]].forEach((q) => {
         fp.push({ g: ZoneKit.box(0.22, 0.44, 0.50), p: [-0.18, q[0], q[1]], r: [0.2, 0.3, 0.15] });
       });
       const g = ZoneKit.merge(fp);
@@ -292,8 +385,8 @@ const ZoneRuins = {
         { g: ZoneKit.box(0.68, 0.24, 0.68), p: [0, -H * 0.5 + 0.44, 0] },      // 柱礎
         { g: ZoneKit.box(0.56, 0.14, 0.56), p: [0, -H * 0.5 + 0.62, 0] }
       ];
-      for (let i = 0; i < 8; i++) {                                            // 溝彫り
-        const a = i / 8 * Math.PI * 2;
+      for (let i = 0; i < 4; i++) {                                            // 溝彫り
+        const a = i / 4 * Math.PI * 2;
         parts.push({ g: ZoneKit.box(0.06, H - 1.2, 0.06), p: [Math.cos(a) * 0.23, 0, Math.sin(a) * 0.23] });
       }
       const g = ZoneKit.merge(parts);
@@ -316,19 +409,19 @@ const ZoneRuins = {
       ]);
       const placeT = (slot, m) => {
         if (!isWall(m + 1)) return null;
-        if (hash(slot, 83) > 0.62) return null;
+        if (hash(slot, 83) > 0.78) return null;
         const side = (slot % 2) ? 1 : -1;
         const ceil = ((slot >> 1) % 2) === 1;
         const y = ceil ? (H - 0.95 - hash(slot, 89) * 0.7) : (0.95 + hash(slot, 89) * 0.7);
         return { x: side * (XW + 0.12), y: y, ry: side > 0 ? 0 : Math.PI, rz: ceil ? Math.PI : 0 };
       };
-      F({ name: 'torch', spacing: 7.5, geo: body, mat: ZoneKit.lam(P.stoneDark), place: placeT });
+      F({ name: 'torch', spacing: 5.5, geo: body, mat: ZoneKit.lam(P.stoneDark), place: placeT });
       const flame = ZoneKit.merge([
-        { g: ZoneKit.cone(0.10, 0.30, 6), p: [0, 0.56, -0.40] },
-        { g: ZoneKit.cone(0.065, 0.17, 6), p: [0, 0.48, -0.40] }
+        { g: ZoneKit.cone(0.22, 0.76, 10), p: [0, 0.80, -0.40] },
+        { g: ZoneKit.cone(0.13, 0.40, 9), p: [0, 0.60, -0.40] }
       ]);
       F({
-        name: 'torchFlame', spacing: 7.5, geo: flame, mat: ZoneKit.bas(P.fire), prop: false,
+        name: 'torchFlame', spacing: 5.5, geo: flame, mat: ZoneKit.bas(P.flame), prop: false,
         place(slot, m, t) {
           const o = placeT(slot, m);
           if (!o) return null;
@@ -338,7 +431,7 @@ const ZoneRuins = {
         }
       });
       F({
-        name: 'torchHot', spacing: 7.5, geo: ZoneKit.merge([{ g: ZoneKit.cone(0.05, 0.13, 5), p: [0, 0.48, -0.40] }]),
+        name: 'torchHot', spacing: 5.5, geo: ZoneKit.merge([{ g: ZoneKit.cone(0.12, 0.40, 9), p: [0, 0.66, -0.40] }]),
         mat: ZoneKit.bas(P.fireHot), prop: false,
         place(slot, m, t) {
           const o = placeT(slot, m);
@@ -347,10 +440,22 @@ const ZoneRuins = {
           return o;
         }
       });
-      /* 壁と床に落ちる火のにじみ */
-      const blob = new THREE.PlaneGeometry(1.0, 1.5);
+      /* 炎のまわりの光（明部をつくる。加算ブレンドの板を炎に重ねる） */
       F({
-        name: 'torchGlow', spacing: 7.5, geo: blob, mat: ZoneKit.add(P.fire, 0.20), prop: false, order: 3,
+        name: 'torchHalo', spacing: 5.5, geo: new THREE.CircleGeometry(0.52, 14),
+        mat: ZoneKit.add(0xffb060, 0.42), prop: false, order: 4,
+        place(slot, m, t) {
+          const o = placeT(slot, m);
+          if (!o) return null;
+          const fl = 0.9 + 0.16 * Math.sin(t * 8.3 + slot * 1.9);
+          return { x: o.x - (o.x > 0 ? 0.34 : -0.34), y: o.y + (o.rz ? -0.62 : 0.62) * 1,
+                   ry: o.x > 0 ? -Math.PI / 2 : Math.PI / 2, sx: fl, sy: fl };
+        }
+      });
+      /* 壁と床に落ちる火のにじみ */
+      const blob = new THREE.CircleGeometry(0.62, 14);
+      F({
+        name: 'torchGlow', spacing: 5.5, geo: blob, mat: ZoneKit.add(P.fire, 0.18), prop: false, order: 3,
         place(slot, m, t) {
           const o = placeT(slot, m);
           if (!o) return null;
@@ -361,7 +466,7 @@ const ZoneRuins = {
         }
       });
       F({
-        name: 'torchFloor', spacing: 7.5, geo: new THREE.PlaneGeometry(1.7, 2.6),
+        name: 'torchFloor', spacing: 5.5, geo: new THREE.CircleGeometry(0.95, 14),
         mat: ZoneKit.add(P.fire, 0.16), prop: false, order: 3,
         place(slot, m) {
           const o = placeT(slot, m);
@@ -386,7 +491,7 @@ const ZoneRuins = {
         name: 'vine', spacing: 5, geo: g, mat: ZoneKit.lam(P.vine),
         place(slot, m, t) {
           if (!isWall(m + 2.5)) return null;
-          if (hash(slot, 141) > 0.66) return null;
+          if (hash(slot, 141) > 0.82) return null;
           const side = (slot % 2) ? 1 : -1;
           const ceil = ((slot >> 1) % 2) === 1;
           return { x: side * (XW + 0.24), y: ceil ? 0.05 : H - 0.05,
@@ -402,6 +507,7 @@ const ZoneRuins = {
         ]), mat: ZoneKit.lam(P.moss),
         place(slot, m) {
           if (hash(slot, 151) > 0.72) return null;
+          if (!isWall(m) && hash(slot, 152) > 0.4) return null;
           const side = (slot % 2) ? 1 : -1;
           const ceil = ((slot >> 1) % 2) === 1;
           return { x: side * (HW + 0.14), y: ceil ? H - 0.06 : 0.06, dz: hash(slot, 153) * 2 };
@@ -463,7 +569,7 @@ const ZoneRuins = {
         name: 'altarFire', spacing: 17, geo: ZoneKit.merge([
           { g: ZoneKit.cone(0.20, 0.52, 7), p: [0, 1.04, 0] },
           { g: ZoneKit.cone(0.12, 0.30, 6), p: [0, 0.92, 0] }
-        ]), mat: ZoneKit.bas(P.fire), prop: false,
+        ]), mat: ZoneKit.bas(P.flame), prop: false,
         place(slot, m, t) {
           const o = placeA(slot, m);
           if (!o) return null;
@@ -483,6 +589,84 @@ const ZoneRuins = {
       });
     }
 
+    /* --- 9b. 火鉢（棚の上の大きな火皿。明部と暖色の主役） ------------------ */
+    {
+      const bowl = ZoneKit.merge([
+        { g: ZoneKit.cyl(0.30, 0.10, 10), p: [0, 0.62, 0] },
+        { g: ZoneKit.cyl(0.22, 0.30, 10), p: [0, 0.44, 0] },
+        { g: ZoneKit.box(0.10, 0.52, 0.10), p: [0, 0.26, 0] },
+        { g: ZoneKit.box(0.44, 0.10, 0.44), p: [0, 0.05, 0] }
+      ]);
+      const placeB = (slot, m) => {
+        if (!isWall(m + 5)) return null;
+        if (hash(slot, 401) > 0.62) return null;
+        const side = (slot % 2) ? 1 : -1;
+        const ceil = ((slot >> 1) % 2) === 1;
+        return { x: side * (HW + 0.78), y: ceil ? H : 0, rz: ceil ? Math.PI : 0, dz: hash(slot, 403) * 3 };
+      };
+      F({ name: 'brazier', spacing: 9, geo: bowl, mat: ZoneKit.lam(P.stoneDark), place: placeB });
+      F({
+        name: 'brazierFire', spacing: 9, geo: ZoneKit.merge([
+          { g: ZoneKit.cone(0.33, 0.92, 10), p: [0, 1.12, 0] },
+          { g: ZoneKit.cone(0.20, 0.46, 7), p: [0, 0.90, 0] }
+        ]), mat: ZoneKit.bas(P.flame), prop: false,
+        place(slot, m, t) {
+          const o = placeB(slot, m);
+          if (!o) return null;
+          o.sy = 0.82 + 0.3 * Math.sin(t * 7.1 + slot * 2.3);
+          o.sx = 0.92 + 0.12 * Math.sin(t * 12 + slot);
+          return o;
+        }
+      });
+      F({
+        name: 'brazierHot', spacing: 9, geo: ZoneKit.merge([
+          { g: ZoneKit.cone(0.18, 0.46, 6), p: [0, 0.94, 0] }
+        ]), mat: ZoneKit.bas(P.fireHot), prop: false,
+        place(slot, m, t) {
+          const o = placeB(slot, m);
+          if (!o) return null;
+          o.sy = 0.9 + 0.25 * Math.sin(t * 9 + slot);
+          return o;
+        }
+      });
+      F({
+        name: 'brazierGlow', spacing: 9, geo: new THREE.CircleGeometry(0.78, 14),
+        mat: ZoneKit.add(0xffb060, 0.40), prop: false, order: 4,
+        place(slot, m, t) {
+          const o = placeB(slot, m);
+          if (!o) return null;
+          const side = (o.x > 0) ? 1 : -1;
+          const fl = 0.9 + 0.14 * Math.sin(t * 6.7 + slot);
+          return { x: o.x - side * 0.2, y: (o.rz ? H - 0.95 : 0.95), dz: o.dz,
+                   ry: side > 0 ? -Math.PI / 2 : Math.PI / 2, sx: fl, sy: fl };
+        }
+      });
+    }
+
+    /* --- 9c. 垂れ幕（深紅と青緑の布。色数を足す / P3a-r1） ----------------- */
+    {
+      const cloth = ZoneKit.merge([
+        { g: ZoneKit.box(0.05, 1.5, 0.66), p: [0, -0.75, 0] },
+        { g: ZoneKit.box(0.09, 0.12, 0.76), p: [0, 0.02, 0] },
+        { g: ZoneKit.box(0.06, 0.26, 0.30), p: [0, -1.62, 0], r: [0, 0, 0] }
+      ]);
+      [[P.cloth, 0, 431], [P.cloth2, 1, 433]].forEach((cc) => {
+        F({
+          name: 'banner', spacing: 9, geo: cloth, mat: ZoneKit.lam(cc[0]),
+          place(slot, m, t) {
+            if (!isWall(m + 3)) return null;
+            if ((slot % 2) !== cc[1]) return null;
+            if (hash(slot, cc[2]) > 0.62) return null;
+            const side = (hash(slot, cc[2] + 1) > 0.5) ? 1 : -1;
+            const ceil = ((slot >> 1) % 2) === 1;
+            return { x: side * (XW + 0.62), y: ceil ? 0.2 : H - 0.2,
+                     rz: (ceil ? Math.PI : 0) + Math.sin(t * 0.9 + slot) * 0.035,
+                     sy: 0.8 + hash(slot, cc[2] + 2) * 0.5 };
+          }
+        });
+      });
+    }
+
     /* --- 10. 壺（割れたものも混ぜる）-------------------------------------- */
     {
       const pot = ZoneKit.merge([
@@ -494,6 +678,7 @@ const ZoneRuins = {
       F({
         name: 'pot', spacing: 4.6, geo: pot, mat: ZoneKit.lam(0xa07a4e),
         place(slot, m) {
+          if (!isWall(m + 2)) return null;            // 棚（ledge）の上にだけ置く
           if (hash(slot, 181) > 0.55) return null;
           const side = (slot % 2) ? 1 : -1;
           const ceil = ((slot >> 1) % 2) === 1;
@@ -509,6 +694,7 @@ const ZoneRuins = {
           { g: ZoneKit.box(0.11, 0.04, 0.09), p: [0.14, 0.02, 0.1], r: [0, 1.1, -0.2] }
         ]), mat: ZoneKit.lam(0x96703f),
         place(slot, m) {
+          if (!isWall(m + 2)) return null;
           if (hash(slot, 191) > 0.6) return null;
           const ceil = ((slot >> 1) % 2) === 1;
           return { x: ((slot % 2) ? 1 : -1) * (HW + 0.2 + hash(slot, 193) * 1.1), y: ceil ? H - 0.02 : 0.02,
@@ -554,6 +740,7 @@ const ZoneRuins = {
       F({
         name: 'steps', spacing: 19, geo: g, mat: ZoneKit.lam(P.stone),
         place(slot, m) {
+          if (!isWall(m + 3)) return null;
           const side = (slot % 2) ? 1 : -1;
           const ceil = ((slot >> 1) % 2) === 1;
           /* 天井側は rz=180° で上下が返るので、ry も返して「外向き」を保つ
@@ -576,6 +763,7 @@ const ZoneRuins = {
       F({
         name: 'rubble', spacing: 2.8, geo: g, mat: ZoneKit.lam(P.stoneDark),
         place(slot, m) {
+          if (!isWall(m + 1)) return null;
           if (hash(slot, 221) > 0.62) return null;
           const side = (slot % 2) ? 1 : -1;
           const ceil = ((slot >> 1) % 2) === 1;
@@ -621,28 +809,78 @@ const ZoneRuins = {
       });
     }
 
+    /* --- 14b. 地割れの火（棚の外側を走る裂け目。明部を連続させる / P3a-r1） - */
+    {
+      const L = 6.0;
+      const lip = ZoneKit.merge([
+        { g: ZoneKit.box(0.30, 0.16, L), p: [-0.22, 0.06, 0], r: [0, 0, 0.12] },
+        { g: ZoneKit.box(0.30, 0.16, L), p: [0.22, 0.06, 0], r: [0, 0, -0.12] }
+      ]);
+      const placeF = (slot, m) => {
+        if (!isWall(m + 4)) return null;
+        const side = (slot % 2) ? 1 : -1;
+        const ceil = ((slot >> 1) % 2) === 1;
+        return { x: side * (HW + 0.92), y: ceil ? H : 0, rz: ceil ? Math.PI : 0 };
+      };
+      F({ name: 'fissure', spacing: 6, geo: lip, mat: ZoneKit.lam(P.stoneDark), place: placeF });
+      F({
+        name: 'fissureFire', spacing: 6,
+        geo: ZoneKit.merge([
+          { g: ZoneKit.box(0.44, 0.05, L * 0.92), p: [0, 0.03, 0] },
+          { g: ZoneKit.box(0.15, 0.30, L * 0.92), p: [-0.16, 0.18, 0], r: [0, 0, 0.14] },
+          { g: ZoneKit.box(0.15, 0.30, L * 0.92), p: [0.16, 0.18, 0], r: [0, 0, -0.14] }
+        ]),
+        mat: ZoneKit.bas(P.fireHot), prop: false, order: 3,
+        place(slot, m, t) {
+          const o = placeF(slot, m);
+          if (!o) return null;
+          return { x: o.x, y: o.rz ? H : 0, rz: o.rz, sy: 0.9 + 0.2 * Math.sin(t * 3 + slot) };
+        }
+      });
+      F({
+        name: 'fissureGlow', spacing: 6, geo: new THREE.PlaneGeometry(2.6, L),
+        mat: ZoneKit.add(0xff9a48, 0.86), prop: false, order: 4,
+        place(slot, m, t) {
+          const o = placeF(slot, m);
+          if (!o) return null;
+          const fl = 0.9 + 0.12 * Math.sin(t * 4.1 + slot);
+          return { x: o.x, y: o.rz ? H - 0.03 : 0.03, rx: o.rz ? Math.PI / 2 : -Math.PI / 2, sx: fl };
+        }
+      });
+    }
+
     /* --- 15. 天窓から落ちる光の柱（黒潰れ防止の主役 / 契約§5） ------------ */
     {
       const beam = ZoneKit.merge([
         { g: ZoneKit.box(1.5, CFG.H + 1.2, 1.5), p: [0, 0, 0], s: [1, 1, 1] }
       ]);
       F({
-        name: 'skylight', spacing: 26, geo: beam, mat: ZoneKit.add(0xffd9a0, 0.055), prop: false, order: 2,
+        name: 'skylight', spacing: 13, geo: beam, mat: ZoneKit.add(0xffd9a0, 0.20), prop: false, order: 2,
         place(slot, m, t) {
-          if (!isWall(m + 8)) return null;
+          if (!isWall(m + 4)) return null;
           const side = (hash(slot, 241) > 0.5) ? 1 : -1;
-          return { x: side * (HW + 0.75 + hash(slot, 243) * 0.7), y: CFG.H / 2,
+          return { x: side * (HW + 0.62 + hash(slot, 243) * 0.36), y: CFG.H / 2,
                    rz: 0.12 * side, sx: 0.8 + 0.1 * Math.sin(t * 0.9 + slot) };
+        }
+      });
+      /* 光が落ちた所の明るい溜まり（床と棚を白く焼く＝明部） */
+      F({
+        name: 'skypool', spacing: 13, geo: new THREE.CircleGeometry(1.5, 18),
+        mat: ZoneKit.add(0xffdca8, 0.52), prop: false, order: 4,
+        place(slot, m) {
+          if (!isWall(m + 4)) return null;
+          const side = (hash(slot, 241) > 0.5) ? 1 : -1;
+          return { x: side * (HW + 0.62 + hash(slot, 243) * 0.36), y: 0.03, rx: -Math.PI / 2 };
         }
       });
       /* 天窓そのもの（天井の抜け） */
       F({
-        name: 'skyhole', spacing: 26, geo: new THREE.PlaneGeometry(1.5, 2.4),
-        mat: ZoneKit.add(0xffe8c0, 0.34), prop: false, order: 2,
+        name: 'skyhole', spacing: 13, geo: new THREE.PlaneGeometry(1.5, 2.4),
+        mat: ZoneKit.add(0xffe8c0, 0.70), prop: false, order: 2,
         place(slot, m) {
-          if (!isWall(m + 8)) return null;
+          if (!isWall(m + 4)) return null;
           const side = (hash(slot, 241) > 0.5) ? 1 : -1;
-          return { x: side * (HW + 0.75 + hash(slot, 243) * 0.7), y: CFG.H - 0.03, rx: Math.PI / 2 };
+          return { x: side * (HW + 0.62 + hash(slot, 243) * 0.36), y: CFG.H - 0.03, rx: Math.PI / 2 };
         }
       });
     }
@@ -676,18 +914,6 @@ const ZoneRuins = {
           const ceil = (slot % 2) === 1;
           return { x: (hash(slot, 263) - 0.5) * 3.2, y: ceil ? H - 0.01 : 0.01,
                    rx: ceil ? Math.PI : 0, ry: (hash(slot, 267) - 0.5) * 0.7 };
-        }
-      });
-    }
-
-    /* --- 17. 石畳の目地（走って見える流れ） ------------------------------- */
-    {
-      F({
-        name: 'joint', onTrack: true, spacing: 2.2, geo: ZoneKit.box(CFG.LANE_W * 3 - 0.2, 0.02, 0.05),
-        mat: ZoneKit.lam(0x6b5936), prop: false,
-        place(slot) {
-          const ceil = (slot % 2) === 1;
-          return { x: 0, y: ceil ? H - 0.012 : 0.012 };
         }
       });
     }
@@ -859,7 +1085,7 @@ const ZoneRuins = {
       F({ name: 'lantern', spacing: 11, geo: body, mat: ZoneKit.lam(0x6b5b3c), place: placeL });
       F({
         name: 'lanternFire', spacing: 11,
-        geo: ZoneKit.merge([{ g: ZoneKit.box(0.14, 0.16, 0.14), p: [0, -0.10, 0] }]),
+        geo: ZoneKit.merge([{ g: ZoneKit.box(0.16, 0.18, 0.16), p: [0, -0.10, 0] }]),
         mat: ZoneKit.bas(P.fireHot), prop: false,
         place(slot, m, t) {
           const o = placeL(slot, m);
@@ -881,6 +1107,7 @@ const ZoneRuins = {
       F({
         name: 'fallen', spacing: 15, geo: g, mat: ZoneKit.lam(P.stone),
         place(slot, m) {
+          if (!isWall(m + 4)) return null;
           const side = (slot % 2) ? 1 : -1;
           const ceil = ((slot >> 1) % 2) === 1;
           return { x: side * (HW + 0.5 + hash(slot, 331) * 0.6), y: ceil ? H - 0.22 : 0.22,
@@ -934,9 +1161,29 @@ const ZoneRuins = {
       const fa = 0.75 + 0.25 * Math.sin(t * 8.3) + 0.1 * Math.sin(t * 19);
       const fb = 0.72 + 0.28 * Math.sin(t * 6.1 + 1.4);
       ZoneRuins.torchA.position.set(-1.85, 1.1, -(a - (dist % a)));
-      ZoneRuins.torchA.intensity = 9.0 * fa;
+      ZoneRuins.torchA.intensity = 24.0 * fa;
       ZoneRuins.torchB.position.set(1.85, CFG.H - 1.1, -(b - (dist % b)));
-      ZoneRuins.torchB.intensity = 7.0 * fb;
+      ZoneRuins.torchB.intensity = 19.0 * fb;
+    }
+    /* 巨岩の追跡（§4.4 S3）: 岩が「球」だと読めるように、横からの主光と
+       後ろ上からの縁光を当てる（演出側＝setpieces は触らず、ゾーンの照明だけで作る）。
+       位置は Setpieces から距離を読むだけ（一方通行の参照）。 */
+    if (ZoneRuins.rockKey) {
+      const Sp = (typeof Setpieces !== 'undefined') ? Setpieces : null;
+      const on = !!(Sp && Sp.rockActive && Sp.rockActive());
+      if (on) {
+        const gap = Sp.rockGap(), R = Sp.ROCK.R;
+        const fl = 0.88 + 0.12 * Math.sin(t * 7.3);
+        /* 主光: 斜め前・横から当てて、球の片側に明暗の境目を作る＝丸く見える */
+        ZoneRuins.rockKey.position.set(1.9, CFG.H * 0.62, gap - R - 1.1);
+        ZoneRuins.rockKey.intensity = 30 * fl;
+        /* 縁光: 後ろ上から。silhouette の縁だけが光って輪郭が立つ */
+        ZoneRuins.rockRim.position.set(-1.7, CFG.H * 1.75, gap + R * 0.55);
+        ZoneRuins.rockRim.intensity = 26 * fl;
+      } else if (ZoneRuins.rockKey.intensity !== 0) {
+        ZoneRuins.rockKey.intensity = 0;
+        ZoneRuins.rockRim.intensity = 0;
+      }
     }
     if (ZoneRuins.speedLines) {
       const op = 0.16 + ZoneRuins._spd01 * 0.34;
