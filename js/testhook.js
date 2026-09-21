@@ -1,0 +1,147 @@
+/* ============================================================================
+   DUO RUN — testhook.js  監査・機械テストの入口 window.DUO（契約 §7）
+
+     DUO.start(stageIdOr'endless'[, seed])   ステージ開始
+     DUO.pump(dt)                            更新＋描画をワンセットで1フレーム
+     DUO.key(code, down)                     キー入力（e.code）
+     DUO.touch(side, gesture)                'left'|'right' × 'left'|'right'|'up'|'down'
+     DUO.state()                             速度・距離・2体の状態・生存・現在チャンク
+     DUO.skipTo(m)                           指定距離へ跳ぶ
+     DUO.bot(mode)                           null | 'perfect' | 'delay250'
+     DUO.runAll() / DUO.runQuick()           機械テスト（Promiseを返す）
+     DUO.reset()                             製品の初期状態（タイトル）へ戻す
+     DUO.__suites                            tests/*.js が push するテスト集合
+   ============================================================================ */
+'use strict';
+
+const DUO = {
+  __suites: [],
+  __lastReport: null,
+  __running: false,
+
+  start(stageId, seed) { return DUO.state(Game.start(stageId || 'S0', seed)); },
+  pump(dt) { Game.pump(dt === undefined ? 1 / 60 : dt); return DUO.state(); },
+  key(code, down) { Input.keyEvent(code, !!down); return true; },
+  touch(side, gesture) {
+    const g = (gesture === 'up') ? 'jump' : (gesture === 'down') ? 'slide' : gesture;
+    return Input.gesture(side, g);
+  },
+  state() { return Game.snapshot(); },
+  skipTo(m) {
+    if (!Game.stage || Game.status === 'idle') return null;
+    const st = Game.status;
+    Game.resetRun(m);
+    Game.status = (st === 'playing' || st === 'dying') ? 'playing' : st;
+    return DUO.state();
+  },
+  bot(mode) { Game.botMode = (mode === 'off') ? null : (mode || null); return Game.botMode; },
+  reset() {
+    Game.botMode = null;
+    Game.handSwap = false;
+    Game.runners.forEach((r) => { r.mirrored = false; });
+    Game.runners[0].surface = 'floor';
+    Game.runners[1].surface = 'ceil';
+    Input.clear();
+    Game.toTitle();
+    return DUO.state();
+  },
+
+  /* 更新のみ（描画なし）。長距離のボット完走テスト用 */
+  __step(dt) { Game.step(dt); return null; },
+
+  __internal: {
+    CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
+    Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
+    createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
+    /* テストで単体の障害物を置く */
+    spawnOne(type, surface, lane, atAheadM) {
+      const o = Obstacles.make(type, surface, lane, Game.dist + atAheadM, Game.dist);
+      Game.active.push(o);
+      return o;
+    },
+    clearObstacles() {
+      Game.active.forEach((o) => World.dropView(o));
+      Game.active.length = 0;
+    }
+  },
+
+  /* --- テストハーネス ------------------------------------------------------ */
+  _mkT() {
+    const res = { pass: 0, fail: 0, msgs: [] };
+    return {
+      res: res,
+      ok(c, m) { if (c) res.pass++; else { res.fail++; res.msgs.push('NG: ' + m); } return !!c; },
+      eq(a, b, m) { return this.ok(a === b, m + ' [got ' + a + ' / want ' + b + ']'); },
+      near(a, b, eps, m) { return this.ok(Math.abs(a - b) <= eps, m + ' [got ' + a + ' / want ' + b + '±' + eps + ']'); },
+      info(m) { res.msgs.push('.. ' + m); }
+    };
+  },
+
+  _run(quickOnly) {
+    if (DUO.__running) return Promise.reject(new Error('already running'));
+    DUO.__running = true;
+    const t0 = (performance && performance.now) ? performance.now() : Date.now();
+    const lsSnap = U.lsSnapshot();
+    DUO.__lsSnap = lsSnap;
+    const list = DUO.__suites.filter((s) => (quickOnly ? s.quick : true));
+    const report = { mode: quickOnly ? 'quick' : 'all', suites: [], pass: 0, fail: 0, sec: 0 };
+
+    const yieldOnce = () => new Promise((r) => setTimeout(r, 0));
+
+    return (async function () {
+      for (let i = 0; i < list.length; i++) {
+        const s = list[i];
+        DUO.reset();
+        const t = DUO._mkT();
+        const st = (performance && performance.now) ? performance.now() : Date.now();
+        try {
+          s.run(t);
+        } catch (e) {
+          t.res.fail++;
+          t.res.msgs.push('EX: ' + (e && e.stack ? e.stack : e));
+        }
+        const el = (((performance && performance.now) ? performance.now() : Date.now()) - st) / 1000;
+        report.suites.push({ name: s.name, pass: t.res.pass, fail: t.res.fail, sec: +el.toFixed(2), msgs: t.res.msgs });
+        report.pass += t.res.pass;
+        report.fail += t.res.fail;
+        await yieldOnce();
+      }
+      /* --- 後始末: localStorage と製品状態を完全復帰し、通常操作が通るか確かめる --- */
+      U.lsRestore(lsSnap);
+      DUO.reset();
+      const t = DUO._mkT();
+      try {
+        const snapNow = U.lsSnapshot();
+        t.eq(JSON.stringify(snapNow), JSON.stringify(lsSnap), 'localStorage が実行前と一致');
+        t.eq(DUO.state().status, 'idle', 'タイトル画面へ復帰');
+        t.eq(document.getElementById('screen-title').classList.contains('on'), true, 'タイトルのDOMが表示状態');
+        DUO.start('S0', 4242);
+        DUO.pump(1 / 60);
+        t.eq(DUO.state().status, 'playing', 'runAll後に通常のプレイ開始ができる');
+        DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
+        t.eq(DUO.state().runners.lumen.act, 'jump', 'runAll後にキー入力が効く');
+        DUO.touch('right', 'up'); DUO.pump(1 / 60);
+        t.eq(DUO.state().runners.umbra.act, 'jump', 'runAll後にタッチ入力が効く');
+        DUO.reset();
+        t.eq(DUO.state().status, 'idle', '最後にタイトルへ戻る');
+      } catch (e) {
+        t.res.fail++; t.res.msgs.push('EX: ' + (e && e.stack ? e.stack : e));
+      }
+      report.suites.push({ name: '_restore（初期状態復帰）', pass: t.res.pass, fail: t.res.fail, sec: 0, msgs: t.res.msgs });
+      report.pass += t.res.pass; report.fail += t.res.fail;
+
+      U.lsRestore(lsSnap);
+      DUO.reset();
+      report.sec = +((((performance && performance.now) ? performance.now() : Date.now()) - t0) / 1000).toFixed(2);
+      report.ok = (report.fail === 0);
+      DUO.__lastReport = report;
+      DUO.__running = false;
+      return report;
+    })();
+  },
+
+  runAll() { return DUO._run(false); },
+  runQuick() { return DUO._run(true); }
+};
+
+window.DUO = DUO;

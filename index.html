@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<title>DUO RUN — Light &amp; Shadow</title>
+<style>
+  :root{
+    --lumen:#ffb347; --lumen-dim:#8a5a12;
+    --umbra:#7d8cff; --umbra-dim:#2f3a8a;
+    --ink:#e8ecff; --bg:#05070f;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%; background:var(--bg); color:var(--ink); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;}
+  #app{position:fixed; inset:0; touch-action:none;}
+  #gl{display:block; width:100%; height:100%;}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .2s;}
+  #hud.on{opacity:1;}
+  .hud-top{position:absolute; top:calc(env(safe-area-inset-top,0px) + 10px); left:0; right:0;
+    display:flex; gap:10px; align-items:baseline; justify-content:center; flex-wrap:wrap;
+    font-variant-numeric:tabular-nums; letter-spacing:.04em;}
+  #hud-dist{font-size:26px; font-weight:700; text-shadow:0 0 14px rgba(140,170,255,.55);}
+  #hud-speed{font-size:13px; opacity:.75;}
+  #hud-stage{font-size:13px; opacity:.55;}
+  .flag{font-size:11px; padding:2px 7px; border:1px solid currentColor; border-radius:99px; opacity:.9;}
+  #flag-mirror{color:#cfd6ff;} #flag-swap{color:#ffd0a0;}
+
+  .hands{position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+    display:flex; justify-content:space-between; padding:0 14px;}
+  .hand{min-width:120px; padding:7px 11px; border-radius:12px; font-size:12px; line-height:1.5;
+    background:rgba(10,14,28,.55); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(3px);}
+  .hand b{display:block; font-size:13px; letter-spacing:.12em;}
+  .hand[data-char="lumen"]{color:var(--lumen); border-color:rgba(255,179,71,.45); box-shadow:0 0 18px rgba(255,179,71,.14) inset;}
+  .hand[data-char="umbra"]{color:var(--umbra); border-color:rgba(125,140,255,.45); box-shadow:0 0 18px rgba(125,140,255,.14) inset;}
+  .hand span{opacity:.65;}
+  .hand.r{text-align:right;}
+
+  /* ---------- スマホのタッチ領域（画面下1/3を左右で色分け・§4.8） ---------- */
+  #touchzones{position:absolute; left:0; right:0; bottom:0; height:33%; display:none; pointer-events:none;}
+  body.touch #touchzones{display:flex;}
+  #touchzones .tz{flex:1; position:relative; border-top:1px solid rgba(255,255,255,.16);}
+  #touchzones .tz.left{background:linear-gradient(to top,rgba(255,179,71,.20),rgba(255,179,71,0));
+    border-right:1px dashed rgba(255,255,255,.22);}
+  #touchzones .tz.right{background:linear-gradient(to top,rgba(125,140,255,.22),rgba(125,140,255,0));}
+  #touchzones .tz::after{content:attr(data-label); position:absolute; top:8px; left:0; right:0; text-align:center;
+    font-size:10px; letter-spacing:.14em; opacity:.6;}
+  #touchzones .tz.left::after{color:var(--lumen);} #touchzones .tz.right::after{color:var(--umbra);}
+
+  /* ---------- 画面 ---------- */
+  .screen{position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; text-align:center; padding:24px; background:radial-gradient(120% 90% at 50% 50%,rgba(5,7,15,.35),rgba(5,7,15,.92));}
+  .screen.on{display:flex;}
+  h1{font-size:clamp(28px,7vw,52px); font-weight:800; letter-spacing:.16em; line-height:1.15;}
+  h1 .l{color:var(--lumen); text-shadow:0 0 26px rgba(255,179,71,.5);}
+  h1 .u{color:var(--umbra); text-shadow:0 0 26px rgba(125,140,255,.5);}
+  .sub{font-size:13px; opacity:.7; line-height:1.8; max-width:30em;}
+  .btns{display:flex; gap:12px; flex-wrap:wrap; justify-content:center;}
+  button{font:inherit; font-size:15px; font-weight:700; letter-spacing:.06em; color:var(--ink);
+    padding:12px 26px; border-radius:99px; border:1px solid rgba(255,255,255,.25);
+    background:rgba(255,255,255,.06); cursor:pointer; transition:transform .12s, background .12s;}
+  button:hover{background:rgba(255,255,255,.14); transform:translateY(-1px);}
+  button.primary{border-color:rgba(255,179,71,.6); color:#ffd9a6;}
+  button.second{border-color:rgba(125,140,255,.6); color:#d2d8ff;}
+  .big{font-size:22px; font-weight:700;}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+
+  <div id="touchzones">
+    <div class="tz left" data-label="LUMEN / 左手"></div>
+    <div class="tz right" data-label="UMBRA / 右手"></div>
+  </div>
+
+  <div id="hud">
+    <div class="hud-top">
+      <span id="hud-stage">—</span>
+      <span id="hud-dist">0 m</span>
+      <span id="hud-speed">8.0 m/s</span>
+      <span class="flag" id="flag-mirror" style="display:none">MIRROR</span>
+      <span class="flag" id="flag-swap" style="display:none">SWAP</span>
+    </div>
+    <div class="hands">
+      <div class="hand" id="hand-left" data-char="lumen">
+        <b id="hand-left-name">LUMEN</b><span id="hand-left-keys">A D / W / S</span>
+      </div>
+      <div class="hand r" id="hand-right" data-char="umbra">
+        <b id="hand-right-name">UMBRA</b><span id="hand-right-keys">← → / ↑ / ↓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="screen on" id="screen-title">
+    <h1><span class="l">DUO</span> <span class="u">RUN</span></h1>
+    <div class="sub">
+      左手で<b style="color:var(--lumen)">LUMEN</b>（床）、右手で<b style="color:var(--umbra)">UMBRA</b>（天井）。<br>
+      PC: A/D・W・S ／ ←→・↑・↓　　スマホ: 画面の左半分と右半分をフリック<br>
+      UMBRAは重力が逆。↑は「床に向かって」跳ぶ。
+    </div>
+    <div class="btns">
+      <button class="primary" id="btn-s0">仮ステージ S0</button>
+      <button class="second" id="btn-endless">仮エンドレス</button>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-dead">
+    <div class="big">CRASH</div>
+    <div class="sub"><span id="dead-dist">0 m</span><br><span id="dead-cp"></span></div>
+    <div class="btns">
+      <button class="primary" id="btn-retry">リトライ</button>
+      <button id="btn-title">タイトルへ</button>
+    </div>
+  </div>
+
+  <div class="screen" id="screen-clear">
+    <div class="big">CLEAR</div>
+    <div class="sub" id="clear-dist"></div>
+    <div class="btns"><button class="primary" id="btn-title2">タイトルへ</button></div>
+  </div>
+</div>
+
+<!-- three.min.js(r158 UMD) は読み込み時に廃止予定の警告を1行出す。
+     コンソールを汚さないよう、この1行だけを読み込み中に限って握りつぶす。 -->
+<script>
+  (function(){ const w=console.warn; window.__warnRestore=w;
+    console.warn=function(m){ if(typeof m==='string'&&m.indexOf('are deprecated with r150+')>=0) return; return w.apply(console,arguments); }; })();
+</script>
+<script src="js/three.min.js"></script>
+<script>console.warn = window.__warnRestore; delete window.__warnRestore;</script>
+
+<script src="js/config.js"></script>
+<script src="js/util.js"></script>
+<script src="js/obstacles.js"></script>
+<script src="js/chunks.js"></script>
+<script src="js/runners.js"></script>
+<script src="js/world.js"></script>
+<script src="js/input.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/bot.js"></script>
+<script src="js/core.js"></script>
+<script src="js/testhook.js"></script>
+
+<!-- 機械テスト（DUO.__suites に push するだけ。製品の挙動には影響しない） -->
+<script src="tests/test_fairness.js"></script>
+<script src="tests/test_input.js"></script>
+<script src="tests/test_collision.js"></script>
+<script src="tests/test_bot.js"></script>
+<script src="tests/test_touch.js"></script>
+
+<script>
+  (function boot(){
+    // タッチ領域の表示（実機のタッチ端末か、縦長の狭い画面のとき）
+    function updateTouchUI(){
+      const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      document.body.classList.toggle('touch', !!coarse || window.innerWidth < 560);
+    }
+    updateTouchUI();
+    Game.init(document.getElementById('gl'));
+    UI.init(Game);
+    window.addEventListener('resize', function(){ World.resize(); updateTouchUI(); });
+    Game.run();
+  })();
+</script>
+</body>
+</html>
