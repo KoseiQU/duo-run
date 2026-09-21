@@ -81,21 +81,8 @@ const World = {
     World._t = 0;
     World._dist = 0;
     World.ready = true;
+    World._fovBoost = 0;
     World.resize();
-    World._exposeCamSym();
-  },
-
-  /* DUO.state() に camSym（床側/天井側の画面上の見かけ比）を足す。
-     core.js は P2a 段階1では触らない約束なので、ここで1度だけ包む。 */
-  _exposeCamSym() {
-    if (typeof Game === 'undefined' || !Game.snapshot || Game.__camSymWrapped) return;
-    const base = Game.snapshot;
-    Game.snapshot = function () {
-      const s = base.apply(Game, arguments);
-      s.camSym = World.camSym();
-      return s;
-    };
-    Game.__camSymWrapped = true;
   },
 
   /* ==========================================================================
@@ -239,8 +226,9 @@ const World = {
   /* ==========================================================================
      毎フレームの同期
      ========================================================================== */
-  syncCorridor(dist, obstacles) {
+  syncCorridor(dist, obstacles, speed) {
     World._dist = dist;
+    if (speed !== undefined) World._speed = speed;
     const T = World.TILE;
     const d = World._dummy;
     const base = Math.floor((dist - World.TILE_BEHIND) / T);
@@ -308,20 +296,26 @@ const World = {
         const u = U.clamp(r.actT / CFG.JUMP_T, 0, 1);
         const tuck = Math.sin(Math.PI * Math.min(1, u * 1.25));
         v.body.rotation.x = -0.18 - 0.12 * tuck;
-        legs[0].rotation.x = 1.35 * tuck + 0.1;
-        legs[1].rotation.x = 1.15 * tuck + 0.1;
+        legs[0].rotation.x = 1.15 * tuck + 0.1;
+        legs[1].rotation.x = 0.95 * tuck + 0.1;
         arms[0].rotation.x = 1.55 * tuck; arms[1].rotation.x = 1.25 * tuck;
         arms[0].rotation.z = -0.35 * tuck; arms[1].rotation.z = 0.35 * tuck;
         v.parts.head.rotation.x = -0.12 * tuck;
       } else if (r.act === 'slide') {
-        /* スライディング: 体を後ろへ倒す（高さが SLIDE_H に落ちる） */
-        const u = U.clamp(r.actT / 0.12, 0, 1);
-        const lean = 1.06 * U.smooth(u);
-        v.body.rotation.x = lean;
-        legs[0].rotation.x = 0.55 + 0.25 * u; legs[1].rotation.x = 0.3;
-        arms[0].rotation.x = -1.5; arms[1].rotation.x = -1.1;
+        /* スライディング: 膝を畳みながら後ろへ倒す。
+           倒し角1.0rad＋脚の畳みで、見た目の高さ≒0.42・奥行き≒0.75（判定 0.40 / 0.70）。
+           body を z 方向に引いて、見た目の塊を判定ボックスの中心に合わせる。 */
+        /* 判定（高さ SLIDE_H=0.40 / 奥行き SLIDE_D）に収まるよう、
+           倒す・首をすくめる・体を少し縮める の3つで作る。 */
+        const u = U.smooth(U.clamp(r.actT / 0.12, 0, 1));
+        v.body.rotation.x = 1.26 * u;
+        v.body.position.z = -0.31 * u;                // 判定ボックスの中心に寄せる
+        v.body.scale.setScalar(1 - 0.10 * u);         // 体を丸める（一様スケール）
+        v.parts.head.position.y = 0.665 - 0.19 * u;   // 首をすくめる
+        legs[0].rotation.x = 0.95 + 0.2 * u; legs[1].rotation.x = 0.78;
+        arms[0].rotation.x = 0.95; arms[1].rotation.x = 0.72;   // 腕は前へ（路面より下に出さない）
         arms[0].rotation.z = 0; arms[1].rotation.z = 0;
-        v.parts.head.rotation.x = -0.75 * U.smooth(u);
+        v.parts.head.rotation.x = -0.55 * u;
       } else {
         /* 走り: 腕振り・脚の前後・体の上下揺れ */
         v.body.rotation.x = -0.12 + Math.sin(t * 30) * 0.02;
@@ -333,6 +327,7 @@ const World = {
         v.parts.head.rotation.x = -sw * 0.05;
       }
       if (r.act !== 'run') v.body.position.y = 0;
+      if (r.act !== 'slide') { v.body.position.z = 0; v.body.scale.setScalar(1); v.parts.head.position.y = 0.665; }
       if (v.parts.cape) v.parts.cape.rotation.x = -0.12 - Math.sin(t * 9) * 0.12 - (r.act === 'jump' ? 0.45 : 0);
 
       /* 丸影は常に面の上。跳ぶほど小さく薄く */
@@ -345,27 +340,43 @@ const World = {
     });
   },
 
-  syncCamera(runners, dyingT) {
+  syncCamera(runners, dyingT, speed, dt) {
     const avgX = (Runners.x(runners[0]) + Runners.x(runners[1])) / 2;
     const push = U.clamp(dyingT / CFG.DEATH_SLOW_T, 0, 1) * 1.4;
     World.camera.position.set(avgX * 0.16, CFG.CAM.Y, CFG.CAM.Z - push);
     World.camera.lookAt(avgX * 0.09, CFG.CAM.LOOK_Y, CFG.CAM.LOOK_Z);
+    /* 体感速度の演出（§4.1）: 速度に応じて画角を広げる（広げる方向なので
+       「2体が常に画面内」は壊れない）。急に変わらないよう時定数で追う。 */
+    const u = U.clamp(((speed || CFG.SPEED_MIN) - CFG.SPEED_MIN) / (CFG.SPEED_MAX - CFG.SPEED_MIN), 0, 1);
+    const want = u * CFG.CAM.FOV_SPEED_GAIN;
+    const k = U.clamp((dt === undefined ? 1 / 60 : dt) / CFG.CAM.FOV_SPEED_T, 0, 1);
+    World._fovBoost += (want - World._fovBoost) * k;
+    const fov = World._baseFov + World._fovBoost;
+    if (Math.abs(World.camera.fov - fov) > 1e-4) {
+      World.camera.fov = fov;
+      World.camera.updateProjectionMatrix();
+    }
   },
 
   /* 画面比が変わっても「2体が常に1画面に収まる」ようにfovを決める（§4.1） */
   resize() {
     if (!World.ready) return;
     const el = World.renderer.domElement;
-    const w = el.clientWidth || window.innerWidth;
-    const h = el.clientHeight || window.innerHeight;
+    World.setViewport(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight,
+                      Math.min(window.devicePixelRatio || 1, 2));
+  },
+  /* 実機の resize と同じ計算で、任意の画面サイズを当てる（監査・機械テストでも使う） */
+  setViewport(w, h, pixelRatio) {
+    if (!World.ready) return;
     const aspect = w / h;
-    World.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    World.renderer.setPixelRatio(pixelRatio === undefined ? 1 : pixelRatio);
     World.renderer.setSize(w, h, false);
     const d = CFG.CAM.Z;
     const vByH = 2 * Math.atan(CFG.CAM.NEED_H / d);
     const vByW = 2 * Math.atan(CFG.CAM.NEED_W / (d * aspect));
     const fov = U.clamp(Math.max(vByH, vByW) * 180 / Math.PI, CFG.CAM.FOV_MIN, CFG.CAM.FOV_MAX);
-    World.camera.fov = fov;
+    World._baseFov = fov;
+    World.camera.fov = fov + (World._fovBoost || 0);
     World.camera.aspect = aspect;
     World.camera.updateProjectionMatrix();
   },
@@ -395,7 +406,7 @@ const World = {
 
   render() {
     if (!World.ready) return;
-    ZoneNeon.sync(World._dist, World._t);
+    ZoneNeon.sync(World._dist, World._t, World._speed);
     World.renderer.render(World.scene, World.camera);
   },
   drawCalls() { return World.ready ? World.renderer.info.render.calls : 0; }

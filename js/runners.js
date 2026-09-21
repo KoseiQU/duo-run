@@ -84,6 +84,7 @@ const Runners = {
       ? CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * U.clamp(actT / CFG.JUMP_T, 0, 1)), CFG.JUMP_SHAPE)
       : 0;
     const h = (act === 'slide') ? CFG.SLIDE_H : CFG.RUN_H;
+    const d = (act === 'slide') ? CFG.SLIDE_D : CFG.BODY_D;   // 倒れ込むぶん前後に伸びる
     const x = laneVal * CFG.LANE_W;
     let y0, y1;
     if (surface === 'floor') { y0 = off; y1 = off + h; }
@@ -91,7 +92,7 @@ const Runners = {
     return {
       x0: x - CFG.BODY_W / 2, x1: x + CFG.BODY_W / 2,
       y0: y0, y1: y1,
-      z0: -CFG.BODY_D / 2, z1: CFG.BODY_D / 2
+      z0: -d / 2, z1: d / 2
     };
   },
   box(r) { return Runners.boxOf(r.surface, r.laneVal, r.act, r.actT); },

@@ -108,6 +108,7 @@ const Game = {
   /* --- 1フレーム（ロジックのみ） ------------------------------------------ */
   step(dt) {
     dt = U.clamp(dt || 0, 0, 0.05);
+    Game._lastDt = dt;
     Game.stats.frames++;
     Game.t += dt;
 
@@ -235,10 +236,10 @@ const Game = {
   /* --- 描画（更新とワンセットで呼ぶ） ------------------------------------- */
   render() {
     if (!World.ready) return;
-    World.syncCorridor(Game.dist, Game.active);
+    World.syncCorridor(Game.dist, Game.active, Game.speed);
     World.syncObstacles(Game.active, Game.dist);
     World.syncRunners(Game.runners, Game.t);
-    World.syncCamera(Game.runners, Game.status === 'dying' ? Game.dyingT : 0);
+    World.syncCamera(Game.runners, Game.status === 'dying' ? Game.dyingT : 0, Game.speed, Game._lastDt);
     World.render();
     HUD.update(Game);
   },
@@ -280,7 +281,9 @@ const Game = {
       runners: rs,
       chunk: Game.gen ? (Game.gen.log.filter((c) => c.startM <= Game.dist).pop() || null) : null,
       obstacles: Game.active.length,
-      drawCalls: World.drawCalls()
+      drawCalls: World.drawCalls(),
+      /* カメラ対称性（§4.1）: 床側/天井側の「画面上の見かけの高さ」の比。0.8〜1.25 が合格 */
+      camSym: World.ready ? World.camSym() : null
     };
   }
 };

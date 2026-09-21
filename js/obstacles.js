@@ -17,17 +17,23 @@
 
 const OBS = {
   /* ローバー（低い柵）: 高さ0.6 → ジャンプ */
-  ROVER:   { span: 1, depth: 0.50, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],  label: 'ローバー' },
-  /* ハイバー（高い梁）: 下端0.5 → スライディング */
-  HIBAR:   { span: 1, depth: 0.50, y0: 0.50, y1: 2.00, both: false, safe: ['slide'], label: 'ハイバー' },
+  ROVER:     { span: 1, depth: 0.50, y0: 0.00, y1: 0.60,   both: false, safe: ['jump'],  label: 'ローバー' },
   /* ピラー（柱）: 1レーン全高。床・天井の両方に効く → レーン移動のみ */
-  PILLAR:  { span: 1, depth: 0.50, y0: 0.00, y1: CFG.H, both: true,  safe: [],       label: 'ピラー' },
+  PILLAR:    { span: 1, depth: 0.50, y0: 0.00, y1: CFG.H,  both: true,  safe: [],        label: 'ピラー' },
   /* ギャップ（穴）: 面が抜けている。足が面に着いていると落ちる → ジャンプ */
-  GAP:     { span: 1, depth: 1.60, y0: -1.60, y1: 0.04, both: false, safe: ['jump'], label: 'ギャップ' },
-  /* ミッドレーザー: コリドー中央帯 0.5〜H-0.5 を塞ぐ → 両者ともスライディング（またはレーン移動） */
-  LASER:   { span: 1, depth: 0.20, y0: 0.50, y1: CFG.H - 0.50, both: true, safe: ['slide'], label: 'ミッドレーザー' },
+  GAP:       { span: 1, depth: 1.60, y0: -1.60, y1: 0.04,  both: false, safe: ['jump'],  label: 'ギャップ' },
   /* ワイド梁: 2レーンを塞ぐ。高さ2.2でジャンプでは越えられない → 空いた1レーンへ */
-  WIDEBAR: { span: 2, depth: 0.60, y0: 0.00, y1: 2.20, both: false, safe: [],        label: 'ワイド梁' }
+  WIDEBAR:   { span: 2, depth: 0.60, y0: 0.00, y1: 2.20,   both: false, safe: [],        label: 'ワイド梁' },
+  /* ローレーザー: 面の近くを走る水平光線（0〜0.6を塞ぐ） → ジャンプ */
+  LASER_LOW: { span: 1, depth: 0.24, y0: 0.00, y1: 0.60,   both: false, safe: ['jump'],  label: 'ローレーザー' },
+  /* 縦レーザー（光柱）: 1レーン全高。両者に効く → レーン移動のみ（潜れない） */
+  LASER_V:   { span: 1, depth: 0.30, y0: 0.00, y1: CFG.H,  both: true,  safe: [],        label: '縦レーザー' },
+  /* 壁の穴: 全幅の壁のうち「穴のあるレーン」。下端0.5の梁 → そのレーンでスライディング
+     （唯一のスライディング要素 / 契約§4.3改訂）。上端 2.30 は跳んでも届かない高さ＝
+     そのキャラにとっての「全高」。反対側の面は空いているので相手は上を通れる。 */
+  WALLHOLE:  { span: 1, depth: 0.55, y0: 0.50, y1: 2.30,   both: false, safe: ['slide'], label: '壁の穴' },
+  /* 壁（穴のないレーン）: 生成器が WALLHOLE を展開するとき自動で置く。チャンク定義には書かない */
+  WALLSOLID: { span: 1, depth: 0.55, y0: 0.00, y1: 2.30,   both: false, safe: [],        label: '壁' }
 };
 
 const OBS_INSET = 0.10;   // レーン幅より少し細くして「隣接レーンの掠り死」を防ぐ
@@ -84,9 +90,11 @@ const Obstacles = {
   _mat: {},
   _pool: {},
   COL: {
-    dark: 0x2b3466, steel: 0x6a75b4, deep: 0x1c2246,
+    /* ネオン都市の夜景（壁 0x475393 前後）から浮くよう、障害物の本体は明るい工事色にする。
+       ユーザー評「障害物が背景に比べて地味」への対応（2026-09-21）。 */
+    body: 0xb9c2e4, dark: 0x515a94, steel: 0x8f99d4, deep: 0x3b4278,
     warn: 0xff8a1e, warnDim: 0x6b3a08, red: 0xff3355, amber: 0xffb347,
-    cyan: 0x38e2ff, magenta: 0xff3ad0, pit: 0x03040c
+    cyan: 0x38e2ff, magenta: 0xff3ad0, pit: 0x151130
   },
   _material(key, color, opacity) {
     if (!Obstacles._mat[key]) {
@@ -135,57 +143,102 @@ const Obstacles = {
 
     if (type === 'ROVER') {
       /* 工事用バリケード（高さ 0.60 = 判定どおり）＋点滅灯 */
-      const matB = Obstacles._material('roverBody', C.dark);
-      box(w, 0.075, D * 0.55, matB, 0, 0.55, 0);                 // 上の板
-      box(w, 0.075, D * 0.55, matB, 0, 0.36, 0);                 // 下の板
-      stripes(w - 0.02, 0.07, D * 0.30, 0.55, 5);
-      stripes(w - 0.02, 0.07, D * 0.30, 0.36, 5);
+      const matB = Obstacles._material('roverBody', C.body);
+      box(w, 0.13, D * 0.55, matB, 0, 0.53, 0);                  // 上の板
+      box(w, 0.13, D * 0.55, matB, 0, 0.30, 0);                  // 下の板
+      stripes(w - 0.02, 0.12, D * 0.30, 0.53, 5);
+      stripes(w - 0.02, 0.12, D * 0.30, 0.30, 5);
       [-1, 1].forEach((s) => {
-        box(0.07, 0.60, 0.07, Obstacles._material('roverLeg', C.steel), s * (w / 2 - 0.08), 0.30, 0);
+        box(0.09, 0.60, 0.09, Obstacles._material('roverLeg', C.steel), s * (w / 2 - 0.08), 0.30, 0);
         box(0.10, 0.10, D * 0.9, Obstacles._material('roverFoot', C.steel), s * (w / 2 - 0.08), 0.05, 0);
       });
-      box(w * 0.98, 0.05, 0.05, Obstacles._emissive('roverGlow', C.red), 0, 0.615, 0);
-      lamp(0.055, C.warn, -w / 2 + 0.10, 0.645, 0);
-      lamp(0.055, C.warn, w / 2 - 0.10, 0.645, 0);
+      box(w * 0.98, 0.06, 0.06, Obstacles._emissive('roverGlow', C.red), 0, 0.575, 0);
+      lamp(0.04, C.warn, -w / 2 + 0.10, 0.60, 0);
+      lamp(0.04, C.warn, w / 2 - 0.10, 0.60, 0);
 
-    } else if (type === 'HIBAR') {
-      /* 壁の穴（契約 §4.3 改訂）: そのレーンを塞ぐ全高の工事用鉄板壁。
-         下端に高さ0.5の潜り穴が1つだけ空いていて、そこをスライディングで抜ける。
-         ※ 当たり判定は現行 OBS の梁（0.50〜2.00）のまま。見た目の上端 4.00 は
-            判定の上端 2.00 を超えるが、跳んでも必ず梁に当たるので抜け道は増えない
-            （全高化は段階2で OBS ごと改修する）。 */
-      const y0 = t.y0;                    // 0.50 = 潜り穴の高さ
-      const TOP = CFG.H;                  // 見た目は全高の壁
-      const matW = Obstacles._material('holeWall', C.dark);
+    } else if (type === 'WALLHOLE' || type === 'WALLSOLID') {
+      /* 壁の穴（契約§4.3改訂）: コリドーを塞ぐ工事用の鉄板壁。WALLHOLE のレーンだけ
+         下端に高さ 0.50 の潜り穴が空く。見た目の上端は判定の上端 y1 とぴったり同じ。 */
+      const hole = (type === 'WALLHOLE');
+      const y0 = hole ? t.y0 : 0;         // 穴の高さ（= 0.50）／壁は床から
+      const TOP = t.y1;                   // 2.30 = 判定の上端そのもの
+      const matW = Obstacles._material('holeWall', C.body);
       const matR = Obstacles._material('holeRib', C.steel);
-      box(w, TOP - y0, D * 0.55, matW, 0, (TOP + y0) / 2, 0);                 // 鉄板本体
-      for (let i = 0; i < 5; i++) {                                           // 波板の縦リブ
+      box(w, TOP - y0, D * 0.55, matW, 0, (TOP + y0) / 2, 0);                  // 鉄板本体
+      for (let i = 0; i < 5; i++) {                                            // 波板の縦リブ
         box(0.07, TOP - y0 - 0.08, D * 0.72, matR, -w / 2 + 0.12 + (w - 0.24) * i / 4, (TOP + y0) / 2, 0);
       }
-      box(w, 0.10, D * 0.82, matR, 0, TOP - 0.05, 0);                         // 上のフレーム
-      box(w, 0.12, D * 0.86, matR, 0, y0 + 0.06, 0);                          // 穴の上の桁
-      [-1, 1].forEach((s2) => box(0.09, y0, D * 0.78, matR, s2 * (w / 2 - 0.045), y0 / 2, 0)); // 穴の左右の柱
-      box(w, 0.06, D + 0.06, Obstacles._emissive('holeWarn', C.warn), 0, y0 + 0.015, 0);      // 穴の縁の警告帯
-      /* 穴の足元を光らせて「ここを潜れ」と示す（路面の誘導帯） */
-      box(w * 0.86, 0.03, D + 0.16, Obstacles._emissive('holeGuide', C.cyan), 0, 0.025, 0);
-      [-1, 1].forEach((s2) => box(0.05, y0 - 0.05, 0.05, Obstacles._emissive('holeGuide', C.cyan),
-                                  s2 * (w / 2 - 0.10), (y0 - 0.05) / 2, D / 2 + 0.03));
-      stripes(w - 0.06, 0.12, D / 2 + 0.04, y0 + 0.17, 7);
-      box(w * 0.5, 0.12, 0.05, Obstacles._emissive('holeSign', C.red), 0, y0 + 0.42, D / 2 + 0.03, [0, 0, 0]);
-      lamp(0.055, C.warn, -w / 2 + 0.09, y0 + 0.10, D / 2 + 0.03);
-      lamp(0.055, C.warn, w / 2 - 0.09, y0 + 0.10, D / 2 + 0.03);
+      box(w, 0.10, D * 0.82, matR, 0, TOP - 0.05, 0);                          // 上のフレーム
+      box(w, 0.07, D * 0.88, Obstacles._emissive('wallEdge', C.warn), 0, TOP - 0.12, 0);
+      if (hole) {
+        box(w, 0.12, D * 0.86, matR, 0, y0 + 0.06, 0);                         // 穴の上の桁
+        [-1, 1].forEach((s2) => box(0.09, y0, D * 0.78, matR, s2 * (w / 2 - 0.045), y0 / 2, 0));
+        box(w, 0.07, D + 0.02, Obstacles._emissive('holeWarn', C.warn), 0, y0 + 0.015, 0);
+        /* 穴の足元を光らせて「ここを潜れ」と示す */
+        box(w * 0.86, 0.03, D + 0.02, Obstacles._emissive('holeGuide', C.cyan), 0, 0.025, 0);
+        [-1, 1].forEach((s2) => box(0.05, y0 - 0.05, 0.05, Obstacles._emissive('holeGuide', C.cyan),
+                                    s2 * (w / 2 - 0.10), (y0 - 0.05) / 2, D / 2 - 0.03));
+        stripes(w - 0.06, 0.13, D / 2 - 0.02, y0 + 0.19, 7);
+        lamp(0.05, C.warn, -w / 2 + 0.09, y0 + 0.10, D / 2 - 0.05);
+        lamp(0.05, C.warn, w / 2 - 0.09, y0 + 0.10, D / 2 - 0.05);
+      } else {
+        /* 穴のない壁: 一目で「ここは通れない」と分かる赤い×と縞 */
+        stripes(w - 0.06, 0.15, D / 2 - 0.02, 0.22, 7);
+        stripes(w - 0.06, 0.15, D / 2 - 0.02, TOP - 0.30, 7);
+        box(w * 0.78, 0.12, 0.05, Obstacles._emissive('wallX', C.red), 0, TOP * 0.45, D / 2 - 0.03, [0, 0, 0.72]);
+        box(w * 0.78, 0.12, 0.05, Obstacles._emissive('wallX', C.red), 0, TOP * 0.45, D / 2 - 0.03, [0, 0, -0.72]);
+        lamp(0.055, C.red, 0, TOP - 0.22, D / 2 - 0.04);
+      }
+
+    } else if (type === 'LASER_LOW') {
+      /* ローレーザー（契約§4.3）: 面の近くを走る水平光線。0〜0.60 を塞ぐのでジャンプで越える。
+         光線そのものは 0.45 付近に置き、下の 0〜0.45 は「光のカーテン」で判定どおり塞ぐ。 */
+      const y1 = t.y1, beam = y1 * 0.74;
+      const matDev = Obstacles._material('lowlDev', C.steel);
+      [-1, 1].forEach((s2) => {
+        box(0.14, y1, D, matDev, s2 * (w / 2 - 0.04), y1 / 2, 0);
+        box(0.16, 0.13, D, Obstacles._emissive('lowlWarn', C.warn), s2 * (w / 2 - 0.04), beam, 0);
+        box(0.16, 0.07, D, Obstacles._emissive('lowlWarn2', C.warn), s2 * (w / 2 - 0.04), y1 - 0.04, 0);
+      });
+      box(w, 0.11, 0.10, Obstacles._emissive('laserCore', 0xffa0a8), 0, beam, 0);
+      box(w, 0.22, 0.18, Obstacles._material('laserHalo', C.red, 0.40), 0, beam, 0);
+      box(w, beam, 0.04, Obstacles._material('laserCurtain', 0xff5a4d, 0.30), 0, beam / 2, 0);
+      box(w, 0.07, D, Obstacles._emissive('lowlFloor', C.warn), 0, 0.035, 0);
+      box(w, 0.05, D * 0.6, Obstacles._emissive('lowlFloor2', C.red), 0, y1 - 0.03, 0);
+      lamp(0.045, C.red, -w / 2 + 0.05, y1 - 0.05, D / 2 - 0.05);
+      lamp(0.045, C.red, w / 2 - 0.05, y1 - 0.05, D / 2 - 0.05);
+
+    } else if (type === 'LASER_V') {
+      /* 縦レーザー＝光柱（契約§4.3改訂）: 1レーンを全高で塞ぐ。潜れない・跳べない＝横に避ける。 */
+      const y0 = t.y0, y1 = t.y1, hh = y1 - y0, yc = (y0 + y1) / 2;
+      const matDev = Obstacles._material('laserDev', C.steel);
+      [-1, 1].forEach((s2) => {
+        box(0.11, hh, D * 0.85, matDev, s2 * (w / 2 - 0.05), yc, 0);
+        [0.16, 0.5, 0.84].forEach((u) => {
+          box(0.15, 0.10, D, Obstacles._emissive('laserWarn', C.warn), s2 * (w / 2 - 0.05), y0 + hh * u, 0);
+        });
+      });
+      box(w * 0.50, hh, D * 0.8, Obstacles._material('laserHalo', C.red, 0.26), 0, yc, 0);
+      box(w * 0.34, hh, 0.05, Obstacles._material('laserGlow', C.red, 0.55), 0, yc, 0);
+      box(w * 0.16, hh, 0.08, Obstacles._emissive('laserCore', 0xff8e98), 0, yc, 0);
+      [[y0, 1], [y1, -1]].forEach((e) => {
+        box(w * 0.70, 0.16, D, matDev, 0, e[0] + e[1] * 0.08, 0);             // 発生装置
+        box(w * 0.54, 0.06, 0.09, Obstacles._emissive('laserWarn', C.warn), 0, e[0] + e[1] * 0.03, D / 2 - 0.06);
+      });
+      lamp(0.05, C.red, 0, y0 + 0.30, D / 2 - 0.06);
+      lamp(0.05, C.red, 0, y1 - 0.30, D / 2 - 0.06);
 
     } else if (type === 'PILLAR') {
       /* 支柱（全高）＋縦のネオン。床天井の両方に効くので上下対称に彫る */
       const H = CFG.H;
-      box(w * 0.82, H, D * 0.9, Obstacles._material('pillarBody', C.dark), 0, H / 2, 0);
-      [-1, 1].forEach((s) => box(0.09, H, D + 0.04, Obstacles._material('pillarEdge', C.steel), s * (w / 2 - 0.05), H / 2, 0));
-      box(w * 0.16, H - 0.2, 0.05, Obstacles._emissive('pillarNeon', C.magenta), 0, H / 2, D / 2 + 0.01);
+      box(w * 0.82, H, D * 0.9, Obstacles._material('pillarBody', C.body), 0, H / 2, 0);
+      [-1, 1].forEach((s) => box(0.09, H, D, Obstacles._material('pillarEdge', C.steel), s * (w / 2 - 0.05), H / 2, 0));
+      box(w * 0.16, H - 0.2, 0.05, Obstacles._emissive('pillarNeon', C.magenta), 0, H / 2, D / 2 - 0.03);
       [0.35, 0.95, 1.55, 2.45, 3.05, 3.65].forEach((y) => {
-        box(w * 0.7, 0.10, 0.04, Obstacles._emissive('pillarWarn', C.warn), 0, y, D / 2 + 0.02, [0, 0, 0.45]);
+        box(w * 0.7, 0.10, 0.04, Obstacles._emissive('pillarWarn', C.warn), 0, y, D / 2 - 0.03, [0, 0, 0.45]);
       });
-      lamp(0.06, C.red, 0, H - 0.18, D / 2 + 0.04);
-      lamp(0.06, C.red, 0, 0.18, D / 2 + 0.04);
+      lamp(0.05, C.red, 0, H - 0.18, D / 2 - 0.04);
+      lamp(0.05, C.red, 0, 0.18, D / 2 - 0.04);
 
     } else if (type === 'GAP') {
       /* 崩れた路面。穴の見た目の幅 = 判定の depth(1.6) ちょうど。
@@ -193,62 +246,64 @@ const Obstacles = {
       const half = D / 2;
       const matPit = Obstacles._material('gapPit', C.pit);
       box(w, 0.04, D, matPit, 0, -1.55, 0);                        // 底
+      box(w * 0.8, 0.05, D * 0.7, Obstacles._emissive('gapBottom', C.red), 0, -1.50, 0);
       [-1, 1].forEach((s) => {
         box(w, 1.6, 0.05, matPit, 0, -0.8, s * half);              // 穴の前後の内壁
         box(0.05, 1.6, D, matPit, s * (w / 2), -0.8, 0);           // 左右の内壁
       });
       /* 判定の外側（タイルが消える範囲）を路面に戻す埋め板 */
       const fillMat = Obstacles._material('gapFill', 0x232b52);
+      /* 穴の内側の非常灯（縁だけでなく「落ちる先」も光らせて存在を目立たせる） */
+      [-1, 1].forEach((s2) => {
+        [-0.18, -0.45, -0.78].forEach((y, i) => {
+          box(w * 0.92, 0.07, 0.06, Obstacles._emissive(i ? 'gapInner2' : 'gapInner', i ? C.red : C.warn),
+              0, y, s2 * (half - 0.05));
+        });
+        box(0.06, 0.9, D * 0.85, Obstacles._emissive('gapInner2', C.red), s2 * (w / 2 - 0.04), -0.6, 0);
+      });
       [-1, 1].forEach((s) => box(CFG.LANE_W - 0.07, 0.14, 3.0, fillMat, 0, -0.075, s * 2.3));
+      /* 穴の手前・奥の路面に描いた警告帯（判定の外だが、路面標示なので体には当たらない。
+         「穴がある」と遠くからでも分かるようにするための視認性対策） */
+      [-1, 1].forEach((s2) => {
+        [0.22, 0.48, 0.74].forEach((dz, i) => {
+          box(w * (0.96 - i * 0.12), 0.03, 0.16, Obstacles._emissive(i % 2 ? 'gapMark2' : 'gapMark', i % 2 ? C.red : C.warn),
+              0, 0.02, s2 * (half + dz));
+        });
+      });
       /* 縁の警告灯とちぎれた鉄筋 */
       [-1, 1].forEach((s) => {
-        box(w, 0.09, 0.14, Obstacles._emissive('gapRim', C.warn), 0, 0.05, s * half);
+        box(w, 0.13, 0.17, Obstacles._emissive('gapRim', C.warn), 0, 0.06, s * (half - 0.08));
         box(0.10, 0.09, D, Obstacles._emissive('gapRim', C.warn), s * (w / 2 - 0.03), 0.05, 0);
-        lamp(0.06, C.red, -w / 2 + 0.12, 0.10, s * half);
-        lamp(0.06, C.red, w / 2 - 0.12, 0.10, s * half);
+        /* 四隅の工事用ビーコン（高さ0.34。ジャンプの軌道（足元1.3）には干渉しない） */
+        [-1, 1].forEach((sx) => {
+          const x = sx * (w / 2 - 0.10);
+          box(0.09, 0.34, 0.09, Obstacles._material('gapPostBody', C.body), x, 0.17, s * (half - 0.09));
+          box(0.13, 0.10, 0.13, Obstacles._emissive('gapPost', C.warn), x, 0.29, s * (half - 0.09));
+          lamp(0.06, C.red, x, 0.38, s * (half - 0.09));
+        });
         box(0.04, 0.26, 0.04, Obstacles._material('gapBar', C.steel), s * 0.22, -0.06, s * (half - 0.06), [0.5, 0, 0.3]);
         box(0.04, 0.22, 0.04, Obstacles._material('gapBar', C.steel), -s * 0.36, -0.10, s * (half - 0.10), [-0.4, 0, -0.2]);
       });
 
-    } else if (type === 'LASER') {
-      /* 縦レーザー＝光柱（契約 §4.3 改訂）: 1レーンを全高で塞ぐ赤い光柱。横に避ける物。
-         判定は y 0.50〜3.50 の1レーン壁（現行 OBS のまま）。両脇の支柱だけ全高に伸ばし、
-         「このレーンは通れない」と一目で分かるようにする（支柱はレーン端なので
-         隣レーンの掠り死は起きない）。 */
-      const y0 = t.y0, y1 = t.y1, hh = y1 - y0, yc = (y0 + y1) / 2;
-      const matDev = Obstacles._material('laserDev', C.dark);
-      [-1, 1].forEach((s2) => {
-        box(0.10, CFG.H, D * 0.85, matDev, s2 * (w / 2 - 0.05), CFG.H / 2, 0);
-        box(0.14, 0.10, D + 0.06, Obstacles._emissive('laserWarn', C.warn), s2 * (w / 2 - 0.05), y0 + 0.05, 0);
-        box(0.14, 0.10, D + 0.06, Obstacles._emissive('laserWarn', C.warn), s2 * (w / 2 - 0.05), y1 - 0.05, 0);
-      });
-      box(w * 0.46, hh, D * 0.8, Obstacles._material('laserHalo', C.red, 0.20), 0, yc, 0);
-      box(w * 0.30, hh, 0.04, Obstacles._material('laserGlow', C.red, 0.5), 0, yc, 0);
-      box(w * 0.14, hh, 0.07, Obstacles._emissive('laserCore', 0xff7a88), 0, yc, 0);
-      [[y0, 1], [y1, -1]].forEach((e) => {
-        box(w * 0.66, 0.15, D + 0.20, matDev, 0, e[0] + e[1] * 0.08, 0);      // 発生装置
-        box(w * 0.5, 0.05, 0.08, Obstacles._emissive('laserWarn', C.warn), 0, e[0] + e[1] * 0.02, D / 2 + 0.10);
-      });
-      lamp(0.05, C.red, 0, y0 + 0.30, D / 2 + 0.12);
-
     } else if (type === 'WIDEBAR') {
       /* 工事用ゲート（2レーン・高さ 2.20 = 判定どおり）。空いた1レーンへ逃げる */
       const H2 = t.y1;
-      const matF = Obstacles._material('wideFrame', C.steel);
+      const matF = Obstacles._material('wideFrame', C.body);
       box(w, 0.14, D * 0.8, matF, 0, H2 - 0.07, 0);                 // 上枠
       box(w, 0.12, D * 0.8, matF, 0, 0.06, 0);                      // 下枠
       [-1, 1].forEach((s) => box(0.12, H2, D * 0.8, matF, s * (w / 2 - 0.06), H2 / 2, 0));
-      box(w - 0.3, H2 - 0.3, D * 0.25, Obstacles._material('wideNet', C.deep), 0, H2 / 2, 0);
-      for (let i = 0; i < 6; i++) {
-        box(0.06, H2 - 0.3, 0.05, Obstacles._material('wideBarM', 0x3a4680, 0.9),
-            -w / 2 + 0.2 + (w - 0.4) * i / 5, H2 / 2, D * 0.16);
+      box(w - 0.3, H2 - 0.3, D * 0.25, Obstacles._material('wideNet', 0xffb347, 0.30), 0, H2 / 2, 0);
+      for (let i = 0; i < 8; i++) {
+        box(0.09, H2 - 0.3, 0.06, Obstacles._material('wideBarM', C.body),
+            -w / 2 + 0.2 + (w - 0.4) * i / 7, H2 / 2, D * 0.16);
       }
-      stripes(w - 0.1, 0.13, D / 2 + 0.05, H2 - 0.16, 10);
-      stripes(w - 0.1, 0.13, D / 2 + 0.05, 0.14, 10);
-      box(w, 0.05, 0.05, Obstacles._emissive('wideGlow', C.warn), 0, H2 + 0.02, 0);
-      lamp(0.06, C.warn, -w / 2 + 0.14, H2 + 0.06, 0);
-      lamp(0.06, C.warn, w / 2 - 0.14, H2 + 0.06, 0);
-      lamp(0.05, C.red, 0, H2 * 0.5, D / 2 + 0.06);
+      box(w, 0.12, D * 0.82, Obstacles._emissive('wideMid', C.warn), 0, H2 * 0.52, 0);
+      stripes(w - 0.1, 0.13, D / 2 - 0.03, H2 - 0.16, 10);
+      stripes(w - 0.1, 0.13, D / 2 - 0.03, 0.14, 10);
+      box(w, 0.06, 0.06, Obstacles._emissive('wideGlow', C.warn), 0, H2 - 0.03, 0);
+      lamp(0.05, C.warn, -w / 2 + 0.14, H2 - 0.03, 0);
+      lamp(0.05, C.warn, w / 2 - 0.14, H2 - 0.03, 0);
+      lamp(0.05, C.red, 0, H2 * 0.5, D / 2 - 0.06);
     }
     /* 材質ごとに融合して1メッシュにする（点滅灯だけは個別マテリアルなので別メッシュのまま） */
     const byMat = [];
@@ -264,31 +319,6 @@ const Obstacles = {
     }
     return g;
   },
-  /* P2b 用の見た目プリセット（契約 §4.3 ローレーザー＝床/天井近くの水平光線・ジャンプで越える）。
-     当たり判定も生成もまだ無いので、ここでは「作り方」だけ置いておく。
-     段階2で OBS に LOWLASER を足したら _build から呼ぶこと。 */
-  buildLowLaserPreset(height) {
-    const C = Obstacles.COL;
-    const y = (height === undefined) ? 0.45 : height;    // 光線の高さ（ジャンプで越える）
-    const w = CFG.LANE_W - OBS_INSET * 2;
-    const g = new THREE.Group();
-    g.userData = { blink: [] };
-    const put = (gw, gh, gd, mat, x, yy, z) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(gw, gh, gd), mat);
-      m.position.set(x, yy, z); g.add(m); return m;
-    };
-    [-1, 1].forEach((s) => {
-      put(0.12, y + 0.22, 0.16, Obstacles._material('lowlDev', C.dark), s * (w / 2 + 0.04), (y + 0.22) / 2, 0);
-      const lm = new THREE.MeshBasicMaterial({ color: C.warn, fog: true });
-      const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), lm);
-      b.position.set(s * (w / 2 + 0.04), y + 0.16, 0.06);
-      g.add(b); g.userData.blink.push({ mesh: b, mat: lm, color: new THREE.Color(C.warn) });
-    });
-    put(w + 0.1, 0.05, 0.05, Obstacles._emissive('laserCore', 0xff7a88), 0, y, 0);
-    put(w + 0.1, 0.13, 0.13, Obstacles._material('laserHalo', C.red, 0.20), 0, y, 0);
-    return g;
-  },
-
   /* プールから見た目を取り出す／返す（毎フレーム new しない） */
   acquire(type) {
     const p = Obstacles._pool[type] || (Obstacles._pool[type] = []);

@@ -52,10 +52,18 @@
         ['ROVER',   'floor', 0,  0, 'jump',  true ],
         ['ROVER',   'floor', 0,  0, 'slide', false],
         ['ROVER',   'floor', 0,  1, 'run',   true ],
-        ['HIBAR',   'floor', 0,  0, 'run',   false],
-        ['HIBAR',   'floor', 0,  0, 'jump',  false],
-        ['HIBAR',   'floor', 0,  0, 'slide', true ],
-        ['HIBAR',   'floor', 0, -1, 'run',   true ],
+        ['WALLHOLE','floor', 0,  0, 'run',   false],
+        ['WALLHOLE','floor', 0,  0, 'jump',  false],
+        ['WALLHOLE','floor', 0,  0, 'slide', true ],
+        ['WALLHOLE','floor', 0, -1, 'run',   true ],
+        ['WALLSOLID','floor',0,  0, 'run',   false],
+        ['WALLSOLID','floor',0,  0, 'jump',  false],
+        ['WALLSOLID','floor',0,  0, 'slide', false],
+        ['WALLSOLID','floor',0,  1, 'run',   true ],
+        ['LASER_LOW','floor',0,  0, 'run',   false],
+        ['LASER_LOW','floor',0,  0, 'jump',  true ],
+        ['LASER_LOW','floor',0,  0, 'slide', false],
+        ['LASER_LOW','floor',0,  1, 'run',   true ],
         ['GAP',     'floor', 0,  0, 'run',   false],
         ['GAP',     'floor', 0,  0, 'jump',  true ],
         ['GAP',     'floor', 0,  0, 'slide', false],
@@ -78,9 +86,11 @@
         ['ROVER', 'ceil', 0,  0, 'jump',  true ],
         ['ROVER', 'ceil', 0,  0, 'slide', false],
         ['ROVER', 'ceil', 0, -1, 'run',   true ],
-        ['HIBAR', 'ceil', 1,  1, 'run',   false],
-        ['HIBAR', 'ceil', 1,  1, 'slide', true ],
-        ['HIBAR', 'ceil', 1,  1, 'jump',  false],
+        ['WALLHOLE', 'ceil', 1,  1, 'run',   false],
+        ['WALLHOLE', 'ceil', 1,  1, 'slide', true ],
+        ['WALLHOLE', 'ceil', 1,  1, 'jump',  false],
+        ['LASER_LOW','ceil', 1,  1, 'run',   false],
+        ['LASER_LOW','ceil', 1,  1, 'jump',  true ],
         ['GAP',   'ceil', 0,  0, 'run',   false],
         ['GAP',   'ceil', 0,  0, 'jump',  true ]
       ]);
@@ -93,7 +103,7 @@
   });
 
   DUO.__suites.push({
-    name: '当たり判定: 床天井の両方に効く障害物（ピラー／ミッドレーザー）',
+    name: '当たり判定: 床天井の両方に効く障害物（ピラー／縦レーザー）',
     quick: true,
     run(t) {
       table(t, [
@@ -101,10 +111,10 @@
         ['PILLAR', 'floor', 0,  0, 'jump',  false],
         ['PILLAR', 'floor', 0,  0, 'slide', false],
         ['PILLAR', 'floor', 0, -1, 'run',   true ],
-        ['LASER',  'floor', 0,  0, 'run',   false],
-        ['LASER',  'floor', 0,  0, 'jump',  false],
-        ['LASER',  'floor', 0,  0, 'slide', true ],
-        ['LASER',  'floor', 0,  1, 'run',   true ]
+        ['LASER_V','floor', 0,  0, 'run',   false],
+        ['LASER_V','floor', 0,  0, 'jump',  false],
+        ['LASER_V','floor', 0,  0, 'slide', false],
+        ['LASER_V','floor', 0,  1, 'run',   true ]
       ]);
       /* ピラーは 2体のどちらにも効く（天井側でも死ぬ） */
       const In = I();

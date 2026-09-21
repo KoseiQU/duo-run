@@ -36,7 +36,9 @@ const ZoneNeon = {
     rain:     0xaecbff
   },
 
-  /* ---- 区間パターン -------------------------------------------------------- */
+  _spd01: 0,          // 速度の正規化値（0=SPEED_MIN, 1=SPEED_MAX）。演出の強さに使う
+
+  /* ---- 区間パターン（宣言は build より前に来る必要はない） --------------- */
   WALL_PERIOD: 120,
   WALL_LEN: 80,
   isWall(m) {
@@ -103,7 +105,52 @@ const ZoneNeon = {
     ZoneNeon._sky(scene);
     ZoneNeon._skyline(scene);
     ZoneNeon._corridorProps(scene);
+    ZoneNeon._speedFx(scene);
     ZoneNeon._rain(scene);
+  },
+
+  /* ---- 体感速度の演出（契約 §4.1）----------------------------------------
+     速度 16→44 で「路面を流れる発光ストライプ」と「風の粒子」を強くする。
+     ストライプは長さ、風は本数の見え方（不透明度）で効かせる。 */
+  _speedFx(scene) {
+    const P = ZoneNeon.PAL, H = CFG.H, hash = ZoneNeon.hash;
+    const streak = new THREE.PlaneGeometry(0.085, 1.0);
+    ZoneNeon.speedLines = [];
+    [['floor', 0.022, -Math.PI / 2, P.amber], ['ceil', H - 0.022, Math.PI / 2, P.indigo]].forEach((sfc, si) => {
+      const f = ZoneNeon._field({
+        name: 'speedline', spacing: 2.0, geo: streak, mat: ZoneNeon.add(sfc[3], 0.2), prop: false, order: 4,
+        place(slot, m) {
+          if ((slot & 1) !== si) return null;
+          const lane = CFG.LANES[Math.floor(hash(slot, 211) * 3)];
+          return { x: lane * CFG.LANE_W + (hash(slot, 213) - 0.5) * 0.55, y: sfc[1], rx: sfc[2],
+                   dz: hash(slot, 217) * 1.8, sy: 2.6 + ZoneNeon._spd01 * 7.0 };
+        }
+      });
+      ZoneNeon.speedLines.push(f);
+    });
+    /* 風の粒子（コリドーの外側を後ろへ飛ぶ細い筋） */
+    const N = 300;
+    const pos = new Float32Array(N * 6);
+    ZoneNeon.WIND_CELL = 24;
+    for (let i = 0; i < N; i++) {
+      const side = (i % 2) ? 1 : -1;
+      const x = side * (2.2 + hash(i, 301) * 4.5);
+      const y = -1.5 + hash(i, 303) * 7.5;
+      const z = -hash(i, 307) * ZoneNeon.WIND_CELL * 4 + 6;
+      const len = 2.0 + hash(i, 311) * 2.5;
+      pos[i * 6] = x; pos[i * 6 + 1] = y; pos[i * 6 + 2] = z;
+      pos[i * 6 + 3] = x; pos[i * 6 + 4] = y; pos[i * 6 + 5] = z - len;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    ZoneNeon.windMat = new THREE.LineBasicMaterial({
+      color: 0xbcd4ff, transparent: true, opacity: 0.0, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+    const m = new THREE.LineSegments(g, ZoneNeon.windMat);
+    m.frustumCulled = false;
+    ZoneNeon.wind = new THREE.Group();
+    ZoneNeon.wind.add(m);
+    scene.add(ZoneNeon.wind);
   },
 
   /* ---- 光（環境光＋弱い平行光＋路面を舐めるネオンの点光源2つ） ------------ */
@@ -712,9 +759,11 @@ const ZoneNeon = {
   /* ==========================================================================
      毎フレームの送り出し
      ========================================================================== */
-  sync(dist, t) {
+  sync(dist, t, speed) {
     if (!ZoneNeon.scene) return;
     ZoneNeon._t = t;
+    ZoneNeon._speed = speed || CFG.SPEED_MIN;
+    ZoneNeon._spd01 = U.clamp((ZoneNeon._speed - CFG.SPEED_MIN) / (CFG.SPEED_MAX - CFG.SPEED_MIN), 0, 1);
     const d = ZoneNeon._dummy;
     let ahead = 0;
     const fs = ZoneNeon.fields;
@@ -755,6 +804,16 @@ const ZoneNeon = {
       const cell = ZoneNeon.RAIN_CELL;
       ZoneNeon.rain.position.y = -((t * 17) % cell);
       ZoneNeon.rain.position.z = (dist % 7.0);
+    }
+
+    /* 体感速度: ストライプの濃さと風の粒子 */
+    if (ZoneNeon.speedLines) {
+      const op = 0.22 + ZoneNeon._spd01 * 0.42;
+      ZoneNeon.speedLines.forEach((f) => { f.mesh.material.opacity = op; });
+    }
+    if (ZoneNeon.wind) {
+      ZoneNeon.windMat.opacity = 0.13 + ZoneNeon._spd01 * 0.30;
+      ZoneNeon.wind.position.z = (dist % ZoneNeon.WIND_CELL);
     }
 
     /* 街のネオンの点光源を流して、濡れた路面にハイライトを走らせる */
