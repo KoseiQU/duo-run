@@ -22,6 +22,50 @@ const Input = {
   touches: {},          // identifier -> {zone, x, y}
   enabled: true,
 
+  /* --- 自由飛行モード（大ジャンプの滑空 / 契約§4.5 2026-09-21 改訂） --------
+     上下分割・1スワイプ1レーンの規則は**滑空中は無効**。画面のどこを触ってもよく、
+     ドラッグ量に比例して DUO体が断面を連続的に動く（先に触れた指だけが有効）。
+     感度: 画面幅の 1/3 のドラッグ＝断面の端から端（y も画面高さ基準で同じ比率）。 */
+  mode: 'lanes',        // 'lanes' | 'free'
+  free: { tx: 0, ty: 2, src: null, owner: null, ox: 0, oy: 0, bx: 0, by: 0 },
+  /* 自由飛行のキー割当（開発・機械テスト用。どちらの手のキーでも上下左右） */
+  FREE_KEYS: {
+    KeyA: { x: -1, y: 0 }, KeyD: { x: 1, y: 0 }, KeyW: { x: 0, y: 1 }, KeyS: { x: 0, y: -1 },
+    ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 },
+    ArrowUp: { x: 0, y: 1 }, ArrowDown: { x: 0, y: -1 }
+  },
+  setMode(mode, x, y) {
+    Input.mode = (mode === 'free') ? 'free' : 'lanes';
+    Input.queue.length = 0;
+    Input.touches = {};
+    Input.free.owner = null;
+    Input.free.src = null;
+    if (Input.mode === 'free') {
+      Input.free.tx = (x === undefined) ? 0 : x;
+      Input.free.ty = (y === undefined) ? CFG.H / 2 : y;
+    }
+    return Input.mode;
+  },
+  /* 目標位置（断面座標）を直接指す。タッチ・キーボード・ボットの共通の入口。 */
+  freeAim(x, y, src) {
+    if (!Input.enabled) return false;
+    Input.free.tx = x;
+    Input.free.ty = y;
+    Input.free.src = src || null;
+    return true;
+  },
+  /* 押されているキーから軸を作る（押しっぱなしで動き続ける） */
+  freeKeys() {
+    let x = 0, y = 0;
+    const keys = Object.keys(Input.held);
+    for (let i = 0; i < keys.length; i++) {
+      const m = Input.FREE_KEYS[keys[i]];
+      if (!m) continue;
+      x += m.x; y += m.y;
+    }
+    return { x: U.clamp(x, -1, 1), y: U.clamp(y, -1, 1) };
+  },
+
   push(hand, act) {
     if (!Input.enabled) return false;
     Input.queue.push({ hand: hand, act: act });
@@ -43,12 +87,24 @@ const Input = {
   /* 画面の上下 → その面を走るキャラの面 */
   surfaceOfZone(zone) { return (zone === 'top') ? 'ceil' : 'floor'; },
   drain() { const q = Input.queue; Input.queue = []; return q; },
-  clear() { Input.queue.length = 0; Input.held = {}; Input.touches = {}; },
+  clear() {
+    Input.queue.length = 0;
+    Input.held = {};
+    Input.touches = {};
+    Input.mode = 'lanes';
+    Input.free.owner = null;
+    Input.free.src = null;
+  },
 
   /* --- キーボード --------------------------------------------------------- */
   keyEvent(code, down) {
     const map = CFG.KEYMAP[code];
     if (!map) return false;
+    /* 自由飛行中は「押されているか」だけを見る（1動作ずつのキューには積まない） */
+    if (Input.mode === 'free') {
+      if (down) Input.held[code] = true; else delete Input.held[code];
+      return true;
+    }
     if (down) {
       if (Input.held[code]) return false;     // オートリピートは1動作に潰す
       Input.held[code] = true;
@@ -65,12 +121,30 @@ const Input = {
      さらに **TOUCH_REPEAT_MS(220ms) 以上**経ってからにする。
      （指を止めずに大きく動かしても、端まで飛んでいかない） */
   now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); },
-  touchStart(id, x, y, height, tMs) {
+  _w(width) { return width || (typeof window !== 'undefined' ? window.innerWidth : 375); },
+  touchStart(id, x, y, height, tMs, width) {
+    if (Input.mode === 'free') {
+      /* 先に触れた指だけが有効（2本目は無視 / 契約§4.5） */
+      if (Input.free.owner !== null) return;
+      Input.free.owner = id;
+      Input.free.ox = x; Input.free.oy = y;
+      Input.free.bx = FF.body.x; Input.free.by = FF.body.y;
+      return;
+    }
     /* 担当は開始点の y だけで決める。境界は画面のちょうど中央 */
     Input.touches[id] = { zone: (y < height / 2) ? 'top' : 'bottom', x: x, y: y,
                           fired: 0, t: (tMs === undefined ? Input.now() : tMs) };
   },
-  touchMove(id, x, y, tMs) {
+  touchMove(id, x, y, tMs, height, width) {
+    if (Input.mode === 'free') {
+      if (Input.free.owner !== id) return null;
+      /* 画面幅の 1/3 のドラッグ＝断面の端から端（y も画面高さ基準で同じ比率） */
+      const w = Input._w(width), h = height || (typeof window !== 'undefined' ? window.innerHeight : 812);
+      const sx = (FF.X1 - FF.X0) / (w / 3), sy = (FF.Y1 - FF.Y0) / (h / 3);
+      Input.freeAim(U.clamp(Input.free.bx + (x - Input.free.ox) * sx, FF.X0, FF.X1),
+                    U.clamp(Input.free.by - (y - Input.free.oy) * sy, FF.Y0, FF.Y1), 'touch');
+      return 'free';
+    }
     const t = Input.touches[id];
     if (!t) return null;
     const now = (tMs === undefined) ? Input.now() : tMs;
@@ -87,7 +161,10 @@ const Input = {
     Input.pushZone(t.zone, dir);
     return dir;
   },
-  touchEnd(id) { delete Input.touches[id]; },
+  touchEnd(id) {
+    if (Input.free.owner === id) Input.free.owner = null;   // 離しても位置はその場（慣性なし）
+    delete Input.touches[id];
+  },
 
   /* テスト用の直接入力（DUO.touch）。zone は 'bottom'|'top' */
   gesture(zone, dir) { return Input.pushZone(zone, dir); },
@@ -109,6 +186,7 @@ const Input = {
     window.addEventListener('keyup', function (e) { Input.keyEvent(Input.codeOf(e), false); });
 
     const h = () => (el.clientHeight || window.innerHeight);
+    const w = () => (el.clientWidth || window.innerWidth);
     // UI（ボタン・画面パネル）上のタッチは横取りしない。ここで preventDefault すると
     // iOS Safari が click を合成しなくなり、START が押せない（実機で発生 2026-09-21）。
     const onUi = (e) => !!(e.target && e.target.closest && e.target.closest('button, .screen, a, input'));
@@ -117,7 +195,7 @@ const Input = {
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        Input.touchStart(t.identifier, t.clientX, t.clientY, h(), e.timeStamp);
+        Input.touchStart(t.identifier, t.clientX, t.clientY, h(), e.timeStamp, w());
       }
     }, { passive: false });
     el.addEventListener('touchmove', function (e) {
@@ -125,7 +203,7 @@ const Input = {
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        Input.touchMove(t.identifier, t.clientX, t.clientY, e.timeStamp);
+        Input.touchMove(t.identifier, t.clientX, t.clientY, e.timeStamp, h(), w());
       }
     }, { passive: false });
     const end = function (e) {

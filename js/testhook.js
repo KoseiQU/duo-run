@@ -51,7 +51,7 @@ const DUO = {
   __internal: {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
-    Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD,
+    Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
     endlessPool: endlessPool, scaleParams: scaleParams,
@@ -114,8 +114,10 @@ const DUO = {
       DUO.reset();
       const t = DUO._mkT();
       try {
+        /* 中身で比べる（キーの並び順は localStorage 側の都合で変わる） */
+        const stable = (o) => JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
         const snapNow = U.lsSnapshot();
-        t.eq(JSON.stringify(snapNow), JSON.stringify(lsSnap), 'localStorage が実行前と一致');
+        t.eq(stable(snapNow), stable(lsSnap), 'localStorage が実行前と一致');
         t.eq(DUO.state().status, 'idle', 'タイトル画面へ復帰');
         t.eq(document.getElementById('screen-title').classList.contains('on'), true, 'タイトルのDOMが表示状態');
         DUO.start('S0', 4242);

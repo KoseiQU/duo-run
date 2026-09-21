@@ -61,20 +61,14 @@ const Setpieces = {
     bigjump: {
       id: 'bigjump',
       lengthM: 200,
-      /* 片側だけの ADPANEL を多めにして「2体が別々によける」場面を作る。
-         全部が both（2体とも同じレーンへ）だと、レーン移動の要求数が増えすぎて
-         §4.3 の動作比率（レーン50%前後）を押し上げてしまうため。 */
-      floor: [
-        { at: 66,  lane: 1,  type: 'ADPANEL' },     // 床側だけ（LUMEN のみ動く）
-        { at: 88,  lane: -1, type: 'WIRE2' },       // -1,0 を塞ぐ → 右へ（2体とも）
-        { at: 132, lane: 0,  type: 'DRONE' },
-        { at: 154, lane: -1, type: 'ADPANEL' },
-        { at: 176, lane: 0,  type: 'SIGNFRAG' }
-      ],
-      ceil: [
-        { at: 110, lane: 1,  type: 'ADPANEL' },     // 天井側だけ（UMBRA のみ動く）
-        { at: 154, lane: 1,  type: 'ADPANEL' }      // 同じ地点で床と天井が別レーン
-      ],
+      /* 【2026-09-21 全面改訂 / P2c】滑空はレーンも床/天井も無い**自由飛行**（§4.5）。
+         レーンの障害物は1つも置かない。空中の障害物は FF（freeflight.js）が
+         シード固定で組み、当たり判定は円 vs 矩形・公平性は Fair.validateAir で見る。
+         旧「空中も ADPANEL/DRONE をレーンで避ける」は失効。 */
+      floor: [],
+      ceil: [],
+      air: true,                     // 自由飛行の区間を持つ演出
+      landRel: 192,                  // 着地（＝この後 GRACE_T 秒は障害物なし）
       events: [
         { at: 0,   type: 'bigjump.start' },
         { at: 52,  type: 'bigjump.launch' },
@@ -178,13 +172,15 @@ const Setpieces = {
       /* 終わってもゴールまで崩落は続く（前線は走り続ける） */
       if (Setpieces.state) Setpieces.state.ending = true;
     } else if (e.type === 'bigjump.start') {
-      Setpieces.state = { id: 'bigjump', startM: e.at, t: 0, phase: 'ramp', land: 0 };
-      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('JUMP!', 'ビルの間を跳ぶ ／ 空中は左右だけ');
+      Setpieces.state = { id: 'bigjump', startM: e.at, t: 0, phase: 'ramp', land: 0,
+                          speed: (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN,
+                          course: null, split: -1 };
+      Setpieces.makeAir(e.at);
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('JUMP!', '手を繋いで跳ぶ', 'high');
     } else if (e.type === 'bigjump.launch') {
-      if (Setpieces.state) Setpieces.state.phase = 'glide';
-      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+      /* 実際の切替は update()（距離の関数）が行う。イベントは合図だけ。 */
     } else if (e.type === 'bigjump.land') {
-      if (Setpieces.state) { Setpieces.state.phase = 'land'; Setpieces.state.land = 0; }
+      /* 〃 */
     } else if (e.type === 'bigjump.end') {
       if (Setpieces.state) Setpieces.state.phase = 'done';
     } else if (e.type === 'rock.start') {
@@ -229,10 +225,55 @@ const Setpieces = {
     const s = Setpieces.state;
     return (s && s.id === 'bigjump') ? (m - s.startM) : null;
   },
-  /* 滑空中か（＝ジャンプ／スライド入力が無効になる区間・契約§4.4） */
+  /* 滑空中か（＝レーンも床/天井も無い自由飛行の区間・契約§4.5 改訂） */
   glideActive() {
     const s = Setpieces.state;
     return !!(s && s.id === 'bigjump' && s.phase === 'glide');
+  },
+
+  /* ---- DUO体（2人が手を繋いだ1体 / 契約§4.5 2026-09-21 改訂） ------------
+     0 = 別々の2体 ／ 1 = 完全に合体。発射台の手前 0.4秒で 0→1、着地後 0.3秒で 1→0。 */
+  duoK(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'bigjump') return 0;
+    const B = Setpieces.BJ, rel = m - s.startM, sp = Math.max(4, s.speed || CFG.SPEED_MIN);
+    if (rel < B.LIP) return U.clamp(1 - (B.LIP - rel) / (sp * FF.MERGE_T), 0, 1);
+    if (rel < B.LAND) return 1;
+    return U.clamp(1 - (rel - B.LAND) / (sp * FF.SPLIT_T), 0, 1);
+  },
+  /* 合体〜分離の間は通常の操作を受け付けない（演出中） */
+  duoLocked() {
+    return Setpieces.duoK((typeof Game !== 'undefined') ? Game.dist : 0) > 0.001;
+  },
+
+  /* ---- 自由飛行の譜面（シード固定・ゾーン非依存） ------------------------ */
+  buildAir(seed, startM, speedAt) {
+    const B = Setpieces.BJ;
+    return FF.build(seed, startM + B.LIP, startM + B.LAND, speedAt);
+  },
+  makeAir(startM) {
+    const st = (typeof Game !== 'undefined' && Game.stage) ? Game.stage : null;
+    const speedAt = st ? st.speedAt : function () { return CFG.SPEED_MIN; };
+    const base = (typeof Game !== 'undefined' ? (Game.seed >>> 0) : 1);
+    const seed = ((base ^ Math.imul(Math.round(startM) + 1, 2654435761)) >>> 0) || 1;
+    const c = Setpieces.buildAir(seed, startM, speedAt);
+    if (Setpieces.state) Setpieces.state.course = c;
+    return c;
+  },
+  /* 着地の強制分離（契約§4.5「DUO体の x に最も近いレーンへ2人が戻る」） */
+  landing(game) {
+    const lane = FF.landingLane();
+    FF.end();
+    game.runners.forEach((r) => {
+      r.laneFrom = lane; r.laneTo = lane; r.laneVal = lane; r.laneT = CFG.LANE_T;
+      r.act = 'run'; r.actT = 0; r.laneBuf = 0;
+    });
+    if (Setpieces.state) Setpieces.state.landLane = lane;
+    if (typeof HUD !== 'undefined') {
+      if (HUD.cueHide) HUD.cueHide();
+      if (HUD.freeFlight) HUD.freeFlight(false);
+    }
+    return lane;
   },
   /* コリドー（路面・天井面・障害物・2体・カメラ）の持ち上がり量。見た目だけ。
      **同じ距離には必ず同じ値**なので、2体と障害物のズレは生まれない。 */
@@ -277,11 +318,30 @@ const Setpieces = {
     s.t += dt;
     s.dist = game.dist;                       // 距離基準の判定に使う（glideActive など）
     if (s.id === 'bigjump') {
+      const B = Setpieces.BJ;
       const rel = game.dist - s.startM;
-      s.phase = (rel < Setpieces.BJ.LIP) ? 'ramp'
-              : (rel < Setpieces.BJ.LAND) ? 'glide'
-              : (rel < Setpieces.BJ.END) ? 'land' : 'done';
-      if (s.phase === 'land') s.land = rel - Setpieces.BJ.LAND;
+      s.speed = game.speed;
+      const prev = s.phase;
+      s.phase = (rel < B.LIP) ? 'ramp'
+              : (rel < B.LAND) ? 'glide'
+              : (rel < B.END) ? 'land' : 'done';
+      if (s.phase === 'glide' && prev !== 'glide') {
+        /* 発射: DUO体の自由飛行へ（入力モードもここで切り替わる） */
+        if (!s.course) Setpieces.makeAir(s.startM);
+        FF.begin(s.course, 0, CFG.H / 2);
+        if (typeof HUD !== 'undefined') {
+          if (HUD.cue) HUD.cue('FREE FLIGHT', '画面をドラッグ', 'high');
+          if (HUD.freeFlight) HUD.freeFlight(true);
+        }
+        s.cueOff = rel + Math.max(12, game.speed * 1.6);
+      }
+      if (s.phase === 'glide') {
+        FF.update(dt);
+        if (s.cueOff && rel > s.cueOff) { s.cueOff = 0; if (typeof HUD !== 'undefined') HUD.cueHide(); }
+      } else if (prev === 'glide') {
+        Setpieces.landing(game);                  // 着地で強制分離（契約§4.5）
+      }
+      if (s.phase === 'land') s.land = rel - B.LAND;
       return;
     }
     if (s.id === 'rockchase') {
@@ -402,6 +462,7 @@ const Setpieces = {
 
   /* ---- 粉塵（崩落前線から飛んでくる破片）／後方の火柱の照り返し ---------- */
   initView(scene) {
+    FF.initView(scene);
     if (Setpieces.dust) return;
     /* 崩落前線の明かり: カメラの後ろに置き、前方の壁や小物を赤く照らす */
     Setpieces.emberLight = new THREE.PointLight(0xff5a2a, 0, 42, 2);
@@ -506,10 +567,11 @@ const Setpieces = {
     const d = Setpieces.dust;
     if (!d) return;
     const s = Setpieces.state;
-    /* 滑空: 眼下の街と雲の層を出す（ゾーン側が持つ演出） */
+    /* 滑空: 眼下の街と雲の層を出す（ゾーン側が持つ演出）＋ 自由飛行の空中障害物と DUO体 */
     {
       const fx = Setpieces.camFx();
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
+      FF.syncView(dist, t, Setpieces.viewLift(dist), Setpieces.duoK(dist));
     }
     if (s && s.id === 'rockchase') { Setpieces._syncRock(dist, t); return; }
     Setpieces._hideRock();
@@ -624,6 +686,8 @@ const Setpieces = {
   /* ---- 後始末（リトライ・タイトル・テストの復帰で必ず呼ぶ） -------------- */
   reset() {
     Setpieces.state = null;
+    FF.reset();
+    if (typeof HUD !== 'undefined' && HUD.freeFlight) HUD.freeFlight(false);
     Setpieces._hideRock();
     if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
     if (Setpieces.emberLight) {

@@ -406,7 +406,13 @@ const STAGE_DEFS = {
        S1 で使った「柱/縦レーザーだけ」の rank1 チャンク（＝レーン移動しか要求しない）は
        S2 では外す。動くレーザー自体が両者にレーン移動を要求するので、そのままだと
        レーン移動に偏って §4.3 の比率（レーン50%前後／ジャンプ35%前後）を外れるため。 */
-    chunkPool: ['c1_rover_f', 'c1_rover_c', 'c1_gap_f', 'c1_gap_c', 'c1_lowl_f', 'c1_lowl_c',
+    /* 【2026-09-21 P2c】大ジャンプが自由飛行になり、演出区間がレーン移動の要求を
+       持たなくなった（§4.5 改訂）。その分をランダム区間で取り戻さないと
+       §4.3 の比率（レーン50%前後）を割るので、横に避けるだけのチャンクを厚めに戻す。 */
+    chunkPool: ['c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
+                'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
+                'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
+                'c1_rover_f', 'c1_rover_c', 'c1_gap_f', 'c1_gap_c', 'c1_lowl_f', 'c1_lowl_c',
                 'c1_laserv',
                 'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
                 'c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
@@ -421,6 +427,9 @@ const STAGE_DEFS = {
       .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))      // 密集チャンク
       .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3).map((c) => c.id))
+      /* 横に避けるチャンクを厚くしたぶん、点滅レーザーが薄まらないよう補う（P2c） */
+      .concat(['c2_blink_v', 'c2_blink_low', 'c3_blink_scan',
+               'c2_blink_v', 'c2_blink_low', 'c3_blink_scan'])
   },
   /* S3 古代遺跡・外周（契約 §4.4）: 1200m / 22→26 / チェックポイント 400・800 /
      新ギミック＝崩れる橋・振り子の刃。終盤200mは「巨岩の追跡」。
@@ -481,8 +490,12 @@ function makeStage(id) {
     s.maxRank = e.maxRank;
   }
   s.endless = !isFinite(d.lengthM);
+  /* エンドレスの加速（契約§4.4 2026-09-21 実機評「加速が弱い」で強化）:
+     16 m/s から **200m ごとに +1**（上限44 ＝ 5600m で到達）。
+     段差にすると 200m の切れ目で体感速度が跳ねるので、同じ勾配の連続な直線で表す
+     （200m 進むごとにちょうど +1。旧「1000mごと+1」は失効）。 */
   s.speedAt = s.endless
-    ? function (m) { return Math.min(CFG.SPEED_MAX, d.speedFrom + m / 1000); }
+    ? function (m) { return Math.min(CFG.SPEED_MAX, d.speedFrom + m / CFG.SPEED_STEP_M); }
     : function (m) { return U.lerp(d.speedFrom, d.speedTo, U.clamp(m / d.lengthM, 0, 1)); };
   /* チェックポイントは 1/3・2/3 地点（§4.4） */
   s.checkpoints = s.endless ? [] : [d.lengthM / 3, d.lengthM * 2 / 3];
@@ -642,6 +655,64 @@ const Fair = {
       slide: res.total ? res.slide / res.total * 100 : 0
     };
     return res;
+  },
+
+  /* ==========================================================================
+     自由飛行（大ジャンプ）の不変条件 — 契約§4.5 を**断面2D**で適用（P2c）
+     ・常に DUO体（半径 FF.R）が通れる隙間が1つある
+     ・隙間の中心までの距離 ≤ FF.V × 到達までの秒数
+       （開いている軸＝その軸には動かなくてよいので数えない）
+     ・生成器はさらに FF.REACT 秒の余裕を見る（0.25秒遅れのボットでも間に合う）
+     ========================================================================== */
+  validateAir(course, speedAt, opt) {
+    const errs = [];
+    if (!course || !course.items) return ['空中の譜面がない'];
+    opt = opt || {};
+    const margin = opt.margin ? FF.REACT : 0;      // 余裕まで見るか（生成器の自己検査）
+    let prev = { x: course.entry.x, y: course.entry.y };
+    let prevAt = course.launchM;
+    course.items.forEach((it) => {
+      const g = it.gap;
+      const sp = speedAt(it.at);
+      const dt = (it.at - prevAt) / sp;
+      const dx = g.openX ? 0 : Math.abs(g.x - prev.x);
+      const dy = g.openY ? 0 : Math.abs(g.y - prev.y);
+      const need = Math.max(dx, dy) / FF.V;        // 各軸 FF.V m/s（同時に動ける）
+      if (need > dt - margin + 1e-9) {
+        errs.push('空中の隙間へ到達不能: ' + need.toFixed(2) + '秒 > ' + (dt - margin).toFixed(2) +
+                  '秒 @' + it.at.toFixed(1));
+      }
+      /* 隙間の寸法（DUO体が通れるか）と、中心が断面の中にあるか */
+      const half = Math.min(g.openX ? 99 : g.hw, g.openY ? 99 : g.hh);
+      if (half < FF.R + 0.05) errs.push('隙間が狭い: 半径 ' + half.toFixed(2) + ' @' + it.at.toFixed(1));
+      if (g.x < FF.X0 - 1e-9 || g.x > FF.X1 + 1e-9 || g.y < FF.Y0 - 1e-9 || g.y > FF.Y1 + 1e-9) {
+        errs.push('隙間の中心が断面の外 @' + it.at.toFixed(1));
+      }
+      /* 実際に円 vs 矩形で通れることを確かめる（判定と同じ関数で） */
+      if (!FF.passable(g.x, g.y, it)) errs.push('隙間の中心が塞がれている @' + it.at.toFixed(1));
+      prev = { x: g.openX ? prev.x : g.x, y: g.openY ? prev.y : g.y };
+      prevAt = it.at;
+    });
+    /* 着地までの猶予（最後の壁を抜けてから着地するまで） */
+    if (course.items.length) {
+      const lastIt = course.items[course.items.length - 1];
+      const sp = speedAt(course.landM);
+      if ((course.landM - lastIt.at) / sp < 0.3) errs.push('最後の壁と着地が近すぎる');
+    }
+    return errs;
+  },
+
+  /* 着地後 FF.GRACE_T 秒（= speed × 2.0 m）は障害物なし（契約§4.5） */
+  landingGrace(list, landM, speedAt) {
+    const errs = [];
+    const until = landM + speedAt(landM) * FF.GRACE_T;
+    list.forEach((o) => {
+      if (o.at >= landM && o.at < until - 1e-6) {
+        errs.push('着地猶予の中に障害物: ' + o.type + ' @' + o.at.toFixed(1) +
+                  '（' + landM.toFixed(1) + '〜' + until.toFixed(1) + 'm は空ける）');
+      }
+    });
+    return errs;
   },
 
   /* 視認距離（生成された瞬間の距離との差） */
@@ -869,6 +940,18 @@ function createGenerator(stage, seed) {
     inst.events.forEach((e) => events.push(e));
     log.push({ id: 'setpiece:' + inst.id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true });
     cursor = inst.startM + inst.lengthM;
+    /* 自由飛行の着地の後 FF.GRACE_T 秒（= speed × 2.0 m）は障害物を置かない（契約§4.5）。
+       演出が 200m で終わっても、猶予がその先まで伸びるならそこまで空ける。 */
+    const def = Setpieces.DEFS[stage.setpiece];
+    if (def && def.air && def.landRel !== undefined) {
+      const landM = inst.startM + def.landRel;
+      const until = landM + stage.speedAt(landM) * FF.GRACE_T;
+      if (until > cursor) {
+        cursor = until;
+        log.push({ id: '(landing-grace)', startM: landM, lengthM: until - landM, grace: true });
+      }
+      lastItemAt = Math.max(lastItemAt, cursor - seamFor(cursor));
+    }
     setpieceDone = true;
     lastWallhole = false;
     return true;

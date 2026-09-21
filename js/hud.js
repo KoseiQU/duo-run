@@ -19,11 +19,13 @@ const HUD = {
   },
 
   /* 大演出の予告（§4.4 大ジャンプの「JUMP!」）。2体に被らない位置は CSS 側で担保 */
-  cue(main, sub) {
+  cue(main, sub, where) {
     const e = HUD.el.cue || document.getElementById('cue');
     if (!e) return false;
     if (HUD.el['cue-main']) HUD.el['cue-main'].textContent = main;
     if (HUD.el['cue-sub']) HUD.el['cue-sub'].textContent = sub || '';
+    /* DUO体は画面の中央を飛ぶので、大ジャンプの合図だけ上へ逃がす（§4.5 改訂） */
+    e.classList.toggle('high', where === 'high');
     e.classList.add('on');
     HUD.cueOn = main;
     return true;
@@ -32,6 +34,15 @@ const HUD = {
     const e = HUD.el.cue || document.getElementById('cue');
     if (e) e.classList.remove('on');
     HUD.cueOn = null;
+  },
+  /* 自由飛行（大ジャンプの滑空 / 契約§4.5 改訂）: 上下の枠と分割線を消す。
+     着地で必ず戻す（Setpieces.landing / Setpieces.reset が呼ぶ）。 */
+  free: false,
+  freeFlight(on) {
+    HUD.free = !!on;
+    const e = document.getElementById('touchzones');
+    if (e) e.classList.toggle('free', HUD.free);
+    return HUD.free;
   },
   _set(id, txt) {
     if (HUD._last[id] === txt) return;

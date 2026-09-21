@@ -392,23 +392,39 @@ const World = {
       const up = (r.surface === 'floor') ? 1 : -1;
       const lift = Setpieces.viewLift(World._dist);          // 発射台／滑空／着地の持ち上がり
       const footY = Runners.footY(r) + lift;
-      v.group.position.set(x, footY, 0);
-      v.group.rotation.set(0, 0, (up === 1) ? 0 : Math.PI);
+      /* DUO体（契約§4.5 改訂）: 発射台で2人が寄って手を繋ぎ、1体として断面を飛ぶ。
+         着地で元の面（床＝LUMEN / 天井＝UMBRA）へ戻る。0→1→0 で滑らかに入れ替える。 */
+      const duoK = Setpieces.duoK(World._dist);
+      const dk = U.smooth(duoK);
+      const side = (r.id === 'lumen') ? -1 : 1;
+      let px = x, py = footY, rz = (up === 1) ? 0 : Math.PI;
+      if (duoK > 0.001) {
+        px = U.lerp(x, FF.body.x + side * FF.PAIR_DX, dk);
+        py = U.lerp(footY, FF.body.y + lift - 0.45, dk);     // 体の中心を断面の y に合わせる
+        rz = U.lerp(rz, 0, dk);                              // 天井側は起き上がって向き合う
+      }
+      v.group.position.set(px, py, 0);
+      v.group.rotation.set(0, 0, rz);
       v.group.scale.set(1, 1, 1);
       v.group.visible = r.alive;
 
       const sw = Math.sin(t * 15);
       const arms = v.parts.arms, legs = v.parts.legs;
-      if (Setpieces.glideActive()) {
-        /* 滑空: 両手を広げて前傾（空中なのでジャンプ／スライドの姿勢は出ない） */
+      if (duoK > 0.001) {
+        /* DUO体の姿勢: 内側の腕を水平に伸ばして手を繋ぎ、外側の腕は広げる */
         const fl = Math.sin(t * 2.2) * 0.06;
-        v.body.rotation.set(-0.42 + fl, Math.sin(t * 1.7) * 0.05, 0);
-        v.body.position.set(0, Math.sin(t * 2.6) * 0.05, 0);
+        const inner = (side < 0) ? 1 : 0;                    // 相手の側にある腕
+        v.body.rotation.set(U.lerp(-0.12, -0.34 + fl, dk), 0, 0);
+        v.body.position.set(0, Math.sin(t * 2.6) * 0.05 * dk, 0);
         v.body.scale.setScalar(1);
         v.parts.head.position.y = 0.665;
-        v.parts.head.rotation.x = 0.22;
-        arms[0].rotation.set(0.1, 0, -1.28 + fl); arms[1].rotation.set(0.1, 0, 1.28 - fl);
-        legs[0].rotation.x = -0.30 + fl; legs[1].rotation.x = -0.16 - fl;
+        v.parts.head.rotation.x = U.lerp(0, 0.18, dk);
+        arms.forEach((a, i) => {
+          const want = (i === inner) ? -side * 1.5 : side * (1.12 + fl);
+          a.rotation.set(U.lerp(-sw * 0.55, 0.06, dk), 0, U.lerp(i ? 0.12 : -0.12, want, dk));
+        });
+        legs[0].rotation.x = U.lerp(sw * 0.62, -0.28 + fl, dk);
+        legs[1].rotation.x = U.lerp(-sw * 0.62, -0.14 - fl, dk);
       } else if (typeof Game !== 'undefined' && Game.status === 'goal') {
         /* ゴール演出: 両手を挙げてポーズ */
         const u = U.clamp(Game.goalT / 0.35, 0, 1);
@@ -459,18 +475,22 @@ const World = {
       if (r.act !== 'slide') { v.body.position.z = 0; v.body.scale.setScalar(1); v.parts.head.position.y = 0.665; }
       if (v.parts.cape) v.parts.cape.rotation.x = -0.12 - Math.sin(t * 9) * 0.12 - (r.act === 'jump' ? 0.45 : 0);
 
-      /* 丸影は常に面の上。跳ぶほど小さく薄く（滑空中は足場が無いので消す） */
+      /* 丸影は常に面の上。跳ぶほど小さく薄く（DUO体の間は足場が無いので消す） */
       v.glow.position.set(x, ((r.surface === 'floor') ? 0.022 : CFG.H - 0.022) + lift, 0);
       v.glow.rotation.x = (r.surface === 'floor') ? -Math.PI / 2 : Math.PI / 2;
       const off = Runners.footOffset(r);
       v.glow.scale.setScalar(U.clamp(1 - off * 0.45, 0.35, 1));
-      v.glow.visible = r.alive && !Setpieces.glideActive();
+      v.glow.visible = r.alive && duoK < 0.02;
       v.light.position.set(0, (r.act === 'slide') ? 0.3 : 0.55, 0);
     });
   },
 
   syncCamera(runners, dyingT, speed, dt) {
-    const avgX = (Runners.x(runners[0]) + Runners.x(runners[1])) / 2;
+    /* DUO体（自由飛行）の間はカメラも1体を追う（契約§4.5） */
+    const duoK = Setpieces.duoK(World._dist);
+    const avgX = (duoK > 0.001)
+      ? U.lerp((Runners.x(runners[0]) + Runners.x(runners[1])) / 2, FF.body.x, U.smooth(duoK))
+      : (Runners.x(runners[0]) + Runners.x(runners[1])) / 2;
     const push = U.clamp(dyingT / CFG.DEATH_SLOW_T, 0, 1) * 1.4;
     /* 大演出（崩落）のカメラ揺れ・画角・霧 */
     const fx = Setpieces.camFx();

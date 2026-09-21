@@ -10,6 +10,7 @@ const Game = {
   stage: null,
   seed: 1,
   dist: 0,
+  prevDist: 0,
   speed: CFG.SPEED_MIN,
   t: 0,
   dyingT: 0,
@@ -111,6 +112,7 @@ const Game = {
     Game.goalT = 0;
     Game.clearWorld();
     Game.dist = fromM;
+    Game.prevDist = fromM;
     Game.t = 0;
     Game.dyingT = 0;
     Game.killer = null;
@@ -164,6 +166,7 @@ const Game = {
          遅くなるぶんには §4.7 の不変条件（時間基準）は緩む方向なので公平性は壊れない。 */
       if (Game.slowT > 0) Game.slowT = Math.max(0, Game.slowT - d);
       Game.speed = Game.stage.speedAt(Game.dist) * (1 - CFG.SLOW.MUL * U.clamp(Game.slowT / CFG.SLOW.T, 0, 1));
+      Game.prevDist = Game.dist;                        // 自由飛行の当たり判定（跨ぎ）に使う
       Game.dist += Game.speed * d;
 
       /* 生成と取り込み・寿命 */
@@ -199,22 +202,20 @@ const Game = {
 
   applyInput() {
     const q = Input.drain();
-    /* 滑空区間（ビル間の大ジャンプ）は空中なので **レーン移動だけ**（契約§4.4）。
-       ジャンプ／スライドはここで捨てる（人間もボットも同じ経路を通るので1か所でよい）。 */
-    const glide = Setpieces.glideActive();
+    /* 合体〜自由飛行〜分離の間（契約§4.5 改訂）は、2体は1体（DUO体）になっている。
+       レーン移動もジャンプ／スライドも無く、操作は Input の自由飛行モードが受ける。
+       ＝ ここへ流れてきた1動作ずつの入力は捨てる（人間もボットも同じ1か所）。 */
+    if (Setpieces.duoLocked()) return;
     for (let i = 0; i < q.length; i++) {
       const it = q[i];
       if (it.zone) {
         /* タッチ: 担当は画面の上下、動作は「足場から離れる向き＝ジャンプ」で決まる */
         const r = Game.runnerForZone(it.zone);
         if (!r) continue;
-        const act = Input.actFromDir(it.dir, r.surface);
-        if (glide && (act === 'jump' || act === 'slide')) continue;
-        Runners.input(r, act);
+        Runners.input(r, Input.actFromDir(it.dir, r.surface));
       } else {
         const r = Game.runnerForHand(it.hand);
         if (!r) continue;
-        if (glide && (it.act === 'jump' || it.act === 'slide')) continue;
         Runners.input(r, it.act);
       }
     }
@@ -238,6 +239,13 @@ const Game = {
 
   /* --- 当たり判定（AABB） ------------------------------------------------- */
   collide() {
+    /* 自由飛行中（契約§4.5）は2体ではなく DUO体（円）が、空中の矩形と当たる。
+       レーンの障害物は滑空区間に1つも無いので、ここで完全に道が分かれる。 */
+    if (FF.active()) {
+      const hit = FF.collide(Game.prevDist, Game.dist);
+      if (hit) Game.onHit(Game.runners[0], { type: 'AIR_' + hit.kind, lane: 0, at: hit.at });
+      return;
+    }
     for (let i = 0; i < Game.active.length; i++) {
       const o = Game.active[i];
       if (Math.abs(o.at - Game.dist) > 4) continue;
@@ -384,6 +392,10 @@ const Game = {
       setpiece: Setpieces.id(),
       phase: Setpieces.state ? (Setpieces.state.phase || null) : null,
       glide: Setpieces.glideActive(),
+      /* 大ジャンプの DUO体（契約§4.5 改訂）: 合体の度合いと断面での位置 */
+      duoK: +Setpieces.duoK(Game.dist).toFixed(3),
+      duo: FF.snapshot(),
+      inputMode: Input.mode,
       tip: Tutorial.current,
       goalT: Game.goalT,
       bestUpdated: Game.bestUpdated,

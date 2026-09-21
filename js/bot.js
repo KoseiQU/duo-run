@@ -132,6 +132,13 @@ const Bot = {
   update(game /*, dt */) {
     if (!game.botMode || game.status !== 'playing') return;
     const delay = (game.botMode === 'delay250') ? CFG.BOT.DELAY : 0;
+    /* 自由飛行（大ジャンプ / 契約§4.5）: 「最も近い隙間の中心へ最大速度で移動」。
+       人間と同じ入口（Input の自由飛行の目標）へ流す。 */
+    if (FF.active()) {
+      const a = FF.aim(game.dist, game.speed * delay);
+      Input.freeAim(a.x, a.y, 'bot');
+      return;
+    }
     for (let i = 0; i < game.runners.length; i++) {
       const r = game.runners[i];
       const cmd = Bot.decideFor(game, r, delay);

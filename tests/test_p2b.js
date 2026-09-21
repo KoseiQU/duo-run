@@ -307,23 +307,20 @@
       t.ok(near && far && (near.bottom - far.top) > h * 0.35,
            '街が画面の縦 ' + pc(near.bottom - far.top) + ' ぶんに広がっている（眼下に世界が広がる構図）');
 
-      /* --- 滑空中はジャンプ/スライドが効かない（実入力経路） --- */
+      /* --- 滑空は自由飛行（レーンも床/天井も無い）＝1動作ずつの入力は効かない --- */
       DUO.bot(null);
-      const before = { l: Game.runners[0].act, u: Game.runners[1].act };
+      const before = { l: Game.runners[0].act, u: Game.runners[1].act, lane: Game.runners[0].laneTo };
       DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
       DUO.key('ArrowUp', true); DUO.pump(1 / 60); DUO.key('ArrowUp', false);
       DUO.key('KeyS', true); DUO.pump(1 / 60); DUO.key('KeyS', false);
       t.eq(Game.runners[0].act, 'run', '滑空中はジャンプ入力が無効（LUMEN）');
       t.eq(Game.runners[1].act, 'run', '滑空中はジャンプ入力が無効（UMBRA）');
-      DUO.touch('bottom', 'up'); DUO.touch('top', 'down'); DUO.touch('bottom', 'down'); DUO.pump(1 / 60);
+      DUO.touch('bottom', 'up'); DUO.touch('top', 'down'); DUO.touch('bottom', 'right'); DUO.pump(1 / 60);
       t.eq(Game.runners[0].act, 'run', '滑空中はタッチのジャンプ/スライドも無効（LUMEN）');
       t.eq(Game.runners[1].act, 'run', '滑空中はタッチのジャンプ/スライドも無効（UMBRA）');
+      t.eq(Game.runners[0].laneTo, before.lane, '滑空中はレーン移動も起きない（自由飛行 / 契約§4.5 改訂）');
+      t.eq(DUO.state().inputMode, 'free', '入力は自由飛行モード（詳細は test_p2c.js）');
       t.info('入力前の状態: ' + before.l + '/' + before.u);
-      /* レーン移動だけは効く（端に居たら逆向きへ） */
-      const lane0 = Game.runners[0].laneTo;
-      DUO.touch('bottom', lane0 >= 1 ? 'left' : 'right'); DUO.pump(1 / 60);
-      t.ok(Game.runners[0].laneTo !== lane0, '滑空中もレーン移動はできる（' + lane0 + '→' + Game.runners[0].laneTo + '）');
-      DUO.touch('bottom', lane0 >= 1 ? 'right' : 'left'); DUO.pump(1 / 60);
 
       /* --- 着地 --- */
       DUO.bot('perfect');
@@ -370,32 +367,26 @@
   });
 
   /* ==========================================================================
-     7. 滑空区間の障害物（跳べない・潜れない＝レーン移動だけで抜けられる）
+     7. 滑空区間は自由飛行（レーンの障害物は1つも置かない / 契約§4.5 改訂）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S2: 滑空区間の障害物はレーン移動だけで避けられる（§4.7 生存経路）',
+    name: 'S2: 滑空区間はレーンの障害物を持たない（自由飛行＝FF が受け持つ）',
     quick: true,
     run(t) {
-      const In = I(), Ob = In.Obstacles;
+      const In = I();
       const def = In.Setpieces.DEFS.bigjump;
-      const items = (def.floor || []).concat(def.ceil || []);
-      t.ok(items.length >= 6, '滑空区間に空中障害物が ' + items.length + '個ある（ドローン・電線・看板の破片）');
-      const glideOnly = items.filter((e) => e.at > In.Setpieces.BJ.LIP && e.at < In.Setpieces.BJ.LAND);
-      t.eq(glideOnly.length, items.length, 'すべて滑空区間の中にある');
-      (def.floor || []).forEach((e) => {
-        const o = Ob.make(e.type, 'floor', e.lane, 100, 0);
-        const a = Ob.occ(o).floor.lanes[e.lane];
-        t.eq(a.jump, false, In.OBS[e.type].label + ': 跳んでも避けられない（＝空中で跳ぶ必要がない）');
-        t.eq(a.slide, false, In.OBS[e.type].label + ': 潜っても避けられない');
-        t.eq(Ob.demand(o, 'floor'), 'lane', In.OBS[e.type].label + ': 要求はレーン移動');
-      });
-      /* 演出全体で §4.7 を満たす（生成器と同じ検証） */
+      t.eq((def.floor || []).length + (def.ceil || []).length, 0,
+           '大ジャンプの譜面にレーンの障害物はない（旧 ADPANEL/DRONE/WIRE2 は失効）');
+      t.eq(def.air, true, '自由飛行の区間を持つ演出として印が付いている');
+      t.eq(def.landRel, In.Setpieces.BJ.LAND, '着地の位置が定義されている（着地猶予の起点）');
       const st = In.makeStage('S2');
       const inst = In.Setpieces.build('bigjump', 1000, 0);
-      const errs = In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any' });
-      t.eq(errs.length, 0, '大ジャンプの譜面が §4.7 を満たす: ' + errs.slice(0, 2).join(' | '));
-      const c = In.Fair.countDemands(inst.items, st.speedAt);
-      t.eq(c.jump + c.slide, 0, '滑空区間はジャンプ/スライドを一切要求しない（レーン ' + c.lane + '回）');
+      t.eq(inst.items.length, 0, '生成しても演出区間に障害物は出ない');
+      t.eq(In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any' }).length, 0, '§4.7 の検査も素通り');
+      /* 空中は FF の譜面（詳細は test_p2c.js） */
+      const c = In.Setpieces.buildAir(9, 1000, st.speedAt);
+      t.ok(c.items.length >= 3, '代わりに空中の壁が ' + c.items.length + '本ある');
+      t.eq(In.Fair.validateAir(c, st.speedAt, { margin: true }).length, 0, '空中の不変条件（§4.5 断面2D）を満たす');
     }
   });
 
@@ -622,7 +613,10 @@
     quick: true,
     run(t) {
       const In = I();
-      const meas = (id, len) => {
+      /* 測る範囲 upTo は「障害物で譜面を作る区間」。大ジャンプ（自由飛行）の演出区間は
+         レーンの障害物を持たない（§4.5 改訂）ので、その手前までで測る。
+         空中の密度は別の規範（§4.5 の隙間と到達時間）で test_p2c.js が見る。 */
+      const meas = (id, len, upTo) => {
         const half = { a: 0, b: 0 };
         let blanks = 0, bad = 0;
         for (let seed = 1; seed <= 50; seed++) {
@@ -634,14 +628,16 @@
           blanks += g.log.filter((c) => c.id === '(blank)').length;
           In.Fair.walls(l, st.speedAt).forEach((w) => {
             const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
-            if (w.at < len / 2) half.a += n; else half.b += n;
+            if (w.at >= upTo) return;
+            if (w.at < upTo / 2) half.a += n; else half.b += n;
           });
         }
-        return { a: half.a / 50 / (len / 2) * 100, b: half.b / 50 / (len / 2) * 100, blanks: blanks, bad: bad };
+        return { a: half.a / 50 / (upTo / 2) * 100, b: half.b / 50 / (upTo / 2) * 100, blanks: blanks, bad: bad };
       };
-      const check = (id, len, dens) => {
-        const m = meas(id, len);
-        const wantA = In.U.lerp(dens[0], dens[1], 0.25), wantB = In.U.lerp(dens[0], dens[1], 0.75);
+      const check = (id, len, dens, upTo) => {
+        upTo = upTo || len;
+        const m = meas(id, len, upTo);
+        const wantA = In.U.lerp(dens[0], dens[1], 0.25 * upTo / len), wantB = In.U.lerp(dens[0], dens[1], 0.75 * upTo / len);
         t.ok(m.a >= wantA * 0.75 && m.a <= wantA * 1.25,
              id + ' 前半の密度 ' + m.a.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
         t.ok(m.b >= wantB * 0.75 && m.b <= wantB * 1.25,
@@ -651,7 +647,7 @@
         t.eq(m.blanks, 0, id + ' 空白チャンク（生成の詰まり）は0回');
       };
       check('S1', 900, In.STAGE_DEFS.S1.density);
-      check('S2', 1200, In.STAGE_DEFS.S2.density);
+      check('S2', 1200, In.STAGE_DEFS.S2.density, 1000);   // 1000m以降は自由飛行の演出
       /* エンドレスは 1000m ごとに +1（上限14） */
       const e = In.makeStage('endless');
       t.eq(!!e.density, true, 'エンドレスにも密度の目安がある');
