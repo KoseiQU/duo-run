@@ -200,20 +200,37 @@ const Setpieces = {
   FISH: {
     LEN: 92, H: 13, W: 9,          // 全長・高さ・幅（コリドー 3.6×4.0 よりはるかに大きい）
     CROSS0: 8, CROSS1: 44,         // 横断の区間
-    CROSS_Z: 40,                   // 横断する地点（演出開始からの相対距離）
+    CROSS_Z: 52,                   // 横断する地点（演出開始からの相対距離）
     /* 横断の始点と終点（魚体の中心の x）。鼻先は中心の 46m 左なので、
        真ん中（u=0.5）で **頭が正面に来る** ように振る＝巨体の頭が目の前を横切る。 */
-    CROSS_X0: -32, CROSS_X1: 124,
+    CROSS_X0: -65, CROSS_X1: 25,
     CROSS_Y: 2.2,                  // 横断時の高さ（コリドーの高さ。巨体が通路を塞いで通る）
     SWIM0: 56,                     // 並走の始まり
     EYE0: 146, EYE1: 176,          // 目玉が画面に入る区間
     END: 200,
     X_FAR: -15.0, X_NEAR: -10.5,   // 並走の横位置（寄ってくる。体が画面を覆わない距離で止める）
-    Y_FAR: 6.0, Y_NEAR: 3.0,       // 〃 高さ（目線まで下りてくる）
+    /* 〃 高さ。目玉が **コリドーの天井（y=4）より下** に来るところまで下ろす。
+       天井の帯に隠れると「目が合う」瞬間が作れない（契約 P4a-r1 の差し戻し理由）。 */
+    Y_FAR: 6.0, Y_NEAR: 1.4,
     EYE_Z: 0.42,                   // 目玉の位置（頭から全長の何割か）
     /* 〃 奥行き（魚体の中心）。全長92mなので、中心が +30 まで来ると
        **目玉（頭から少し後ろ）がちょうど2体の真横**に来る＝目が合う瞬間になる。 */
-    Z_FAR: -60, Z_NEAR: 30
+    Z_FAR: -60, Z_NEAR: 30,
+    /* 横断カットの前半（u < SIL_U）は **遠景のシルエット**。
+       全長92mが画面幅の60〜80%に収まる距離（カメラから 80〜100m）を通し、
+       頭から尾までの流線形・背びれ・尾びれが1枚で読めるカットにする（契約 P4a-r1）。
+       そのあと SIL_BLEND のあいだに寄ってきて、至近の通過（現行）へ繋ぐ。 */
+    SIL_U: 0.42, SIL_BLEND: 0.26,
+    /* 遠景カットは **斜め（3/4ビュー）** で見せる。真横だと 92m の胴が薄い帯にしか
+       ならないので、頭を画面の中心近くに置き、胴を奥へ逃がして「近くの頭＋遠ざかる胴」
+       という奥行きのある形にする（契約 P4a-r1「シルエット全体が読める」）。 */
+    SIL_YAW2: 3.785,
+    SIL_X0: -58, SIL_X1: -26,
+    SIL_Z0: -92, SIL_Z1: -63,
+    SIL_Y1: 7.0,
+    /* 遠景カットの高さ。**小物より上**（海底の岩棚やアーチは y≤9）を通し、
+       開けた水と光の柱だけを背にして巨体の輪郭を抜く。そのあと潜り込んで至近を通る。 */
+    SIL_Y: 11.0
   },
 
   /* ---- 神殿崩壊のキーフレーム（距離 m。すべてここから引く） --------------- */
@@ -350,15 +367,29 @@ const Setpieces = {
     const rel = m - s.startM;
     if (rel < F.CROSS0) {
       /* 予告: 前方の霧の中に、まだ遠い影 */
-      return { vis: true, x: F.CROSS_X0 - 30, y: F.CROSS_Y, z: -(F.CROSS_Z - rel) - 40,
-               yaw: Math.PI / 2, phase: 'far' };
+      return { vis: true, x: F.SIL_X0 - 10, y: F.SIL_Y + 2, z: F.SIL_Z0 - 16,
+               yaw: F.SIL_YAW2, phase: 'far' };
     }
     if (rel <= F.CROSS1) {
-      const u = U.smooth((rel - F.CROSS0) / (F.CROSS1 - F.CROSS0));
-      return { vis: true, x: U.lerp(F.CROSS_X0, F.CROSS_X1, u), y: F.CROSS_Y,
-               z: -(F.CROSS_Z - rel), yaw: Math.PI / 2, phase: 'cross' };
+      const raw = (rel - F.CROSS0) / (F.CROSS1 - F.CROSS0);
+      /* 奥行きと高さだけを2段に割る（横の動きは1本の曲線のまま）。
+         前半＝遠景のシルエット、後半＝至近の通過。距離のキーフレームは変えない。 */
+      const b = U.smooth(U.clamp((raw - F.SIL_U) / F.SIL_BLEND, 0, 1));
+      const v = U.clamp(raw / F.SIL_U, 0, 1);
+      /* 遠景（斜めに迫る3/4ビュー） → 至近（真横に横切る）へ、向きごと滑らかに繋ぐ */
+      /* 横の動きは **等速**（raw に比例）にして、遠景カットの終わりと段差なく繋ぐ */
+      const x = U.lerp(U.lerp(F.SIL_X0, F.SIL_X1, v), U.lerp(F.CROSS_X0, F.CROSS_X1, raw), b);
+      const z = U.lerp(U.lerp(F.SIL_Z0, F.SIL_Z1, v), -(F.CROSS_Z - rel), b);
+      const y = U.lerp(U.lerp(F.SIL_Y, F.SIL_Y1, v), F.CROSS_Y, b);
+      const yaw = U.lerp(F.SIL_YAW2, Math.PI / 2, b);
+      return { vis: true, x: x, y: y, z: z, yaw: yaw, phase: (b < 0.5) ? 'far' : 'cross' };
     }
-    if (rel < F.SWIM0) return { vis: false, x: F.CROSS_X, y: F.CROSS_Y, z: 0, yaw: Math.PI / 2, phase: 'turn' };
+    if (rel < F.SWIM0) {
+      /* 横断のあと、画面の外へ抜けきるまで動かし続ける（急に消すと「ぱっと消えた」に見える） */
+      const k = U.clamp((rel - F.CROSS1) / 12, 0, 1);
+      return { vis: k < 1, x: F.CROSS_X1 + 96 * k, y: F.CROSS_Y, z: -(F.CROSS_Z - rel),
+               yaw: Math.PI / 2, phase: 'turn' };
+    }
     /* 並走: 左から寄ってきて、目線の高さまで下りる → 目が合う → 深みへ去る */
     const v = U.smooth(U.clamp((rel - F.SWIM0) / (F.EYE0 - F.SWIM0), 0, 1));
     const w = U.smooth(U.clamp((rel - F.EYE1) / (F.END - F.EYE1), 0, 1));
@@ -383,9 +414,10 @@ const Setpieces = {
     const p = Setpieces.fishPos((m === undefined) ? (Setpieces.state ? Setpieces.state.dist : 0) : m);
     if (!p.vis) return null;
     /* 横断中は全長が x 方向、並走中は z 方向 */
-    const cross = (p.phase === 'cross' || p.phase === 'far');
-    const hx = cross ? F.LEN / 2 : F.W / 2;
-    const hz = cross ? F.W / 2 : F.LEN / 2;
+    /* 向き（yaw）に合わせて外接箱を回す（斜めのカットでも実寸で測れる） */
+    const c = Math.abs(Math.cos(p.yaw)), sn = Math.abs(Math.sin(p.yaw));
+    const hx = (F.LEN / 2) * sn + (F.W / 2) * c;
+    const hz = (F.LEN / 2) * c + (F.W / 2) * sn;
     return { x0: p.x - hx, x1: p.x + hx, y0: p.y - F.H / 2, y1: p.y + F.H / 2,
              z0: p.z - hz, z1: p.z + hz };
   },
@@ -394,8 +426,14 @@ const Setpieces = {
     const F = Setpieces.FISH;
     const p = Setpieces.fishPos((m === undefined) ? (Setpieces.state ? Setpieces.state.dist : 0) : m);
     if (!p.vis || p.phase === 'cross' || p.phase === 'far') return null;
-    const r = 1.5;
-    const ex = p.x + F.W * 0.42, ey = p.y + F.H * 0.16, ez = p.z - F.LEN * F.EYE_Z;
+    const r = 2.0;
+    /* 目の位置は魚のローカル座標（横 W*0.50 / 前 -LEN*EYE_Z）。向き（yaw）を掛けて世界へ直す
+       ＝ 監査で測る箱と、実際に描かれている目玉が必ず一致する。 */
+    const lx = F.W * 0.50, lz = -F.LEN * F.EYE_Z;
+    const c = Math.cos(p.yaw), sn = Math.sin(p.yaw);
+    const ex = p.x + lx * c + lz * sn;
+    const ez = p.z - lx * sn + lz * c;
+    const ey = p.y + F.H * 0.18;
     return { x0: ex - r, x1: ex + r, y0: ey - r, y1: ey + r, z0: ez - r, z1: ez + r };
   },
   /* 魚体が画面をどれだけ覆っているか 0..1（描いていないときは 0） */
@@ -793,8 +831,13 @@ const Setpieces = {
       /* 巨大魚: 横断の瞬間に水が押されて揺れる。並走中は霧が晴れて巨体が見える */
       const m = s.dist || s.startM;
       const p = Setpieces.fishPos(m);
+      const rel = m - s.startM;
       const cross = (p.phase === 'cross') ? U.clamp(1 - Math.abs(p.x) / 46, 0, 1) : 0;
       const near = (p.phase === 'swim') ? U.clamp(1 - Math.abs(p.x) / 26, 0, 1) : 0;
+      /* 遠景のシルエットを見せるあいだは霧を遠くまで開ける（濃い霧のままだと
+         80〜100m 先の巨体が沈んで見えない）。前後は滑らかに戻す。 */
+      const F2 = Setpieces.FISH;
+      const rev = U.clamp((rel + 6) / 10, 0, 1) * U.clamp((F2.SWIM0 + 30 - rel) / 26, 0, 1);
       return {
         shake: 0.012 + 0.085 * cross * (0.7 + 0.3 * Math.sin(s.t * 24)) + 0.02 * near,
         fovAdd: 3 + 6 * cross + 3 * near,
@@ -802,8 +845,8 @@ const Setpieces = {
         /* 巨体を見上げる（横断は上、並走はやや上）。カメラは前を向いたまま＝操作は奪わない */
         camUp: 0.30 + 0.35 * cross,
         lookUp: 0.30 + 1.15 * cross + 0.35 * near,
-        fogFar: U.lerp(76, 118, Math.max(cross, near)),
-        fogColor: 0x083244,
+        fogFar: U.lerp(76, 175, Math.max(rev, Math.max(cross, near) * 0.5)),
+        fogColor: 0x1a6478,
         glide: 0,
         cross: cross, near: near
       };
@@ -855,86 +898,249 @@ const Setpieces = {
     const L = F.LEN, H = F.H, W = F.W;
     const g = new THREE.Group();
     g.visible = false;
-    const skin = new THREE.MeshLambertMaterial({ color: 0x4d8e9b, flatShading: true });
-    const belly = new THREE.MeshLambertMaterial({ color: 0xa8cfc8, flatShading: true });
-    const dark = new THREE.MeshLambertMaterial({ color: 0x17323c, flatShading: true });
-    const tooth = new THREE.MeshLambertMaterial({ color: 0xe8e2cf, flatShading: true });
-    const glow = new THREE.MeshBasicMaterial({ color: 0x8ff0ff, fog: true });
-    const eyeW = new THREE.MeshBasicMaterial({ color: 0xffe9b0, fog: true });
-    const eyeB = new THREE.MeshBasicMaterial({ color: 0x0a1418, fog: true });
-    /* 胴（前後で細くなる塊を連ねる＝ローポリでも「魚」に見える） */
-    const body = [];
-    const seg = 7;
+    const lam = (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c, flatShading: true }, o || {}));
+    const bas = (c, o) => new THREE.MeshBasicMaterial(Object.assign({ color: c, fog: true }, o || {}));
+    const M = {
+      back:  lam(0x12313c),                 // 背（暗い青緑）＝明るい水を背に輪郭が抜ける
+      side:  lam(0x47838f),                 // 側面
+      scale: lam(0x35707c),                 // 鱗の列（側面より少し暗い縞）
+      belly: lam(0xc2ddd4),                 // 腹（淡い）＝2トーン
+      dark:  lam(0x0d2530),                 // 口の中・エラの溝
+      bone:  lam(0xf0ead6),                 // 牙
+      fin:   lam(0x6fb0bb, { transparent: true, opacity: 0.70, side: THREE.DoubleSide }),
+      finBone: lam(0xbfe4ea),
+      /* 発光器は **霧をかけない**（fog:false）＝ 80〜100m 先でも輪郭の光が沈まない。
+         遠景では「光の点線でできた魚の形」として読め、至近では体の発光器として読める。 */
+      glow:  bas(0x8ff0ff, { fog: false, transparent: true, opacity: 1 }),
+      edge:  bas(0x7fe6ff, { fog: false, transparent: true, opacity: 0.92 }),
+      /* 遠景カット専用の「発光する体」。深海の背景は暗いので、黒い影絵では沈む。
+         **霧をかけない淡い光の膜**にして、暗い水の中に巨体の形が浮かび上がるようにする
+         （契約 P4a-r1「巨大な魚のシルエット全体が読める」）。
+         至近では opacity を 0 にして、陰影のある本来の体を見せる。 */
+      sil:   bas(0x9fdcea, { fog: false, transparent: true, opacity: 0, depthWrite: false }),
+      eyeW:  bas(0xf7f1dd),
+      iris:  bas(0xffc24a),
+      pupil: bas(0x06121a)
+    };
+    const add = (parts, mat) => { const m = new THREE.Mesh(ZoneKit.merge(parts), mat); g.add(m); return m; };
+    const box = ZoneKit.box;
+
+    /* ---- 胴（流線形）------------------------------------------------------
+       前後で細くなる塊を連ね、**背（暗）／側面／腹（淡）** の3トーンに割る。
+       遠くではシルエットが流線形に読め、近くでは面の明暗で丸みが出る。 */
+    const seg = 9, segL = L / seg;
+    const prof = (u) => Math.sin(Math.PI * Math.pow(U.clamp(0.10 + 0.86 * u, 0, 1), 0.85));
+    const backP = [], sideP = [], bellyP = [], scaleP = [];
     for (let i = 0; i < seg; i++) {
-      const u = i / (seg - 1);                       // 0=頭 1=尾
-      const taper = Math.sin(Math.PI * (0.16 + 0.78 * u));
-      const hh = H * (0.34 + 0.66 * taper), ww = W * (0.30 + 0.70 * taper);
-      body.push({ g: ZoneKit.box(ww, hh, L / seg + 0.6), p: [0, 0, -L / 2 + (i + 0.5) * (L / seg)] });
-    }
-    g.add(new THREE.Mesh(ZoneKit.merge(body), skin));
-    /* 腹（明るい面。下から見上げたときの明部） */
-    const bl = [];
-    for (let i = 1; i < seg - 1; i++) {
       const u = i / (seg - 1);
-      const taper = Math.sin(Math.PI * (0.16 + 0.78 * u));
-      const ww = W * (0.26 + 0.64 * taper), hh = H * (0.30 + 0.62 * taper);
-      bl.push({ g: ZoneKit.box(ww * 0.92, hh * 0.22, L / seg + 0.4), p: [0, -hh * 0.42, -L / 2 + (i + 0.5) * (L / seg)] });
-    }
-    g.add(new THREE.Mesh(ZoneKit.merge(bl), belly));
-    /* 頭（鼻先へすぼまる）と顎 */
-    g.add(new THREE.Mesh(ZoneKit.merge([
-      { g: ZoneKit.box(W * 0.62, H * 0.52, 9), p: [0, 0.6, -L / 2 - 3.4] },
-      { g: ZoneKit.box(W * 0.40, H * 0.30, 6), p: [0, 0.2, -L / 2 - 7.5] },
-      { g: ZoneKit.box(W * 0.78, H * 0.16, 12), p: [0, -H * 0.24, -L / 2 - 1.5], r: [0.10, 0, 0] }
-    ]), skin));
-    /* 牙（口の中をくぐる、の“口”） */
-    const teeth = [];
-    for (let i = 0; i < 9; i++) {
-      const x = (i / 8 - 0.5) * W * 0.66;
-      teeth.push({ g: new THREE.ConeGeometry(0.5, 2.4, 5), p: [x, -H * 0.10, -L / 2 - 4.0], r: [Math.PI, 0, 0] });
-      teeth.push({ g: new THREE.ConeGeometry(0.44, 2.0, 5), p: [x, -H * 0.30, -L / 2 - 3.2] });
-    }
-    g.add(new THREE.Mesh(ZoneKit.merge(teeth), tooth));
-    /* 目玉（両側）。大きく・光る＝「目が画面に入る」瞬間が作れる */
-    [-1, 1].forEach((s) => {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(1.5, 12, 9), eyeW);
-      e.position.set(s * W * 0.42, H * 0.16, -L * F.EYE_Z);
-      g.add(e);
-      const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.72, 10, 8), eyeB);
-      p2.position.set(s * W * 0.50, H * 0.16, -L * F.EYE_Z);
-      g.add(p2);
-    });
-    /* 背ビレ・尾ビレ・胸ビレ */
-    g.add(new THREE.Mesh(ZoneKit.merge([
-      { g: ZoneKit.box(1.0, H * 0.52, 16), p: [0, H * 0.62, -4], r: [0.08, 0, 0] },
-      { g: ZoneKit.box(1.0, H * 0.34, 9), p: [0, H * 0.52, 16], r: [0.16, 0, 0] },
-      { g: ZoneKit.box(1.0, H * 0.92, 8), p: [0, 2, L / 2 + 2], r: [0.30, 0, 0] },
-      { g: ZoneKit.box(1.0, H * 0.70, 7), p: [0, -3, L / 2 + 4], r: [-0.42, 0, 0] },
-      { g: ZoneKit.box(W * 1.3, 0.9, 7), p: [0, -H * 0.24, -L * 0.22], r: [0, 0, 0.22] },
-      { g: ZoneKit.box(W * 1.1, 0.9, 6), p: [0, -H * 0.30, L * 0.10], r: [0, 0, -0.18] }
-    ]), dark));
-    /* 発光する側線と斑（深海生物らしさ＋明部） */
-    const dots = [];
-    /* 側線（体の横を貫く光の筋）。間近を横切るときに「生き物だ」と分かる主役 */
-    [-1, 1].forEach((s) => {
-      dots.push({ g: ZoneKit.box(0.6, 0.70, L * 0.88), p: [s * W * 0.38, H * 0.06, 2] });
-    });
-    for (let i = 0; i < 14; i++) {
-      const z = -L / 2 + 6 + i * (L - 12) / 13;
-      /* 発光器（点々と並ぶ大きな斑）。深海生物らしさと明部を作る */
-      dots.push({ g: ZoneKit.box(1.0, 1.6, 1.6), p: [W * 0.34, H * 0.22, z] });
-      dots.push({ g: ZoneKit.box(1.0, 1.6, 1.6), p: [-W * 0.34, H * 0.22, z] });
-      if (i % 2 === 0) {
-        dots.push({ g: ZoneKit.box(1.2, 1.2, 1.2), p: [W * 0.30, -H * 0.26, z] });
-        dots.push({ g: ZoneKit.box(1.2, 1.2, 1.2), p: [-W * 0.30, -H * 0.26, z] });
+      const k = prof(u);
+      const hh = H * (0.22 + 0.78 * k), ww = W * (0.22 + 0.78 * k);
+      const z = -L / 2 + (i + 0.5) * segL;
+      sideP.push({ g: box(ww, hh * 0.60, segL + 0.5), p: [0, hh * 0.04, z] });
+      backP.push({ g: box(ww * 0.94, hh * 0.30, segL + 0.4), p: [0, hh * 0.36, z] });
+      bellyP.push({ g: box(ww * 0.86, hh * 0.24, segL + 0.4), p: [0, -hh * 0.36, z] });
+      /* 鱗の列: 側面に浅い段を3段（明暗の縞として読める） */
+      for (let r = 0; r < 3; r++) {
+        const y = hh * (0.22 - r * 0.20);
+        [-1, 1].forEach((sx) => {
+          scaleP.push({ g: box(0.5, hh * 0.13, segL * 0.86), p: [sx * ww * 0.50, y, z], r: [0, 0, sx * 0.05] });
+        });
       }
     }
-    g.add(new THREE.Mesh(ZoneKit.merge(dots), glow));
+    add(sideP, M.side);
+    add(backP, M.back);
+    add(bellyP, M.belly);
+    add(scaleP, M.scale);
+
+    /* ---- 頭（口は上下の顎に分ける＝開閉できる） --------------------------- */
+    const headZ = -L / 2;                     // 胴の先端
+    const jawZ = headZ - 1.5;                 // 口の付け根（顎のピボット）
+    add([
+      { g: box(W * 0.82, H * 0.74, 7), p: [0, 0.4, headZ - 2.4] },          // 頭
+      { g: box(W * 0.66, H * 0.52, 4), p: [0, 0.9, headZ - 5.6] },          // 鼻先へすぼまる
+      { g: box(W * 0.30, H * 0.22, 3.4), p: [0, H * 0.40, headZ - 5.0] }    // 頭頂の隆起
+    ], M.back);
+    add([
+      { g: box(W * 0.30, H * 0.16, 5.0), p: [0, H * 0.46, headZ - 3.0], r: [0.10, 0, 0] },
+      { g: box(W * 0.16, H * 0.12, 3.0), p: [0, H * 0.54, headZ - 1.0], r: [0.16, 0, 0] }
+    ], M.scale);
+    /* エラの溝（3本×左右）＝「生き物」の合図 */
+    const gillP = [];
+    [-1, 1].forEach((sx) => {
+      for (let i = 0; i < 3; i++) {
+        gillP.push({ g: box(0.7, H * 0.46, 0.9), p: [sx * W * 0.44, -0.2, headZ + 2.4 + i * 2.2], r: [0, 0, sx * 0.16] });
+      }
+    });
+    const gills = add(gillP, M.dark);
+    /* 口の中（暗い空洞）。顎が開くと見える */
+    add([{ g: box(W * 0.56, H * 0.30, 6), p: [0, -0.3, jawZ - 3.0] }], M.dark);
+
+    /* 上顎・下顎（それぞれ別の群＝ピボットで回す） */
+    const mkJaw = (up) => {
+      const j = new THREE.Group();
+      j.position.set(0, up ? 0.5 : -0.9, jawZ);
+      const sgn = up ? 1 : -1;
+      const plate = new THREE.Mesh(ZoneKit.merge([
+        { g: box(W * 0.70, H * 0.17, 7.0), p: [0, sgn * H * 0.07, -3.4] },
+        { g: box(W * 0.50, H * 0.13, 3.2), p: [0, sgn * H * 0.08, -7.6] }
+      ]), up ? M.back : M.belly);
+      j.add(plate);
+      /* 牙（判定の牙 FISH_TOOTH と同じ「口」の合図） */
+      const tp = [];
+      for (let i = 0; i < 7; i++) {
+        const x = (i / 6 - 0.5) * W * 0.58;
+        const h2 = 2.6 - Math.abs(i / 6 - 0.5) * 2.0;
+        tp.push({ g: new THREE.ConeGeometry(0.42, h2, 4), p: [x, -sgn * h2 / 2, -3.0 - Math.abs(i / 6 - 0.5) * 2.0],
+                  r: [0, 0, up ? Math.PI : 0] });
+      }
+      j.add(new THREE.Mesh(ZoneKit.merge(tp), M.bone));
+      g.add(j);
+      return j;
+    };
+    const jawTop = mkJaw(true), jawBot = mkJaw(false);
+
+    /* ---- 目（白目＋虹彩＋瞳の3層）---------------------------------------- */
+    const eyes = [];
+    [-1, 1].forEach((sx) => {
+      const ez = -L * F.EYE_Z, ey = H * 0.18;
+      /* 3層（白目・虹彩・瞳）。**胴の輪郭より外**に出す（埋まると黄色い楕円にしか見えない） */
+      const e = new THREE.Mesh(new THREE.SphereGeometry(2.0, 10, 8), M.eyeW);
+      e.position.set(sx * W * 0.50, ey, ez);
+      g.add(e);
+      const ir = new THREE.Mesh(new THREE.SphereGeometry(1.30, 10, 8), M.iris);
+      ir.position.set(sx * W * 0.60, ey, ez);
+      g.add(ir);
+      const pu = new THREE.Mesh(new THREE.SphereGeometry(0.60, 8, 6), M.pupil);
+      pu.position.set(sx * W * 0.66, ey, ez);
+      g.add(pu);
+      eyes.push({ iris: ir, pupil: pu });
+      /* 目の縁（まぶたの隆起）＝楕円に見せない */
+      g.add(new THREE.Mesh(ZoneKit.merge([
+        { g: box(0.6, 0.7, 5.4), p: [sx * W * 0.50, ey + 2.1, ez] },
+        { g: box(0.6, 0.6, 5.0), p: [sx * W * 0.50, ey - 2.1, ez] }
+      ]), M.back));
+    });
+
+    /* ---- ヒレ（半透明＋放射状の骨）---------------------------------------- */
+    const finP = [], boneP = [];
+    const fin = (w2, h2, x, y, z, rot, bones) => {
+      finP.push({ g: box(w2, h2, 0.5), p: [x, y, z], r: rot });
+      for (let i = 0; i < bones; i++) {
+        const a = (i / (bones - 1) - 0.5);
+        boneP.push({ g: box(w2 * 0.9, 0.35, 0.35), p: [x, y + a * h2 * 0.82, z], r: [rot[0], rot[1], rot[2] + a * 0.30] });
+      }
+    };
+    /* 背ビレ（上に立つ三角）: 板を段々に重ねて三角形の輪郭を作る */
+    for (let i = 0; i < 5; i++) {
+      const u = i / 4;
+      finP.push({ g: box(0.9, H * (0.70 - u * 0.52), 14 - u * 8), p: [0, H * (0.60 + 0.34 * (1 - u) * 0.5), -10 + u * 16] });
+    }
+    /* 胸ビレ（左右・後ろへ広がる）と腹ビレ */
+    [-1, 1].forEach((sx) => {
+      fin(W * 1.15, 5.0, sx * W * 0.62, -H * 0.16, -L * 0.20, [0, 0, sx * 0.34], 4);
+      fin(W * 0.80, 3.4, sx * W * 0.50, -H * 0.30, L * 0.10, [0, 0, sx * 0.26], 3);
+    });
+    add(finP, M.fin);
+    add(boneP, M.finBone);
+
+    /* ---- 尾（左右に振る＝別の群）------------------------------------------ */
+    const tail = new THREE.Group();
+    tail.position.set(0, 0, L * 0.34);
+    const tp2 = [], tb = [];
+    tp2.push({ g: box(W * 0.30, H * 0.34, L * 0.16), p: [0, 0, L * 0.08] });       // 尾柄
+    /* 三日月の尾ビレ（上下に広がる2枚） */
+    [1, -1].forEach((sy) => {
+      for (let i = 0; i < 4; i++) {
+        const u = i / 3;
+        tp2.push({ g: box(0.8, H * (0.50 + u * 0.55), 7 - u * 4),
+                   p: [0, sy * H * (0.34 + u * 0.46), L * 0.18 + u * 5.5] });
+        tb.push({ g: box(0.5, H * (0.44 + u * 0.50), 0.5), p: [0.5, sy * H * (0.34 + u * 0.46), L * 0.18 + u * 5.5] });
+      }
+    });
+    tail.add(new THREE.Mesh(ZoneKit.merge(tp2), M.fin));
+    tail.add(new THREE.Mesh(ZoneKit.merge(tb), M.finBone));
+    g.add(tail);
+
+    /* ---- 側線（1本の発光ライン）と発光器 ---------------------------------- */
+    const dots = [];
+    [-1, 1].forEach((sx) => {
+      dots.push({ g: box(0.45, 0.55, L * 0.80), p: [sx * W * 0.52, H * 0.04, 0] });
+    });
+    for (let i = 0; i < 12; i++) {
+      const z = -L / 2 + 8 + i * (L - 16) / 11;
+      [-1, 1].forEach((sx) => {
+        dots.push({ g: box(0.8, 1.3, 1.3), p: [sx * W * 0.46, -H * 0.24, z] });
+      });
+    }
+    const glowMesh = add(dots, M.glow);
+    glowMesh.renderOrder = 4;
+    /* ---- 輪郭の発光（遠景で「魚の形」が読めるようにする / 契約 P4a-r1）------
+       背びれの稜線・腹の縁・尾びれの縁・頭の稜を、光の点線でなぞる。
+       霧をかけない材質なので、80〜100m 先のシルエットカットでも形が残る。 */
+    const edgeP = [];
+    for (let i = 0; i < 16; i++) {
+      const u = i / 15;
+      const z = -L / 2 - 4 + u * (L + 12);
+      const k = prof(U.clamp((z + L / 2) / L, 0, 1));
+      const top = H * (0.22 + 0.78 * k) * 0.52 + (z > -10 && z < 6 ? H * 0.30 : 0);
+      edgeP.push({ g: box(0.7, 0.7, 2.0), p: [0, top + 0.5, z] });                 // 背の稜線
+      if (i % 2 === 0) edgeP.push({ g: box(0.7, 0.7, 1.8), p: [0, -top - 0.4, z] }); // 腹の縁
+    }
+    [1, -1].forEach((sy) => {
+      for (let i = 0; i < 4; i++) {
+        const u = i / 3;
+        edgeP.push({ g: box(0.7, 0.7, 1.4), p: [0, sy * H * (0.62 + u * 0.50), L * 0.52 + u * 5.2] });
+      }
+    });
+    [-1, 1].forEach((sx) => {
+      edgeP.push({ g: box(0.8, 0.8, 0.8), p: [sx * W * 0.50, H * 0.42, headZ - 4.0] });  // 頭の角
+      edgeP.push({ g: box(0.8, 0.8, 0.8), p: [sx * W * 0.62, -H * 0.18, -L * 0.20] });   // 胸びれの先
+    });
+    const edgeMesh = add(edgeP, M.edge);
+    edgeMesh.renderOrder = 5;
+    /* 影絵（遠景カット用）。胴・頭・背びれ・尾を1つに融合して少しだけ外側に置く */
+    const silP = [];
+    /* 胴は **実際の高さ**（側面の帯の 1/0.60）に戻す。太らせると背びれ・尾びれの
+       輪郭が埋もれて「ただの板」に見えるため（契約 P4a-r1 の差し戻し理由）。 */
+    sideP.forEach((q) => silP.push({ g: ZoneKit.box(q.g.parameters.width * 1.02,
+                                                    q.g.parameters.height * 1.60,
+                                                    q.g.parameters.depth), p: q.p }));
+    silP.push({ g: box(W * 0.86, H * 0.78, 7), p: [0, 0.4, headZ - 2.4] });
+    silP.push({ g: box(W * 0.70, H * 0.56, 5), p: [0, 0.9, headZ - 6.0] });
+    for (let i = 0; i < 5; i++) {
+      const u = i / 4;
+      silP.push({ g: box(1.0, H * (0.70 - u * 0.52), 14 - u * 8),
+                  p: [0, H * (0.60 + 0.34 * (1 - u) * 0.5), -10 + u * 16] });
+    }
+    [1, -1].forEach((sy) => {
+      for (let i = 0; i < 4; i++) {
+        const u = i / 3;
+        silP.push({ g: box(1.0, H * (0.50 + u * 0.55), 7 - u * 4),
+                    p: [0, sy * H * (0.34 + u * 0.46), L * 0.52 + u * 5.5] });
+      }
+    });
+    [-1, 1].forEach((sx) => {
+      silP.push({ g: box(W * 1.15, 5.0, 0.6), p: [sx * W * 0.62, -H * 0.16, -L * 0.20], r: [0, 0, sx * 0.34] });
+    });
+    const sil = add(silP, M.sil);
+    /* 影絵は **発光器と輪郭の光より先に** 描く（後だと目や口を塗り潰して
+       ただの白い塊に見える / 契約 P4a-r1 の差し戻し理由）。 */
+    sil.renderOrder = -1;
     scene.add(g);
-    /* 魚が落とす影（前方の床と天井を覆う暗い帯） */
+
+    /* ---- 魚に追い立てられて逃げる小魚の群れ（スケール感の主役）------------ */
+    const escortMat = new THREE.MeshBasicMaterial({ color: 0xcfeef5, fog: true, transparent: true,
+                                                    opacity: 0.85, side: THREE.DoubleSide });
+    const escort = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.34, 0.16), escortMat, 54);
+    escort.frustumCulled = false;
+    escort.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    escort.visible = false;
+    scene.add(escort);
+
+    /* ---- 魚の影（丸影の大型版。床と天井に落ちる）-------------------------- */
     const shadows = [];
-    [[0.03, -Math.PI / 2], [CFG.H - 0.03, Math.PI / 2]].forEach((c) => {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2 + 1.4, 34),
+    [[0.035, -Math.PI / 2], [CFG.H - 0.035, Math.PI / 2]].forEach((c) => {
+      const m = new THREE.Mesh(new THREE.CircleGeometry(1, 20),
                                new THREE.MeshBasicMaterial({ color: 0x03141c, transparent: true,
                                                              opacity: 0, depthWrite: false, fog: true }));
       m.rotation.x = c[1];
@@ -944,35 +1150,163 @@ const Setpieces = {
       scene.add(m);
       shadows.push(m);
     });
-    Setpieces.fish = { group: g, shadows: shadows, glowMat: glow };
+    Setpieces.fish = { group: g, shadows: shadows, glowMat: M.glow, mats: M, sil: sil,
+                       jawTop: jawTop, jawBot: jawBot, tail: tail, gills: gills,
+                       eyes: eyes, escort: escort, escortMat: escortMat,
+                       dummy: new THREE.Object3D() };
+  },
+
+  /* 口の開き 0..1（契約 P4a-r1）。基本は 0.5秒周期で開閉し、
+     **判定の牙（FISH_TOOTH）に近づくと大きく開く**＝見た目と判定が同じ合図になる。 */
+  fishJaw(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'megafish') return 0;
+    const sp = (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN;
+    const rel = m - s.startM;
+    const base = 0.30 + 0.30 * (0.5 - 0.5 * Math.cos(2 * Math.PI * rel / (sp * 0.5)));
+    let bite = 0;
+    const def = Setpieces.DEFS.megafish;
+    const teeth = Setpieces._fishTeeth || (Setpieces._fishTeeth =
+      (def.floor || []).concat(def.ceil || []).filter((e) => e.type === 'FISH_TOOTH').map((e) => e.at));
+    for (let i = 0; i < teeth.length; i++) {
+      const d = teeth[i] - rel;
+      if (d > -8 && d < 44) bite = Math.max(bite, U.clamp(1 - Math.abs(d - 14) / 26, 0, 1));
+    }
+    /* 横断カットで頭が画面に入る瞬間は大きく開ける（口の中・牙が読める見せ場） */
+    const F = Setpieces.FISH;
+    const mid = (F.CROSS0 + F.CROSS1) / 2;
+    bite = Math.max(bite, U.clamp(1 - Math.abs(rel - mid + 4) / 12, 0, 1));
+    return U.clamp(Math.max(base, bite), 0, 1);
+  },
+  /* 尾の振り -1..1。**判定の尾（FISH_TAIL の横スキャン）と同じ周期・位相** */
+  fishTailK(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'megafish') return 0;
+    const sp = (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN;
+    const period = CFG.LASER.SCAN_PERIOD * (sp / CFG.REF_SPEED);
+    const def = Setpieces.DEFS.megafish;
+    const tailAt = Setpieces._fishTailAt || (Setpieces._fishTailAt =
+      ((def.floor || []).filter((e) => e.type === 'FISH_TAIL')[0] || { at: 154 }).at);
+    const at = s.startM + tailAt;
+    return -Math.cos(2 * Math.PI * (m - at) / period);
+  },
+  /* 遠景カットのあいだ、海底の小物を間引く割合 0..1（ゾーンが読む）。
+     巨体の輪郭を見せるには背景が要る。海藻や梁が視界を埋めていると
+     「シルエット全体が読める」を満たせないので、カットの前後で滑らかに間引く。
+     ＝「巨体の影が差して魚たちが逃げ、水が空く」という読み方にもなる。 */
+  fishClearK(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'megafish') return 0;
+    const F = Setpieces.FISH, rel = m - s.startM;
+    /* ① 横断カット（シルエット全体を見せる） ② 目が合うカット（頭が寄る）の2回 */
+    const win = (a, b2, amt) => amt * U.smooth(U.clamp((rel - a) / 10, 0, 1)) *
+                                     U.smooth(U.clamp((b2 - rel) / 12, 0, 1));
+    return Math.max(win(F.CROSS0 - 10, F.CROSS1 + 6, 0.78),
+                    win(F.EYE0 - 24, F.EYE1 + 8, 0.62));
+  },
+  /* 魚を照らす明かりの強さ 0..1（ゾーンが読む。遠景のシルエットでは弱く、至近で強く） */
+  fishLightK(m) {
+    const p = Setpieces.fishPos(m);
+    if (!p.vis) return 0;
+    /* 遠景カットでも体の面は起こす（真っ暗だと「板」に見える）。
+       至近ほど強く、遠景は中くらい。 */
+    if (p.phase === 'far') return 0.62;
+    return U.clamp(1 - Math.abs(p.z + 6) / 70, 0.2, 1);
+  },
+  /* 魚のシルエットが画面幅の何割を占めるか（契約 P4a-r1 の数値ゲート）。
+     カメラの後ろに回り込んだ角は数えない（投影が裏返るため）。 */
+  fishWidthShare(m) {
+    const f = Setpieces.fish;
+    if (!f || !f.group.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    const b = Setpieces.fishBox(m);
+    if (!b) return 0;
+    const cam = World.camera;
+    cam.updateMatrixWorld();
+    const v = Setpieces._pv || (Setpieces._pv = new THREE.Vector3());
+    let x0 = 1e9, x1 = -1e9, n = 0;
+    for (let i = 0; i < 8; i++) {
+      v.set((i & 1) ? b.x1 : b.x0, (i & 2) ? b.y1 : b.y0, (i & 4) ? b.z1 : b.z0);
+      v.applyMatrix4(cam.matrixWorldInverse);
+      if (v.z > -cam.near) return 0;                 // 一部でもカメラの後ろなら測らない
+      v.applyMatrix4(cam.projectionMatrix);
+      const px = v.x * 0.5 + 0.5;
+      if (px < x0) x0 = px;
+      if (px > x1) x1 = px;
+      n++;
+    }
+    if (!n) return 0;
+    return U.clamp(Math.min(1, x1) - Math.max(0, x0), 0, 1);
   },
 
   _hideFish() {
     const f = Setpieces.fish;
     if (!f || !f.group.visible) return;
     f.group.visible = false;
+    f.escort.visible = false;
     f.shadows.forEach((m) => { m.visible = false; m.material.opacity = 0; });
   },
   /* 巨大魚の更新（すべて距離の関数。フレームに依存しない） */
   _syncFish(dist, t) {
-    const f = Setpieces.fish, d = Setpieces.dust;
+    const f = Setpieces.fish, d = Setpieces.dust, F = Setpieces.FISH;
     if (!f) return;
     const p = Setpieces.fishPos(dist);
     f.group.visible = p.vis;
+    f.escort.visible = p.vis;
     if (p.vis) {
       /* 泳ぐうねり（体を左右に振る）。距離の関数なので巻き戻しても同じ */
       const sway = Math.sin(dist * 0.05) * 0.06;
       f.group.position.set(p.x, p.y + Math.sin(dist * 0.035) * 0.5, p.z);
       f.group.rotation.set(0, p.yaw + sway, Math.sin(dist * 0.04) * 0.04);
-      f.glowMat.color.setHex(0x8ff0ff).multiplyScalar(0.75 + 0.25 * Math.sin(t * 2.4));
+      /* 口の開閉（判定の牙と同期）。上顎は上へ、下顎は下へ開く */
+      const jaw = Setpieces.fishJaw(dist);
+      f.jawTop.rotation.x = -0.34 * jaw;
+      f.jawBot.rotation.x = 0.46 * jaw;
+      /* 尾の振り（判定の尾のスキャンと同じ周期） */
+      const tk = Setpieces.fishTailK(dist);
+      f.tail.rotation.y = 0.42 * tk;
+      f.tail.position.x = -1.6 * tk;
+      /* エラの開閉（呼吸） */
+      f.gills.scale.z = 1 + 0.18 * Math.sin(dist * 0.18);
+      /* 瞳がこちらを見る（至近では 2体のほうへ寄る） */
+      const look = U.clamp(1 - Math.abs(p.z) / 60, 0, 1);
+      f.eyes.forEach((e) => { e.pupil.position.z = -F.LEN * F.EYE_Z + 1.6 * look; });
+      f.glowMat.color.setHex(0x8ff0ff).multiplyScalar(0.72 + 0.28 * Math.sin(t * 2.4));
+      /* 影絵: 遠いほど濃く（輪郭だけで読ませる）、至近では消して陰影の体を見せる */
+      const farK = U.clamp((Math.abs(p.z) - 38) / 26, 0, 1);
+      f.mats.sil.opacity = 0.42 * farK;
+      f.sil.visible = farK > 0.02;
+      /* 逃げる小魚の群れ（魚体に沿って前へ抜ける）＝巨体の大きさが比較で分かる */
+      const o = f.dummy;
+      for (let i = 0; i < f.escort.count; i++) {
+        const h1 = ZoneKit.hash(i, 911), h2 = ZoneKit.hash(i, 919), h3 = ZoneKit.hash(i, 929);
+        const u = (h1 + (dist * 0.010 + t * 0.10)) % 1;
+        const side = (i % 2) ? 1 : -1;
+        const along = F.LEN * (0.55 - u * 1.25);
+        const out = (1.0 + h2 * 1.6) * (0.4 + u * 1.9);
+        const lx = side * (F.W * 0.6 * out);
+        const ly = (h3 - 0.5) * F.H * 1.1 - u * 2.0;
+        /* 魚のローカル座標 → 世界（yaw だけ効く） */
+        const c = Math.cos(p.yaw), sn = Math.sin(p.yaw);
+        o.position.set(p.x + lx * c + along * sn, p.y + ly, p.z - lx * sn + along * c);
+        o.rotation.set(0, p.yaw + side * 0.4 + Math.sin(t * 6 + i) * 0.3, Math.sin(t * 5 + i) * 0.25);
+        o.scale.setScalar(0.8 + h2 * 1.4);
+        o.updateMatrix();
+        f.escort.setMatrixAt(i, o.matrix);
+      }
+      f.escort.instanceMatrix.needsUpdate = true;
+      f.escortMat.opacity = 0.55 + 0.3 * U.clamp(1 - Math.abs(p.z) / 90, 0, 1);
     }
-    /* 影: 魚が近いほど濃く、前方へ伸びる */
+    /* 影（丸影の大型版）: 魚の真下・真上に落ちる。近いほど濃く大きい */
     const near = p.vis && (p.phase === 'cross' || p.phase === 'swim');
-    const k = near ? U.clamp(1 - Math.abs(p.x) / 26, 0, 1) : 0;
+    const k = near ? U.clamp(1 - Math.abs(p.x) / 30, 0, 1) * U.clamp(1 - Math.abs(p.z) / 70, 0, 1) : 0;
     f.shadows.forEach((m) => {
-      m.visible = k > 0.01;
-      m.material.opacity = 0.42 * k;
-      m.position.z = U.clamp(p.z, -60, 0) + 6;
+      m.visible = k > 0.02;
+      m.material.opacity = 0.50 * k;
+      const r = 6 + 16 * k;
+      m.scale.set(r * 2.2, r, 1);
+      m.position.x = U.clamp(p.x, -CFG.HALF_W - 1, CFG.HALF_W + 1);
+      m.position.z = U.clamp(p.z, -70, 2);
     });
     /* 巻き上がる砂と泡（既存の粒子を水色に染めて使い回す） */
     if (d) {

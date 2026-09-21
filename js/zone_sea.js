@@ -95,10 +95,16 @@ const ZoneSea = {
      最大 spacing ぶん手前に寄る）＝ 気泡やクラゲがレンズの直前に来て画面を覆う。
      ここで「2体より CULL_BEHIND m 以上うしろ」を一括で落とす。 */
   CULL_BEHIND: 1.2,
+  _clear: 0,
   _field(spec) {
     const place = spec.place;
+    const isProp = (spec.prop !== false);
     spec.place = function (slot, m, t, dist) {
       if (dist !== undefined && m < dist - ZoneSea.CULL_BEHIND) return null;
+      /* 大演出「巨大魚の通過」の遠景カットのあいだは小物を間引く（§4.4 S5 / P4a-r1）。
+         巨体の輪郭を見せるための背景を空ける。割合は演出側が決め、ゾーンは読むだけ。
+         同じスロットは同じ判定になるので、点滅せず滑らかに消えていく。 */
+      if (isProp && ZoneSea._clear > 0 && ZoneKit.hash(slot, 977) < ZoneSea._clear) return null;
       return place(slot, m, t, dist);
     };
     return ZoneKit.field(ZoneSea, spec);
@@ -1198,6 +1204,9 @@ const ZoneSea = {
     ZoneSea._t = t;
     ZoneSea._speed = speed || CFG.SPEED_MIN;
     ZoneSea._spd01 = U.clamp((ZoneSea._speed - CFG.SPEED_MIN) / (CFG.SPEED_MAX - CFG.SPEED_MIN), 0, 1);
+    /* 巨大魚の遠景カットのあいだだけ小物を間引く（演出側の割合を読むだけ） */
+    ZoneSea._clear = (typeof Setpieces !== 'undefined' && Setpieces.fishClearK)
+      ? Setpieces.fishClearK(dist) : 0;
     ZoneSea.aheadCount = ZoneKit.syncFields(ZoneSea, dist, t, false);
 
     /* 遠景の層を視差で流す */
@@ -1228,12 +1237,17 @@ const ZoneSea = {
       const Sp = (typeof Setpieces !== 'undefined') ? Setpieces : null;
       const on = !!(Sp && Sp.fishActive && Sp.fishActive());
       if (on) {
-        const p = Sp.fishPos(Sp.state.dist || Sp.state.startM);
+        const m = Sp.state.dist || Sp.state.startM;
+        const p = Sp.fishPos(m);
         const fl = 0.86 + 0.14 * Math.sin(t * 2.6);
+        /* 遠景のシルエットでは弱く（輪郭だけ抜く）、至近では強く面を起こす。
+           強さの決め方は演出側（Setpieces.fishLightK）から読むだけ。 */
+        const k = Sp.fishLightK ? Sp.fishLightK(m) : 1;
         ZoneSea.fishKey.position.set(p.x * 0.35, CFG.H * 0.9, p.z + 6);
-        ZoneSea.fishKey.intensity = 34 * fl;
+        ZoneSea.fishKey.intensity = 34 * fl * k;
+        ZoneSea.fishKey.distance = 46 + 40 * (1 - k);
         ZoneSea.fishRim.position.set(-p.x * 0.3, CFG.H * 1.9, p.z - 10);
-        ZoneSea.fishRim.intensity = 26 * fl;
+        ZoneSea.fishRim.intensity = 26 * fl * (0.4 + 0.6 * k);
       } else if (ZoneSea.fishKey.intensity !== 0) {
         ZoneSea.fishKey.intensity = 0;
         ZoneSea.fishRim.intensity = 0;
