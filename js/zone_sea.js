@@ -1209,10 +1209,15 @@ const ZoneSea = {
       ? Setpieces.fishClearK(dist) : 0;
     ZoneSea.aheadCount = ZoneKit.syncFields(ZoneSea, dist, t, false);
 
-    /* 遠景の層を視差で流す */
+    /* 遠景の層を視差で流す。**巨大魚の横向きカットのあいだは伏せる**
+       （沈没船や岩礁のシルエットが巨体に重なると「生き物」と読めなくなる。
+       背景は深い青のグラデと光の柱だけにする / 契約 P4a-4）。 */
+    const sideCut = (typeof Setpieces !== 'undefined' && Setpieces.fishSideK)
+      ? Setpieces.fishSideK(dist) : 0;
     for (let i = 0; i < ZoneSea.farLayers.length; i++) {
       const g = ZoneSea.farLayers[i];
       g.position.z = (dist * g.userData.par) % g.userData.len;
+      g.visible = (sideCut < 0.12);
     }
     /* 遠景の光の柱をゆっくり揺らす（水面の揺らぎ） */
     if (ZoneSea.farShafts) {

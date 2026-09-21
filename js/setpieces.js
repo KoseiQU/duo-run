@@ -199,38 +199,28 @@ const Setpieces = {
   /* ---- 巨大魚のキーフレーム（距離 m。すべてここから引く） ----------------- */
   FISH: {
     LEN: 92, H: 13, W: 9,          // 全長・高さ・幅（コリドー 3.6×4.0 よりはるかに大きい）
-    CROSS0: 8, CROSS1: 44,         // 横断の区間
-    CROSS_Z: 52,                   // 横断する地点（演出開始からの相対距離）
-    /* 横断の始点と終点（魚体の中心の x）。鼻先は中心の 46m 左なので、
-       真ん中（u=0.5）で **頭が正面に来る** ように振る＝巨体の頭が目の前を横切る。 */
-    CROSS_X0: -65, CROSS_X1: 25,
-    CROSS_Y: 2.2,                  // 横断時の高さ（コリドーの高さ。巨体が通路を塞いで通る）
+    /* ====================================================================
+       **横向きカット**（2026-09-22 P4a-4）
+       巨岩の振り返りカット（ROCK.LOOKBACK）と同じ仕組みで、カメラをその場で
+       90度 左（開放区間の外＝海の側）へ振る。前進は止めない。
+       その視界にはコリドーの小物を入れず（ゾーンが間引く／遠景の層も伏せる）、
+       深い青のグラデと光の柱だけを背に **巨大魚が全身のシルエットで横切る**。
+       窓には障害物を置かない（譜面の最初は 76m）。カット明けは前を向いて
+       牙・ヒレ・尾の判定へ繋ぐ＝§4.7 の視認距離も守れる。
+       ==================================================================== */
+    SIDE0: 3, SIDE1: 31,           // カットの区間（演出開始からの相対 m）
+    SIDE_X: -71,                   // 魚が泳ぐ横の位置（全長92mが視界の70〜90%になる距離）
+    SIDE_Y: 2.2,                   // 〃 高さ（目線）
+    SIDE_Z0: 52, SIDE_Z1: -52,     // 〃 奥行き（後ろから前へ追い抜いていく）
+    CROSS0: 3, CROSS1: 31,         // （互換）カットの窓＝障害物を置かない区間
+    EYE_Z: 0.42,                   // 目玉の位置（頭から全長の何割か）
     SWIM0: 56,                     // 並走の始まり
     EYE0: 146, EYE1: 176,          // 目玉が画面に入る区間
     END: 200,
-    X_FAR: -15.0, X_NEAR: -10.5,   // 並走の横位置（寄ってくる。体が画面を覆わない距離で止める）
-    /* 〃 高さ。目玉が **コリドーの天井（y=4）より下** に来るところまで下ろす。
-       天井の帯に隠れると「目が合う」瞬間が作れない（契約 P4a-r1 の差し戻し理由）。 */
-    Y_FAR: 6.0, Y_NEAR: 1.4,
-    EYE_Z: 0.42,                   // 目玉の位置（頭から全長の何割か）
-    /* 〃 奥行き（魚体の中心）。全長92mなので、中心が +30 まで来ると
-       **目玉（頭から少し後ろ）がちょうど2体の真横**に来る＝目が合う瞬間になる。 */
-    Z_FAR: -60, Z_NEAR: 30,
-    /* 横断カットの前半（u < SIL_U）は **遠景のシルエット**。
-       全長92mが画面幅の60〜80%に収まる距離（カメラから 80〜100m）を通し、
-       頭から尾までの流線形・背びれ・尾びれが1枚で読めるカットにする（契約 P4a-r1）。
-       そのあと SIL_BLEND のあいだに寄ってきて、至近の通過（現行）へ繋ぐ。 */
-    SIL_U: 0.42, SIL_BLEND: 0.26,
-    /* 遠景カットは **斜め（3/4ビュー）** で見せる。真横だと 92m の胴が薄い帯にしか
-       ならないので、頭を画面の中心近くに置き、胴を奥へ逃がして「近くの頭＋遠ざかる胴」
-       という奥行きのある形にする（契約 P4a-r1「シルエット全体が読める」）。 */
-    SIL_YAW2: 3.785,
-    SIL_X0: -58, SIL_X1: -26,
-    SIL_Z0: -92, SIL_Z1: -63,
-    SIL_Y1: 7.0,
-    /* 遠景カットの高さ。**小物より上**（海底の岩棚やアーチは y≤9）を通し、
-       開けた水と光の柱だけを背にして巨体の輪郭を抜く。そのあと潜り込んで至近を通る。 */
-    SIL_Y: 11.0
+    X_FAR: -15.0, X_NEAR: -10.5,   // 並走の横位置（寄ってくる）
+    Y_FAR: 6.0, Y_NEAR: 1.4,       // 〃 高さ（天井より下まで下りて目が合う）
+    EYE_R: 2.0,
+    Z_FAR: -60, Z_NEAR: 30         // 〃 奥行き（目玉が2体の真横へ）
   },
 
   /* ---- 神殿崩壊のキーフレーム（距離 m。すべてここから引く） --------------- */
@@ -365,30 +355,22 @@ const Setpieces = {
     const s = Setpieces.state, F = Setpieces.FISH;
     if (!s || s.id !== 'megafish') return { vis: false, x: 0, y: 0, z: 0, yaw: 0, phase: 'none' };
     const rel = m - s.startM;
-    if (rel < F.CROSS0) {
-      /* 予告: 前方の霧の中に、まだ遠い影 */
-      return { vis: true, x: F.SIL_X0 - 10, y: F.SIL_Y + 2, z: F.SIL_Z0 - 16,
-               yaw: F.SIL_YAW2, phase: 'far' };
+    if (rel < F.SIDE0) {
+      /* 予告: 左のずっと後ろに影（カットが始まると追い抜いていく） */
+      return { vis: true, x: F.SIDE_X, y: F.SIDE_Y, z: F.SIDE_Z0 + (F.SIDE0 - rel) * 4,
+               yaw: 0, phase: 'far' };
     }
-    if (rel <= F.CROSS1) {
-      const raw = (rel - F.CROSS0) / (F.CROSS1 - F.CROSS0);
-      /* 奥行きと高さだけを2段に割る（横の動きは1本の曲線のまま）。
-         前半＝遠景のシルエット、後半＝至近の通過。距離のキーフレームは変えない。 */
-      const b = U.smooth(U.clamp((raw - F.SIL_U) / F.SIL_BLEND, 0, 1));
-      const v = U.clamp(raw / F.SIL_U, 0, 1);
-      /* 遠景（斜めに迫る3/4ビュー） → 至近（真横に横切る）へ、向きごと滑らかに繋ぐ */
-      /* 横の動きは **等速**（raw に比例）にして、遠景カットの終わりと段差なく繋ぐ */
-      const x = U.lerp(U.lerp(F.SIL_X0, F.SIL_X1, v), U.lerp(F.CROSS_X0, F.CROSS_X1, raw), b);
-      const z = U.lerp(U.lerp(F.SIL_Z0, F.SIL_Z1, v), -(F.CROSS_Z - rel), b);
-      const y = U.lerp(U.lerp(F.SIL_Y, F.SIL_Y1, v), F.CROSS_Y, b);
-      const yaw = U.lerp(F.SIL_YAW2, Math.PI / 2, b);
-      return { vis: true, x: x, y: y, z: z, yaw: yaw, phase: (b < 0.5) ? 'far' : 'cross' };
+    if (rel <= F.SIDE1) {
+      /* 横向きカット: 2体の左を、後ろから前へ全身で追い抜く */
+      const u = (rel - F.SIDE0) / (F.SIDE1 - F.SIDE0);
+      return { vis: true, x: F.SIDE_X, y: F.SIDE_Y, z: U.lerp(F.SIDE_Z0, F.SIDE_Z1, u),
+               yaw: 0, phase: 'side' };
     }
     if (rel < F.SWIM0) {
-      /* 横断のあと、画面の外へ抜けきるまで動かし続ける（急に消すと「ぱっと消えた」に見える） */
-      const k = U.clamp((rel - F.CROSS1) / 12, 0, 1);
-      return { vis: k < 1, x: F.CROSS_X1 + 96 * k, y: F.CROSS_Y, z: -(F.CROSS_Z - rel),
-               yaw: Math.PI / 2, phase: 'turn' };
+      /* カット明け: 前方左へ回り込んで並走に入る */
+      const u = U.smooth(U.clamp((rel - F.SIDE1) / (F.SWIM0 - F.SIDE1), 0, 1));
+      return { vis: true, x: U.lerp(F.SIDE_X, F.X_FAR, u), y: U.lerp(F.SIDE_Y, F.Y_FAR, u),
+               z: U.lerp(F.SIDE_Z1, F.Z_FAR, u), yaw: U.lerp(0, -0.10, u), phase: 'turn' };
     }
     /* 並走: 左から寄ってきて、目線の高さまで下りる → 目が合う → 深みへ去る */
     const v = U.smooth(U.clamp((rel - F.SWIM0) / (F.EYE0 - F.SWIM0), 0, 1));
@@ -398,6 +380,19 @@ const Setpieces = {
     const z = U.lerp(U.lerp(F.Z_FAR, F.Z_NEAR, v), -52, w);
     return { vis: true, x: x, y: y, z: z, yaw: -0.10 + 0.16 * w, phase: (w > 0.01) ? 'leave' : 'swim' };
   },
+
+  /* 横向きカットの強さ 0..1（0→1→0。巨岩の lookBack と同じ流儀）。
+     World.syncCamera がこれを読んでカメラを左へ振る。 */
+  fishSideK(m) {
+    const s = Setpieces.state, F = Setpieces.FISH;
+    if (!s || s.id !== 'megafish') return 0;
+    const rel = m - s.startM;
+    if (rel <= F.SIDE0 - 4 || rel >= F.SIDE1 + 4) return 0;
+    const a = F.SIDE0 - 4, b = F.SIDE1 + 4;
+    /* 端で 0、真ん中で 1。振り始め・戻しがなめらかになるよう sin で包む */
+    return Math.sin(Math.PI * U.clamp((rel - a) / (b - a), 0, 1));
+  },
+
   /* 大演出の間はゾーンの区間パターンを **開放区間** に固定する（ゾーンが読む）。
      壁のある区間だと、コリドーの外にいる巨体が壁に隠れて画面に映らないため。
      ＝ 演出はゾーンを触らず「今は開けておいてほしい」とだけ答える（一方通行）。 */
@@ -733,12 +728,11 @@ const Setpieces = {
       return (0.012 + 0.05 * p) * (1 - U.clamp(ahead / 40, 0, 1)) * Math.sin(s.t * 31 + atM * 2.1);
     }
     if (s && s.id === 'megafish') {
-      /* 巨大魚が横切るとき、押された水で前方の床と天井が波打つ（落とさない） */
-      const p = Setpieces.fishPos(dist);
-      const cross = (p.phase === 'cross') ? U.clamp(1 - Math.abs(p.x) / 46, 0, 1) : 0;
+      /* 巨大魚が追い抜くとき、押された水で床と天井が波打つ（落とさない） */
+      const side = Setpieces.fishSideK(dist);
       const ahead = atM - dist;
       if (ahead < -6 || ahead > 56) return 0;
-      return (0.008 + 0.05 * cross) * (1 - U.clamp(ahead / 56, 0, 1)) * Math.sin(s.t * 22 + atM * 1.8);
+      return (0.008 + 0.05 * side) * (1 - U.clamp(ahead / 56, 0, 1)) * Math.sin(s.t * 22 + atM * 1.8);
     }
     if (s && s.id === 'templefall') {
       /* 神殿崩壊: 前方の床と天井が地響きで震える（落とさない＝公平性に影響しない） */
@@ -828,27 +822,27 @@ const Setpieces = {
       };
     }
     if (s.id === 'megafish') {
-      /* 巨大魚: 横断の瞬間に水が押されて揺れる。並走中は霧が晴れて巨体が見える */
       const m = s.dist || s.startM;
-      const p = Setpieces.fishPos(m);
       const rel = m - s.startM;
-      const cross = (p.phase === 'cross') ? U.clamp(1 - Math.abs(p.x) / 46, 0, 1) : 0;
+      const p = Setpieces.fishPos(m);
+      const side = Setpieces.fishSideK(m);
       const near = (p.phase === 'swim') ? U.clamp(1 - Math.abs(p.x) / 26, 0, 1) : 0;
-      /* 遠景のシルエットを見せるあいだは霧を遠くまで開ける（濃い霧のままだと
-         80〜100m 先の巨体が沈んで見えない）。前後は滑らかに戻す。 */
       const F2 = Setpieces.FISH;
+      /* 遠景まで開ける（濃い霧のままだと 75m 先の巨体が沈む）。前後は滑らかに戻す */
       const rev = U.clamp((rel + 6) / 10, 0, 1) * U.clamp((F2.SWIM0 + 30 - rel) / 26, 0, 1);
       return {
-        shake: 0.012 + 0.085 * cross * (0.7 + 0.3 * Math.sin(s.t * 24)) + 0.02 * near,
-        fovAdd: 3 + 6 * cross + 3 * near,
+        /* 巨体が通り過ぎる水圧で揺れる。横向きカットの真ん中がいちばん強い */
+        shake: 0.012 + 0.085 * side * (0.7 + 0.3 * Math.sin(s.t * 24)) + 0.02 * near,
+        fovAdd: 3 + 5 * side + 3 * near,
         camBack: 0,
-        /* 巨体を見上げる（横断は上、並走はやや上）。カメラは前を向いたまま＝操作は奪わない */
-        camUp: 0.30 + 0.35 * cross,
-        lookUp: 0.30 + 1.15 * cross + 0.35 * near,
-        fogFar: U.lerp(76, 175, Math.max(rev, Math.max(cross, near) * 0.5)),
+        camUp: 0.30 + 0.20 * side,
+        lookUp: 0.30 + 0.35 * near,
+        fogFar: U.lerp(76, 185, Math.max(rev, Math.max(side, near) * 0.5)),
         fogColor: 0x1a6478,
         glide: 0,
-        cross: cross, near: near
+        /* 横向きカット（§4.4 S5）: World.syncCamera がこれを読んで首を左へ振る */
+        lookSide: side,
+        near: near
       };
     }
     const ramp = U.clamp(s.t / 1.2, 0, 1);              // 立ち上がり
@@ -901,23 +895,22 @@ const Setpieces = {
     const lam = (c, o) => new THREE.MeshLambertMaterial(Object.assign({ color: c, flatShading: true }, o || {}));
     const bas = (c, o) => new THREE.MeshBasicMaterial(Object.assign({ color: c, fog: true }, o || {}));
     const M = {
-      back:  lam(0x12313c),                 // 背（暗い青緑）＝明るい水を背に輪郭が抜ける
-      side:  lam(0x47838f),                 // 側面
-      scale: lam(0x35707c),                 // 鱗の列（側面より少し暗い縞）
-      belly: lam(0xc2ddd4),                 // 腹（淡い）＝2トーン
-      dark:  lam(0x0d2530),                 // 口の中・エラの溝
-      bone:  lam(0xf0ead6),                 // 牙
-      fin:   lam(0x6fb0bb, { transparent: true, opacity: 0.70, side: THREE.DoubleSide }),
-      finBone: lam(0xbfe4ea),
+      back:  lam(0x081326),                 // 背＝ほぼ黒に近い群青（青緑の水から必ず分離する）
+      side:  lam(0x11223d),                 // 側面（暗い群青）
+      scale: lam(0x1a3053),                 // 鱗の列（側面より少し明るい縞）
+      belly: lam(0x2c4a72),                 // 腹（少し明るい群青）＝2トーン
+      dark:  lam(0x03060e),                 // 口の中・エラの溝
+      bone:  lam(0xf4efdd),                 // 牙（暗い体から浮く唯一の明部）
+      fin:   lam(0x16294a, { transparent: true, opacity: 0.80, side: THREE.DoubleSide }),
+      finBone: lam(0x5a86c0),
       /* 発光器は **霧をかけない**（fog:false）＝ 80〜100m 先でも輪郭の光が沈まない。
          遠景では「光の点線でできた魚の形」として読め、至近では体の発光器として読める。 */
       glow:  bas(0x8ff0ff, { fog: false, transparent: true, opacity: 1 }),
       edge:  bas(0x7fe6ff, { fog: false, transparent: true, opacity: 0.92 }),
-      /* 遠景カット専用の「発光する体」。深海の背景は暗いので、黒い影絵では沈む。
-         **霧をかけない淡い光の膜**にして、暗い水の中に巨体の形が浮かび上がるようにする
-         （契約 P4a-r1「巨大な魚のシルエット全体が読める」）。
-         至近では opacity を 0 にして、陰影のある本来の体を見せる。 */
-      sil:   bas(0x9fdcea, { fog: false, transparent: true, opacity: 0, depthWrite: false }),
+      /* 横向きカット専用の「影絵」。**霧をかけない** ので 75m 先でも色が沈まず、
+         明るい青緑の水を背に **真っ黒な魚の形** が抜ける（契約 P4a-4）。
+         並走〜至近では opacity を 0 にして、陰影のある本来の体を見せる。 */
+      sil:   bas(0x050c1a, { fog: false, transparent: true, opacity: 0, depthWrite: false }),
       eyeW:  bas(0xf7f1dd),
       iris:  bas(0xffc24a),
       pupil: bas(0x06121a)
@@ -1172,10 +1165,10 @@ const Setpieces = {
       const d = teeth[i] - rel;
       if (d > -8 && d < 44) bite = Math.max(bite, U.clamp(1 - Math.abs(d - 14) / 26, 0, 1));
     }
-    /* 横断カットで頭が画面に入る瞬間は大きく開ける（口の中・牙が読める見せ場） */
+    /* 横向きカットの真ん中で大きく開ける（口の中・牙が読める見せ場） */
     const F = Setpieces.FISH;
-    const mid = (F.CROSS0 + F.CROSS1) / 2;
-    bite = Math.max(bite, U.clamp(1 - Math.abs(rel - mid + 4) / 12, 0, 1));
+    const mid = (F.SIDE0 + F.SIDE1) / 2;
+    bite = Math.max(bite, U.clamp(1 - Math.abs(rel - mid) / 14, 0, 1));
     return U.clamp(Math.max(base, bite), 0, 1);
   },
   /* 尾の振り -1..1。**判定の尾（FISH_TAIL の横スキャン）と同じ周期・位相** */
@@ -1198,20 +1191,21 @@ const Setpieces = {
     const s = Setpieces.state;
     if (!s || s.id !== 'megafish') return 0;
     const F = Setpieces.FISH, rel = m - s.startM;
-    /* ① 横断カット（シルエット全体を見せる） ② 目が合うカット（頭が寄る）の2回 */
-    const win = (a, b2, amt) => amt * U.smooth(U.clamp((rel - a) / 10, 0, 1)) *
-                                     U.smooth(U.clamp((b2 - rel) / 12, 0, 1));
-    return Math.max(win(F.CROSS0 - 10, F.CROSS1 + 6, 0.78),
-                    win(F.EYE0 - 24, F.EYE1 + 8, 0.62));
+    /* ① 横向きカット（全身のシルエットを見せる） ② 目が合うカット（頭が寄る）の2回 */
+    const win = (a, b2, amt) => amt * U.smooth(U.clamp((rel - a) / 8, 0, 1)) *
+                                     U.smooth(U.clamp((b2 - rel) / 10, 0, 1));
+    return Math.max(win(F.SIDE0 - 8, F.SIDE1 + 5, 0.92),
+                    win(F.EYE0 - 24, F.EYE1 + 8, 0.72));
   },
   /* 魚を照らす明かりの強さ 0..1（ゾーンが読む。遠景のシルエットでは弱く、至近で強く） */
   fishLightK(m) {
     const p = Setpieces.fishPos(m);
     if (!p.vis) return 0;
-    /* 遠景カットでも体の面は起こす（真っ暗だと「板」に見える）。
-       至近ほど強く、遠景は中くらい。 */
-    if (p.phase === 'far') return 0.62;
-    return U.clamp(1 - Math.abs(p.z + 6) / 70, 0.2, 1);
+    /* 横向きカットは **暗いシルエット** で見せる（明かりを当てない）。
+       並走〜至近では面を起こして、鱗・ヒレ・目を読ませる。 */
+    if (p.phase === 'side' || p.phase === 'far') return 0.10;
+    if (p.phase === 'turn') return 0.35;
+    return U.clamp(1 - Math.abs(p.z + 6) / 70, 0.3, 1);
   },
   /* 魚のシルエットが画面幅の何割を占めるか（契約 P4a-r1 の数値ゲート）。
      カメラの後ろに回り込んだ角は数えない（投影が裏返るため）。 */
@@ -1228,7 +1222,7 @@ const Setpieces = {
     for (let i = 0; i < 8; i++) {
       v.set((i & 1) ? b.x1 : b.x0, (i & 2) ? b.y1 : b.y0, (i & 4) ? b.z1 : b.z0);
       v.applyMatrix4(cam.matrixWorldInverse);
-      if (v.z > -cam.near) return 0;                 // 一部でもカメラの後ろなら測らない
+      if (v.z > -cam.near) continue;                 // カメラの後ろの角は数えない（投影が裏返る）
       v.applyMatrix4(cam.projectionMatrix);
       const px = v.x * 0.5 + 0.5;
       if (px < x0) x0 = px;
@@ -1273,8 +1267,11 @@ const Setpieces = {
       f.eyes.forEach((e) => { e.pupil.position.z = -F.LEN * F.EYE_Z + 1.6 * look; });
       f.glowMat.color.setHex(0x8ff0ff).multiplyScalar(0.72 + 0.28 * Math.sin(t * 2.4));
       /* 影絵: 遠いほど濃く（輪郭だけで読ませる）、至近では消して陰影の体を見せる */
-      const farK = U.clamp((Math.abs(p.z) - 38) / 26, 0, 1);
-      f.mats.sil.opacity = 0.42 * farK;
+      /* 影絵（霧をかけない暗い膜）: 横向きカットでは常に最大＝背景から必ず分離する。
+         並走〜至近では消して、陰影のある本来の体を見せる。 */
+      const farK = (p.phase === 'side' || p.phase === 'far') ? 1
+                 : U.clamp((Math.abs(p.z) - 38) / 26, 0, 1);
+      f.mats.sil.opacity = 0.88 * farK;
       f.sil.visible = farK > 0.02;
       /* 逃げる小魚の群れ（魚体に沿って前へ抜ける）＝巨体の大きさが比較で分かる */
       const o = f.dummy;
@@ -1298,7 +1295,7 @@ const Setpieces = {
       f.escortMat.opacity = 0.55 + 0.3 * U.clamp(1 - Math.abs(p.z) / 90, 0, 1);
     }
     /* 影（丸影の大型版）: 魚の真下・真上に落ちる。近いほど濃く大きい */
-    const near = p.vis && (p.phase === 'cross' || p.phase === 'swim');
+    const near = p.vis && (p.phase === 'side' || p.phase === 'swim' || p.phase === 'turn');
     const k = near ? U.clamp(1 - Math.abs(p.x) / 30, 0, 1) * U.clamp(1 - Math.abs(p.z) / 70, 0, 1) : 0;
     f.shadows.forEach((m) => {
       m.visible = k > 0.02;

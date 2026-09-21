@@ -548,8 +548,10 @@
       const In = I(), W = In.World, Sp = In.Setpieces, F = In.Setpieces.FISH;
       const fogFar0 = W.scene.fog.far, fogCol0 = W.scene.fog.color.getHex();
       W.setViewport(812, 375, 1);
-      /* 魚体が実際に画面へ描かれている割合（外接箱ではなく**塗られた画素**で測る）。
-         描いた絵と、魚だけ消した絵の差分を数える＝手前の岩や床に隠れた分は数えない。 */
+      /* 魚体が実際に画面へ描かれている割合と、背景との輝度差を測る。
+         外接箱ではなく **塗られた画素** を数えるので、手前の岩や床に隠れた分は入らない。
+         描いた絵と、魚だけ消した絵の差分＝魚の画素。その画素の明るさを
+         「魚」と「その裏にあった背景」で比べる（契約 P4a-4 の数値ゲート）。 */
       const cv = document.createElement('canvas');
       cv.width = 203; cv.height = 94;
       const cx = cv.getContext('2d');
@@ -559,35 +561,47 @@
         cx.drawImage(W.renderer.domElement, 0, 0, cv.width, cv.height);
         return cx.getImageData(0, 0, cv.width, cv.height).data;
       };
-      const share = () => {
+      const measure = () => {
         const a = shot();
         const orig = Sp._syncFish;
         Sp._syncFish = function () { Sp.fish.group.visible = false; };
         const b = shot();
         Sp._syncFish = orig;
-        let n = 0;
+        let n = 0, fa = 0, bg = 0;
         for (let i = 0; i < a.length; i += 4) {
-          if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 6) n++;
+          if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 6) {
+            n++;
+            fa += 0.2126 * a[i] + 0.7152 * a[i + 1] + 0.0722 * a[i + 2];
+            bg += 0.2126 * b[i] + 0.7152 * b[i + 1] + 0.0722 * b[i + 2];
+          }
         }
-        return n / (cv.width * cv.height);
+        return { share: n / (cv.width * cv.height), sep: n ? (fa - bg) / n : 0 };
       };
 
       DUO.reset(); DUO.start('S5', 7); DUO.bot('perfect');
       /* 演出の少し手前から実ステップで跨ぐ（直行するとイベントを飛ばす） */
       DUO.skipTo(1240);
       let g = 0;
-      while (Game.dist < 1310 && g++ < 4000 && Game.status === 'playing') DUO.pump(1 / 60);
+      while (Game.dist < 1302 && g++ < 4000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'megafish', '1300m で巨大魚の通過が始まる');
       t.eq(document.getElementById('cue').classList.contains('on'), true, 'HUD に予告が出る');
       t.ok(document.getElementById('cue-main').textContent.indexOf('LEVIATHAN') >= 0, '予告の文字は「LEVIATHAN!」');
       const start = Sp.state.startM;
 
-      let maxShare = 0, maxEye = 0, eyeIn = 0, crossFrames = 0, maxShake = 0;
+      let sideFrames = 0, maxSide = 0, maxW = 0, bestSep = 0, maxShare = 0;
+      let maxEye = 0, eyeIn = 0, maxShake = 0;
       while (Game.status === 'playing' && Game.dist < start + F.END && g++ < 16000) {
         DUO.pump(1 / 60);
         const rel = Game.dist - start;
         const ph = Sp.fishPos(Game.dist).phase;
-        if (ph === 'cross') { crossFrames++; maxShare = Math.max(maxShare, share()); }
+        maxSide = Math.max(maxSide, Sp.fishSideK(Game.dist));
+        if (ph === 'side') {
+          sideFrames++;
+          maxW = Math.max(maxW, Sp.fishWidthShare(Game.dist));
+          const m = measure();
+          maxShare = Math.max(maxShare, m.share);
+          if (m.share > 0.05 && m.sep < bestSep) bestSep = m.sep;
+        }
         if (rel > F.EYE0 - 30 && rel < F.EYE1 + 10) {
           const e = Sp.fishEyeOnScreen(Game.dist);
           if (e > maxEye) maxEye = e;
@@ -598,12 +612,17 @@
         const fx = Sp.camFx();
         if (fx) maxShake = Math.max(maxShake, fx.shake);
       }
-      t.ok(crossFrames > 20, '横断のカットがある（' + crossFrames + 'フレーム）');
-      t.ok(maxShare >= 0.5,
-           '**魚体が画面の半分以上を占めるカットがある**（最大 ' + (maxShare * 100).toFixed(1) + '%）');
+      /* --- 横向きカット（契約 P4a-4 の合格条件） --- */
+      t.ok(sideFrames > 20, '横向きカットがある（' + sideFrames + 'フレーム）');
+      t.ok(maxSide > 0.95, 'カメラが真横（海の側）まで振れる（最大 ' + maxSide.toFixed(2) + '）');
+      t.ok(maxW >= 0.70 && maxW <= 0.90,
+           '**魚のシルエットが画面幅の ' + (maxW * 100).toFixed(0) + '%**（70〜90%）');
+      t.ok(bestSep <= -30 || bestSep >= 40,
+           '**魚体が背景から輝度で分離している**（差 ' + bestSep.toFixed(0) + '：−30以下 または +40以上）');
+      t.ok(maxShare > 0.10, 'カット中に魚が画面の ' + (maxShare * 100).toFixed(0) + '% を実際に塗る');
       t.ok(maxEye > 0.01, '目玉が画面に大きく入る瞬間がある（最大 ' + (maxEye * 100).toFixed(2) + '%）');
       t.ok(eyeIn > 30, '目玉が画面の中にある ' + eyeIn + ' フレーム');
-      t.ok(maxShake > 0.04, '横断で水が押されてカメラが揺れる（最大 ' + maxShake.toFixed(3) + '）');
+      t.ok(maxShake > 0.04, '巨体の水圧でカメラが揺れる（最大 ' + maxShake.toFixed(3) + '）');
       t.eq(runToEndPump(), 'clear', '巨大魚の通過を跨いでゴールできる');
 
       /* --- 譜面（口・ヒレ・尾）と §4.7 --- */
@@ -622,20 +641,21 @@
       t.ok(dens >= 6, '演出区間の密度 ' + dens.toFixed(1) + ' 回/100m');
       /* 横断のカットには障害物を置かない（視認距離ぶん空ける） */
       const firstAt = Math.min.apply(null, all.map((e) => e.at));
-      t.ok(firstAt > F.CROSS1 + 26,
-           '横断のカット（〜' + F.CROSS1 + 'm）の後、視認距離ぶん空けてから置く（最初は ' + firstAt + 'm）');
+      t.ok(firstAt > F.SIDE1 + 26,
+           '横向きカット（〜' + F.SIDE1 + 'm）の後、視認距離ぶん空けてから置く（最初は ' + firstAt + 'm）');
+      t.eq(all.filter((e) => e.at < F.SIDE1).length, 0, 'カットの窓には障害物を置かない（§4.7）');
 
       /* --- delay250 でも演出を跨いで完走する --- */
       DUO.reset(); DUO.start('S5', 12); DUO.bot('delay250'); DUO.skipTo(1240);
       g = 0;
-      while (Game.dist < 1310 && g++ < 4000 && Game.status === 'playing') DUO.pump(1 / 60);
+      while (Game.dist < 1302 && g++ < 4000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'megafish', '0.25秒遅延のボットでも演出に入る');
       t.eq(runToEndPump(), 'clear', '0.25秒遅延のボットも巨大魚を抜けてゴールする');
 
       /* --- 中断（リトライ）で完全復元 --- */
       DUO.reset(); DUO.start('S5', 7); DUO.bot('perfect'); DUO.skipTo(1240);
       g = 0;
-      while (Game.dist < 1340 && g++ < 4000 && Game.status === 'playing') DUO.pump(1 / 60);
+      while (Game.dist < 1320 && g++ < 4000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'megafish', 'もう一度 巨大魚の通過に入る');
       Game.retry();
       t.eq(DUO.state().setpiece, null, 'リトライで演出状態が消える');

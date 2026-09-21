@@ -520,8 +520,18 @@ const World = {
     /* 振り返りカット（§4.4 S3「巨岩の追跡」）: その場で 180度 首を振り、
        少し前へ出て高さを上げる。迫る巨岩（2体の後ろ＝+z）が正面に来る。
        演出の中でも障害物を置かない区間だけで起きる（§4.7 は崩さない）。 */
+    /* 横向きカット（§4.4 S5「巨大魚の通過」/ P4a-4）: その場で首を **左（海の側）** へ振る。
+       前進は止めない。カットの窓には障害物を置かないので §4.7 は崩れない
+       （巨岩の振り返りカットと同じ仕組み・同じ約束）。 */
+    const lsd = (fx && fx.lookSide) ? fx.lookSide : 0;
     const lb = (fx && fx.lookBack) ? fx.lookBack : 0;
-    if (lb > 0.001) {
+    if (lsd > 0.001) {
+      const k = U.smooth(lsd);
+      World.camera.position.set(avgX * 0.10 + sx, CFG.CAM.Y + sy + camUp, CFG.CAM.Z - push);
+      World.camera.lookAt(U.lerp(avgX * 0.09 + sx * 0.5, -70, k),
+                          CFG.CAM.LOOK_Y + sy * 0.5 + lookUp,
+                          U.lerp(CFG.CAM.LOOK_Z, -2, k));
+    } else if (lb > 0.001) {
       const k = U.smooth(lb);
       /* カットごとに引く量が違う（近いカット2ほど前へ出て、岩の輪郭を画面に収める） */
       const cut = (fx.lookBackCut === undefined) ? 0 : fx.lookBackCut;
