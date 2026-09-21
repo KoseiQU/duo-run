@@ -6,7 +6,7 @@
 
 const Game = {
   /* --- 状態 --------------------------------------------------------------- */
-  status: 'idle',        // 'idle' | 'playing' | 'dying' | 'dead' | 'clear'
+  status: 'idle',        // 'idle' | 'playing' | 'dying' | 'dead' | 'goal' | 'clear'
   stage: null,
   seed: 1,
   dist: 0,
@@ -22,7 +22,10 @@ const Game = {
   gen: null,
   genPtr: 0,
   eventLog: [],
+  goalT: 0,              // ゴール演出の経過（§4.8 ゴールゲート→ポーズ→リザルト）
+  bestUpdated: false,    // 直近のリザルトでベスト更新したか
   stats: { frames: 0 },
+  GOAL_T: 1.3,           // ゴール演出の長さ（秒）
 
   /* --- 初期化 ------------------------------------------------------------- */
   init(canvas) {
@@ -32,6 +35,7 @@ const Game = {
     ];
     if (canvas) { World.init(canvas); Input.attach(canvas.parentNode || canvas); }
     HUD.init();
+    Tutorial.init();
     Game.stage = makeStage('S0');
     Game.speed = Game.stage.speedAt(0);
     Game.status = 'idle';
@@ -42,6 +46,12 @@ const Game = {
   runnerForHand(hand) {
     const want = Game.handSwap ? (hand === 'left' ? 'right' : 'left') : hand;
     return Game.runners.filter((r) => r.hand === want)[0] || null;
+  },
+  /* タッチ: 画面の下半分＝床を走るキャラ / 上半分＝天井を走るキャラ（§4.2 改訂）。
+     重力反転ワープ（§4.5）で面が入れ替わっても「画面の位置＝担当」は保たれる。 */
+  runnerForZone(zone) {
+    const surface = Input.surfaceOfZone(zone);
+    return Game.runners.filter((r) => r.surface === surface)[0] || null;
   },
   setHandSwap(on) { Game.handSwap = !!on; },
   setMirror(id, on) { Game.runners.forEach((r) => { if (r.id === id) r.mirrored = !!on; }); },
@@ -62,14 +72,19 @@ const Game = {
     UI.show('play');
     return Game.stage;
   },
-  retry() {
+  /* fromStart=true は「もう一度（最初から）」 */
+  retry(fromStart) {
     if (!Game.stage) return;
-    Game.resetRun(Game.stage.endless ? 0 : Game.lastCheckpoint);
+    const from = (Game.stage.endless || fromStart) ? 0 : Game.lastCheckpoint;
+    if (fromStart) Game.lastCheckpoint = 0;
+    Game.resetRun(from);
     Game.status = 'playing';
     UI.show('play');
   },
   toTitle() {
     Game.status = 'idle';
+    Setpieces.reset();
+    Tutorial.reset();
     Game.clearWorld();
     Game.dist = 0;
     Game.killer = null;
@@ -86,6 +101,9 @@ const Game = {
 
   /* 指定距離から走り直す（チェックポイント再開・skipTo で使う） */
   resetRun(fromM) {
+    Setpieces.reset();
+    Tutorial.reset();
+    Game.goalT = 0;
     Game.clearWorld();
     Game.dist = fromM;
     Game.t = 0;
@@ -101,7 +119,10 @@ const Game = {
     Game.active = Game.gen.obstacles.filter((o) => o.at >= fromM + runway);
     Game.active.forEach((o) => { o.spawnDist = fromM; });
     Game.genPtr = Game.gen.obstacles.length;
-    Game.gen.events.forEach((e) => { e.done = (e.at < fromM + runway); });
+    /* 再開位置より手前のイベントだけ「済み」にする。
+       助走ぶん先にあるイベント（チュートリアルの合図・大演出の開始）は
+       そこへ到達した時にちゃんと発火させる。 */
+    Game.gen.events.forEach((e) => { e.done = (e.at < fromM); });
     Game.lastCheckpoint = Game.stage.checkpoints.filter((c) => c <= fromM).pop() || 0;
   },
 
@@ -111,6 +132,16 @@ const Game = {
     Game._lastDt = dt;
     Game.stats.frames++;
     Game.t += dt;
+
+    if (Game.status === 'goal') {
+      /* ゴール演出: 減速しながら少し進み、2体がポーズしてリザルトへ */
+      Game.goalT += dt;
+      const u = U.clamp(Game.goalT / Game.GOAL_T, 0, 1);
+      Game.dist += Game.speed * (1 - U.smooth(u)) * dt;
+      Game.runners.forEach((r) => Runners.update(r, dt * (1 - u)));
+      if (Game.goalT >= Game.GOAL_T) Game.onClear();
+      return;
+    }
 
     if (Game.status === 'playing' || Game.status === 'dying') {
       const scale = (Game.status === 'dying') ? CFG.DEATH_SLOW_SCALE : 1;
@@ -138,11 +169,13 @@ const Game = {
 
       Game.runners.forEach((r) => Runners.update(r, d));
       Game.fireEvents();
+      Setpieces.update(Game, d);
+      Tutorial.update(dt);
 
       if (Game.status === 'playing') {
         Game.collide();
         Game.updateCheckpoint();
-        if (!Game.stage.endless && Game.dist >= Game.stage.lengthM) Game.onClear();
+        if (!Game.stage.endless && Game.dist >= Game.stage.lengthM) Game.onGoal();
       } else {
         Game.dyingT += dt;
         if (Game.dyingT >= CFG.DEATH_SLOW_T) Game.onDead();
@@ -158,8 +191,15 @@ const Game = {
   applyInput() {
     const q = Input.drain();
     for (let i = 0; i < q.length; i++) {
-      const r = Game.runnerForHand(q[i].hand);
-      if (r) Runners.input(r, q[i].act);
+      const it = q[i];
+      if (it.zone) {
+        /* タッチ: 担当は画面の上下、動作は「足場から離れる向き＝ジャンプ」で決まる */
+        const r = Game.runnerForZone(it.zone);
+        if (r) Runners.input(r, Input.actFromDir(it.dir, r.surface));
+      } else {
+        const r = Game.runnerForHand(it.hand);
+        if (r) Runners.input(r, it.act);
+      }
     }
   },
 
@@ -172,7 +212,12 @@ const Game = {
       if (!e.done && e.at <= Game.dist) { e.done = true; Game.eventLog.push(e); Game.onEvent(e); }
     }
   },
-  onEvent(/* e */) { /* P2以降: 鏡ゲート・入れ替え・重力反転などをここで処理する */ },
+  onEvent(e) {
+    /* チュートリアルの吹き出しと、大演出の開始/終了 */
+    Tutorial.onEvent(e);
+    Setpieces.onEvent(e);
+    /* P3以降: 鏡ゲート・入れ替え・重力反転などもここで処理する */
+  },
 
   /* --- 当たり判定（AABB） ------------------------------------------------- */
   collide() {
@@ -197,7 +242,11 @@ const Game = {
   },
   onDead() {
     Game.status = 'dead';
-    Game.saveBest();
+    Game.bestUpdated = Game.saveBest();
+    Setpieces.reset();
+    Tutorial.hide();
+    const db = document.getElementById('dead-best');
+    if (db) db.textContent = Game.bestUpdated ? '★ 自己ベスト更新' : '';
     const dd = document.getElementById('dead-dist');
     if (dd) dd.textContent = Math.floor(Game.dist) + ' m';
     const cp = document.getElementById('dead-cp');
@@ -206,31 +255,44 @@ const Game = {
     if (btn) btn.style.display = Game.stage.endless ? 'none' : '';
     UI.show('dead');
   },
+  /* ゴール到達 → 短い演出 → リザルト */
+  onGoal() {
+    if (Game.status !== 'playing') return;
+    Game.status = 'goal';
+    Game.goalT = 0;
+    Tutorial.hide();
+  },
   onClear() {
     Game.status = 'clear';
-    Game.saveBest(true);
+    Game.bestUpdated = Game.saveBest(true);
     const cd = document.getElementById('clear-dist');
-    if (cd) cd.textContent = Math.floor(Game.stage.lengthM) + ' m 完走';
+    if (cd) cd.textContent = Math.floor(Game.stage.lengthM) + ' m 完走 ／ ' + Game.stage.name;
+    const cb = document.getElementById('clear-best');
+    if (cb) cb.textContent = Game.bestUpdated ? '★ ベスト更新！' : '';
+    Setpieces.reset();
     UI.show('clear');
   },
   updateCheckpoint() {
     const cps = Game.stage.checkpoints;
     for (let i = 0; i < cps.length; i++) if (Game.dist >= cps[i] && cps[i] > Game.lastCheckpoint) Game.lastCheckpoint = cps[i];
   },
+  /* 戻り値: ベストを更新したか */
   saveBest(cleared) {
-    if (!Game.stage) return;
+    if (!Game.stage) return false;
+    let updated = false;
     if (Game.stage.endless) {
       const best = U.lsGet('best.endless', 0);
-      if (Game.dist > best) U.lsSet('best.endless', Math.floor(Game.dist));
+      if (Game.dist > best) { U.lsSet('best.endless', Math.floor(Game.dist)); updated = true; }
     } else {
       const key = 'best.' + Game.stage.id;
       const best = U.lsGet(key, 0);
-      if (Game.dist > best) U.lsSet(key, Math.floor(Game.dist));
+      if (Game.dist > best) { U.lsSet(key, Math.floor(Game.dist)); updated = true; }
       if (cleared) {
         const list = U.lsGet('cleared', []);
-        if (list.indexOf(Game.stage.id) < 0) { list.push(Game.stage.id); U.lsSet('cleared', list); }
+        if (list.indexOf(Game.stage.id) < 0) { list.push(Game.stage.id); U.lsSet('cleared', list); updated = true; }
       }
     }
+    return updated;
   },
 
   /* --- 描画（更新とワンセットで呼ぶ） ------------------------------------- */
@@ -238,6 +300,7 @@ const Game = {
     if (!World.ready) return;
     World.syncCorridor(Game.dist, Game.active, Game.speed);
     World.syncObstacles(Game.active, Game.dist);
+    World.syncGoal(Game.dist, Game.stage);
     World.syncRunners(Game.runners, Game.t);
     World.syncCamera(Game.runners, Game.status === 'dying' ? Game.dyingT : 0, Game.speed, Game._lastDt);
     World.render();
@@ -281,6 +344,10 @@ const Game = {
       runners: rs,
       chunk: Game.gen ? (Game.gen.log.filter((c) => c.startM <= Game.dist).pop() || null) : null,
       obstacles: Game.active.length,
+      setpiece: Setpieces.active() ? 'collapse' : null,
+      tip: Tutorial.current,
+      goalT: Game.goalT,
+      bestUpdated: Game.bestUpdated,
       drawCalls: World.drawCalls(),
       /* カメラ対称性（§4.1）: 床側/天井側の「画面上の見かけの高さ」の比。0.8〜1.25 が合格 */
       camSym: World.ready ? World.camSym() : null

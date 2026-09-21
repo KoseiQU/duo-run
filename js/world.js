@@ -76,6 +76,17 @@ const World = {
     World.obsRoot = new THREE.Group();
     scene.add(World.obsRoot);
 
+    /* --- ゴールゲート（§4.8 ゴール演出） ---------------------------------- */
+    World.goal = World._buildGoalGate();
+    World.goal.visible = false;
+    scene.add(World.goal);
+
+    /* --- 大演出（崩落）の粉塵と、元に戻すための基準値 ---------------------- */
+    Setpieces.initView(scene);
+    World._fogBase = { near: scene.fog.near, far: scene.fog.far, color: scene.fog.color.getHex() };
+    World._shake = 0;
+    World._fxFov = 0;
+
     /* --- 2体 --------------------------------------------------------------- */
     World.runnerViews = {};
     World._t = 0;
@@ -248,14 +259,27 @@ const World = {
             if (o.surface !== surface || o.lane !== lane) continue;
             if (Math.abs(o.at - atM) < (T + OBS.GAP.depth) / 2) { hide = true; break; }
           }
-          if (hide) {
+          const fall = Setpieces.tileFall(atM, surface, lane);
+          if (hide || fall >= 1) {
             d.position.set(0, -9999, 0);
             d.scale.set(0.0001, 0.0001, 0.0001);
-          } else {
-            d.position.set(lane * CFG.LANE_W, y, -(atM - dist));
+            d.rotation.set(0, 0, 0);
+          } else if (fall > 0) {
+            /* 崩落: 傾きながら落ちていく（前線より後ろだけ） */
+            const sgn = (lane + (surface === 'ceil' ? 1 : 0)) % 2 ? 1 : -1;
+            const drop = fall * fall * 5;
+            d.position.set(lane * CFG.LANE_W + sgn * fall * 0.5,
+                           y + (surface === 'floor' ? -drop : drop),
+                           -(atM - dist) + fall * 1.2);
+            d.rotation.set(sgn * fall * 0.9, fall * 0.4, sgn * fall * 1.1);
             d.scale.set(1, 1, 1);
+          } else {
+            /* 崩落が迫ると前方の路面も揺れる（落とさないので公平性には影響しない） */
+            const sh = Setpieces.tileShake(atM, dist);
+            d.position.set(lane * CFG.LANE_W, y + sh, -(atM - dist));
+            d.scale.set(1, 1, 1);
+            d.rotation.set(sh * 2.2, 0, sh * 3.0);
           }
-          d.rotation.set(0, 0, 0);
           d.updateMatrix();
           im.setMatrixAt(n++, d.matrix);
         }
@@ -276,6 +300,16 @@ const World = {
     if (o.view) { World.obsRoot.remove(o.view); Obstacles.release(o.type, o.view); o.view = null; }
   },
 
+  /* ゴールゲートを置く（有限ステージのみ。視界に入ったら出す） */
+  syncGoal(dist, stage) {
+    if (!World.goal) return;
+    if (!stage || stage.endless) { World.goal.visible = false; return; }
+    const rel = stage.lengthM - dist;
+    const vis = rel < CFG.VIEW_FAR && rel > -8;
+    World.goal.visible = vis;
+    if (vis) World.goal.position.set(0, 0, -rel);
+  },
+
   syncRunners(runners, t) {
     World._t = t;
     runners.forEach((r) => {
@@ -291,7 +325,18 @@ const World = {
 
       const sw = Math.sin(t * 15);
       const arms = v.parts.arms, legs = v.parts.legs;
-      if (r.act === 'jump') {
+      if (typeof Game !== 'undefined' && Game.status === 'goal') {
+        /* ゴール演出: 両手を挙げてポーズ */
+        const u = U.clamp(Game.goalT / 0.35, 0, 1);
+        v.body.rotation.set(0, 0, 0);
+        v.body.position.set(0, Math.abs(Math.sin(t * 6)) * 0.05 * u, 0);
+        v.body.scale.setScalar(1);
+        v.parts.head.position.y = 0.665;
+        v.parts.head.rotation.x = -0.12 * u;
+        arms[0].rotation.set(2.5 * u, 0, -0.35 * u);
+        arms[1].rotation.set(2.5 * u, 0, 0.35 * u);
+        legs[0].rotation.x = 0.15 * u; legs[1].rotation.x = -0.15 * u;
+      } else if (r.act === 'jump') {
         /* ジャンプ: 膝を抱える → 着地に向けて脚を伸ばす */
         const u = U.clamp(r.actT / CFG.JUMP_T, 0, 1);
         const tuck = Math.sin(Math.PI * Math.min(1, u * 1.25));
@@ -343,12 +388,29 @@ const World = {
   syncCamera(runners, dyingT, speed, dt) {
     const avgX = (Runners.x(runners[0]) + Runners.x(runners[1])) / 2;
     const push = U.clamp(dyingT / CFG.DEATH_SLOW_T, 0, 1) * 1.4;
-    World.camera.position.set(avgX * 0.16, CFG.CAM.Y, CFG.CAM.Z - push);
-    World.camera.lookAt(avgX * 0.09, CFG.CAM.LOOK_Y, CFG.CAM.LOOK_Z);
+    /* 大演出（崩落）のカメラ揺れ・画角・霧 */
+    const fx = Setpieces.camFx();
+    let sx = 0, sy = 0, back = 0;
+    if (fx) {
+      back = fx.camBack || 0;
+      World._shake = fx.shake;
+      World._fxFov = fx.fovAdd;
+      sx = Math.sin(World._t * 37.1) * fx.shake;
+      sy = Math.sin(World._t * 29.7 + 1.3) * fx.shake;
+      if (World.scene.fog) {
+        World.scene.fog.far = fx.fogFar;
+        World.scene.fog.color.setHex(fx.fogColor);
+        World.scene.background.setHex(fx.fogColor);
+      }
+    } else if (World._shake) {
+      World.clearSetpieceFx();
+    }
+    World.camera.position.set(avgX * 0.16 + sx, CFG.CAM.Y + sy, CFG.CAM.Z - push + back);
+    World.camera.lookAt(avgX * 0.09 + sx * 0.5, CFG.CAM.LOOK_Y + sy * 0.5, CFG.CAM.LOOK_Z);
     /* 体感速度の演出（§4.1）: 速度に応じて画角を広げる（広げる方向なので
        「2体が常に画面内」は壊れない）。急に変わらないよう時定数で追う。 */
     const u = U.clamp(((speed || CFG.SPEED_MIN) - CFG.SPEED_MIN) / (CFG.SPEED_MAX - CFG.SPEED_MIN), 0, 1);
-    const want = u * CFG.CAM.FOV_SPEED_GAIN;
+    const want = u * CFG.CAM.FOV_SPEED_GAIN + (World._fxFov || 0);
     const k = U.clamp((dt === undefined ? 1 / 60 : dt) / CFG.CAM.FOV_SPEED_T, 0, 1);
     World._fovBoost += (want - World._fovBoost) * k;
     const fov = World._baseFov + World._fovBoost;
@@ -365,6 +427,42 @@ const World = {
     World.setViewport(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight,
                       Math.min(window.devicePixelRatio || 1, 2));
   },
+  /* ゴールゲート: ネオンの門。2体がここを抜けるとクリア演出に入る */
+  _buildGoalGate() {
+    const g = new THREE.Group();
+    const frame = ZoneNeon.lam(0x8f99d4);
+    const neon = ZoneNeon.bas(ZoneNeon.PAL.amber);
+    const neon2 = ZoneNeon.bas(ZoneNeon.PAL.indigo);
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+    [-1, 1].forEach((s2) => {
+      add(new THREE.BoxGeometry(0.28, CFG.H + 0.6, 0.6), frame, s2 * (CFG.HALF_W + 0.22), CFG.H / 2, 0);
+      add(new THREE.BoxGeometry(0.10, CFG.H, 0.08), neon, s2 * (CFG.HALF_W + 0.06), CFG.H / 2, 0.32);
+    });
+    add(new THREE.BoxGeometry(CFG.HALF_W * 2 + 0.9, 0.42, 0.6), frame, 0, CFG.H + 0.2, 0);
+    add(new THREE.BoxGeometry(CFG.HALF_W * 2 + 0.9, 0.42, 0.6), frame, 0, -0.2, 0);
+    add(new THREE.BoxGeometry(CFG.HALF_W * 2, 0.10, 0.08), neon2, 0, CFG.H + 0.02, 0.32);
+    add(new THREE.BoxGeometry(CFG.HALF_W * 2, 0.10, 0.08), neon, 0, -0.02, 0.32);
+    /* 門をくぐる帯（通過が分かるように光の膜を薄く張る） */
+    const veil = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2, CFG.H),
+                                ZoneNeon.add(0xfff0c8, 0.16));
+    veil.position.set(0, CFG.H / 2, 0);
+    veil.renderOrder = 4;
+    g.add(veil);
+    return g;
+  },
+
+  /* 大演出の後始末（リトライ・タイトルで必ず通る） */
+  clearSetpieceFx() {
+    World._shake = 0;
+    World._fxFov = 0;
+    if (World.scene && World.scene.fog && World._fogBase) {
+      World.scene.fog.near = World._fogBase.near;
+      World.scene.fog.far = World._fogBase.far;
+      World.scene.fog.color.setHex(World._fogBase.color);
+      World.scene.background.setHex(World._fogBase.color);
+    }
+  },
+
   /* 実機の resize と同じ計算で、任意の画面サイズを当てる（監査・機械テストでも使う） */
   setViewport(w, h, pixelRatio) {
     if (!World.ready) return;
@@ -407,6 +505,7 @@ const World = {
   render() {
     if (!World.ready) return;
     ZoneNeon.sync(World._dist, World._t, World._speed);
+    Setpieces.syncView(World._dist, World._t);
     World.renderer.render(World.scene, World.camera);
   },
   drawCalls() { return World.ready ? World.renderer.info.render.calls : 0; }

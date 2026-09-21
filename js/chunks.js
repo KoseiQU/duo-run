@@ -83,6 +83,21 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 18, lane: -1, type: 'WALLHOLE' }], events: [] }
 ];
 
+/* ---------------------------------------------------------------- 導入区間（S1）
+   契約 §4.4「基本障害物を1種ずつ順に紹介」/ §4.8 チュートリアル。
+   ・位置は**実寸 m**（速度で伸縮させない）。1つずつ 33m 間隔で出す＝16m/s で約2秒おき。
+   ・tip は障害物の 30m 手前（約1.9秒前）に出す DOM オーバーレイの合図。
+   ・まず片側だけ（床→天井）→ 横に避ける → 穴 → 光線 → ワイド梁 → 最後に両側同時。 */
+const INTRO_S1 = [
+  { at: 60,  tip: 'jump_l', floor: [{ lane: 0, type: 'ROVER' }] },
+  { at: 93,  tip: 'jump_r', ceil:  [{ lane: 0, type: 'ROVER' }] },
+  { at: 126, tip: 'lane',   floor: [{ lane: 1, type: 'PILLAR' }] },          // both（2体ともレーン移動）
+  { at: 159, tip: 'gap',    floor: [{ lane: -1, type: 'GAP' }] },
+  { at: 192, tip: 'laser',  ceil:  [{ lane: 0, type: 'LASER_LOW' }] },
+  { at: 225, tip: 'wide',   floor: [{ lane: -1, type: 'WIDEBAR' }] },
+  { at: 262, tip: 'both',   floor: [{ lane: 0, type: 'ROVER' }], ceil: [{ lane: 1, type: 'ROVER' }] }
+];
+
 const CHUNK_BY_ID = {};
 CHUNK_DEFS.forEach((c) => { CHUNK_BY_ID[c.id] = c; });
 
@@ -94,10 +109,22 @@ const STAGE_DEFS = {
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null,  // setpiece スロットは P2 以降で使う
     chunkPool: CHUNK_DEFS.map((c) => c.id)
   },
+  /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
+     冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
+  S1: {
+    id: 'S1', name: 'S1 ネオン都市・入門', zone: 'neon', lengthM: 900,
+    speedFrom: 16, speedTo: 20, maxRank: 2, setpiece: 'collapse',
+    intro: INTRO_S1,
+    /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
+       「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
+       ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2).map((c) => c.id)
+      .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
+  },
   endless: {
-    id: 'endless', name: '仮エンドレス', zone: 'neon', lengthM: Infinity,
-    speedFrom: 16, speedTo: 44, maxRank: 3, setpiece: null,
-    chunkPool: CHUNK_DEFS.map((c) => c.id)
+    id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
+    speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null,
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2).map((c) => c.id)
   }
 };
 
@@ -281,6 +308,10 @@ function createGenerator(stage, seed) {
   const rng = U.mulberry32((seed >>> 0) || 1);
   let cursor = CFG.LEAD_IN;     // 次のチャンクを置く距離
   let lastWallhole = false;     // 直前のチャンクが「壁の穴」を含んでいたか（連続禁止）
+  let introPtr = 0;             // 導入区間の何番目まで置いたか
+  let setpieceDone = false;     // 終盤の大演出を置いたか
+  const spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
+    ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
   const out = [];               // 生成済み障害物（at 昇順）
   const events = [];            // チャンクの events（P2以降のフック）
   const log = [];               // {id, startM, lengthM}
@@ -326,11 +357,50 @@ function createGenerator(stage, seed) {
     return { items: items, events: evs, lengthM: def.lengthM * scale, startM: startM, id: def.id };
   }
 
+  /* 導入区間（実寸・固定） */
+  function appendIntro(nowDist) {
+    const it = stage.intro[introPtr++];
+    const items = [];
+    (it.floor || []).forEach((e) => put(items, e, 'floor', it.at, nowDist));
+    (it.ceil || []).forEach((e) => put(items, e, 'ceil', it.at, nowDist));
+    items.sort((a, b) => a.at - b.at);
+    items.forEach((o) => out.push(o));
+    if (it.tip) events.push({ at: Math.max(2, it.at - 30), type: 'tip', params: { id: it.tip }, done: false });
+    log.push({ id: 'intro:' + it.tip, startM: it.at - 8, lengthM: 16, intro: true });
+    cursor = it.at + ((introPtr < stage.intro.length) ? 8 : 40);
+    return true;
+  }
+
+  /* 終盤の大演出（実寸・固定。§4.7 は通常どおり検査する） */
+  function appendSetpiece(nowDist) {
+    if (setpieceDone) return false;             // 二度置かない（置いたら二度と戻らない）
+    const inst = Setpieces.build(stage.setpiece, spStart, nowDist);
+    if (!inst) { setpieceDone = true; return false; }
+    const tail = out.slice(-8);
+    const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any' });
+    if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
+    inst.items.forEach((o) => out.push(o));
+    inst.events.forEach((e) => events.push(e));
+    log.push({ id: 'setpiece:' + inst.id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true });
+    cursor = inst.startM + inst.lengthM;
+    setpieceDone = true;
+    lastWallhole = false;
+    return true;
+  }
+
   function appendOne(nowDist) {
+    if (stage.intro && introPtr < stage.intro.length) return appendIntro(nowDist);
+    if (!setpieceDone && cursor >= spStart) return appendSetpiece(nowDist);
     const cands = candidates(cursor);
     const tail = out.slice(-8);
     for (let tryI = 0; tryI < 10; tryI++) {
       const def = cands[Math.floor(rng() * cands.length) % cands.length];
+      /* 大演出の手前ははみ出さないよう空白で詰める（演出を置く前だけ） */
+      if (!setpieceDone && cursor + def.lengthM * (stage.speedAt(cursor) / CFG.REF_SPEED) > spStart) {
+        log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: spStart - cursor });
+        cursor = spStart;
+        return appendSetpiece(nowDist);
+      }
       for (let pad = 0; pad <= 24; pad += 4) {
         const inst = instantiate(def, cursor + pad, nowDist);
         const errs = Fair.validate(tail.concat(inst.items), stage.speedAt, { startLanes: 'any' });

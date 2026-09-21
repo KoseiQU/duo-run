@@ -14,7 +14,8 @@
     DUO.bot(mode);
     let frames = 0;
     const cap = Math.round(maxSec * 60);
-    while (Game.status === 'playing' && frames++ < cap) DUO.__step(1 / 60);
+    /* ゴール演出（status:'goal'）を跨いで clear まで回す（§4.8） */
+    while ((Game.status === 'playing' || Game.status === 'goal') && frames++ < cap) DUO.__step(1 / 60);
     return { status: Game.status, dist: Game.dist, sec: frames / 60, killer: Game.killer };
   }
 

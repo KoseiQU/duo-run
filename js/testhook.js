@@ -4,7 +4,9 @@
      DUO.start(stageIdOr'endless'[, seed])   ステージ開始
      DUO.pump(dt)                            更新＋描画をワンセットで1フレーム
      DUO.key(code, down)                     キー入力（e.code）
-     DUO.touch(side, gesture)                'left'|'right' × 'left'|'right'|'up'|'down'
+     DUO.touch(zone, dir)                    'bottom'|'top' × 'left'|'right'|'up'|'down'
+                                             （dir はスクリーン方向。担当キャラの足場で
+                                               jump/slide に変換される＝§4.2 改訂）
      DUO.state()                             速度・距離・2体の状態・生存・現在チャンク
      DUO.skipTo(m)                           指定距離へ跳ぶ
      DUO.bot(mode)                           null | 'perfect' | 'delay250'
@@ -22,10 +24,7 @@ const DUO = {
   start(stageId, seed) { return DUO.state(Game.start(stageId || 'S0', seed)); },
   pump(dt) { Game.pump(dt === undefined ? 1 / 60 : dt); return DUO.state(); },
   key(code, down) { Input.keyEvent(code, !!down); return true; },
-  touch(side, gesture) {
-    const g = (gesture === 'up') ? 'jump' : (gesture === 'down') ? 'slide' : gesture;
-    return Input.gesture(side, g);
-  },
+  touch(zone, dir) { return Input.gesture(zone, dir); },
   state() { return Game.snapshot(); },
   skipTo(m) {
     if (!Game.stage || Game.status === 'idle') return null;
@@ -52,7 +51,9 @@ const DUO = {
   __internal: {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
+    Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
+    STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1,
     /* テストで単体の障害物を置く */
     spawnOne(type, surface, lane, atAheadM) {
       const o = Obstacles.make(type, surface, lane, Game.dist + atAheadM, Game.dist);
@@ -120,8 +121,8 @@ const DUO = {
         t.eq(DUO.state().status, 'playing', 'runAll後に通常のプレイ開始ができる');
         DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
         t.eq(DUO.state().runners.lumen.act, 'jump', 'runAll後にキー入力が効く');
-        DUO.touch('right', 'up'); DUO.pump(1 / 60);
-        t.eq(DUO.state().runners.umbra.act, 'jump', 'runAll後にタッチ入力が効く');
+        DUO.touch('top', 'down'); DUO.pump(1 / 60);
+        t.eq(DUO.state().runners.umbra.act, 'jump', 'runAll後にタッチ入力が効く（上半分の下フリック＝UMBRAのジャンプ）');
         DUO.reset();
         t.eq(DUO.state().status, 'idle', '最後にタイトルへ戻る');
       } catch (e) {

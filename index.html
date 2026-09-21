@@ -40,16 +40,29 @@
   .hand span{opacity:.65;}
   .hand.r{text-align:right;}
 
-  /* ---------- スマホのタッチ領域（画面下1/3を左右で色分け・§4.8） ---------- */
-  #touchzones{position:absolute; left:0; right:0; bottom:0; height:33%; display:none; pointer-events:none;}
-  body.touch #touchzones{display:flex;}
-  #touchzones .tz{flex:1; position:relative; border-top:1px solid rgba(255,255,255,.16);}
-  #touchzones .tz.left{background:linear-gradient(to top,rgba(255,179,71,.20),rgba(255,179,71,0));
-    border-right:1px dashed rgba(255,255,255,.22);}
-  #touchzones .tz.right{background:linear-gradient(to top,rgba(125,140,255,.22),rgba(125,140,255,0));}
-  #touchzones .tz::after{content:attr(data-label); position:absolute; top:8px; left:0; right:0; text-align:center;
-    font-size:10px; letter-spacing:.14em; opacity:.6;}
-  #touchzones .tz.left::after{color:var(--lumen);} #touchzones .tz.right::after{color:var(--umbra);}
+  /* ---------- タッチ領域: 画面を上下に2分割（§4.2/§4.8 改訂） ----------
+     上半分＝天井のUMBRA（藍）／下半分＝床のLUMEN（琥珀）。常時ごく薄く示す。 */
+  #touchzones{position:absolute; inset:0; display:flex; flex-direction:column; pointer-events:none;}
+  #touchzones .tz{flex:1; position:relative;}
+  #touchzones .tz.top{background:linear-gradient(to bottom,rgba(125,140,255,.13),rgba(125,140,255,0) 46%);
+    box-shadow:inset 0 2px 0 rgba(125,140,255,.30), inset 2px 0 0 rgba(125,140,255,.14), inset -2px 0 0 rgba(125,140,255,.14);}
+  #touchzones .tz.bottom{background:linear-gradient(to top,rgba(255,179,71,.13),rgba(255,179,71,0) 46%);
+    box-shadow:inset 0 -2px 0 rgba(255,179,71,.30), inset 2px 0 0 rgba(255,179,71,.14), inset -2px 0 0 rgba(255,179,71,.14);}
+  #touchzones .tz::after{content:attr(data-label); position:absolute; left:0; right:0; text-align:center;
+    font-size:10px; letter-spacing:.16em; opacity:.55;}
+  #touchzones .tz.top::after{color:var(--umbra); bottom:9px;}
+  #touchzones .tz.bottom::after{color:var(--lumen); top:9px;}
+  /* 中央の分割線 */
+  #touch-split{position:absolute; left:8%; right:8%; top:50%; height:1px; transform:translateY(-.5px);
+    background:linear-gradient(90deg,transparent,rgba(220,230,255,.30),transparent);}
+  /* 横持ち: 親指が届く位置（両端・中央寄り）に薄いガイド */
+  .thumb{position:absolute; width:54px; height:54px; border-radius:50%; opacity:.16; display:none;
+    border:1px dashed currentColor;}
+  @media (orientation:landscape){ .thumb{display:block;} }
+  .thumb.tl{left:14px; top:calc(50% - 74px); color:var(--umbra);}
+  .thumb.tr{right:14px; top:calc(50% - 74px); color:var(--umbra);}
+  .thumb.bl{left:14px; top:calc(50% + 20px); color:var(--lumen);}
+  .thumb.br{right:14px; top:calc(50% + 20px); color:var(--lumen);}
 
   /* ---------- 画面 ---------- */
   .screen{position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
@@ -67,15 +80,61 @@
   button.primary{border-color:rgba(255,179,71,.6); color:#ffd9a6;}
   button.second{border-color:rgba(125,140,255,.6); color:#d2d8ff;}
   .big{font-size:22px; font-weight:700;}
+
+  /* ---------- ネオン都市UI ---------- */
+  .neon{position:relative; display:inline-block; padding:2px 0;
+    color:#eaf0ff; text-shadow:0 0 6px rgba(120,200,255,.9),0 0 22px rgba(90,140,255,.55);}
+  .panel{background:linear-gradient(180deg,rgba(24,30,62,.72),rgba(12,16,38,.78));
+    border:1px solid rgba(150,175,255,.28); border-radius:16px; padding:18px 20px;
+    box-shadow:0 0 34px rgba(60,90,200,.20) inset, 0 8px 30px rgba(0,0,0,.35);
+    backdrop-filter:blur(6px);}
+  .label{font-size:11px; letter-spacing:.34em; opacity:.6;}
+  button[data-ui]{position:relative;}
+  button.ghost{border-color:rgba(255,255,255,.18); color:rgba(232,236,255,.75); font-size:13px; padding:9px 18px;}
+
+  /* ステージ選択 */
+  #stage-grid{display:grid; grid-template-columns:repeat(4,minmax(96px,1fr)); gap:10px; max-width:560px; width:100%;}
+  @media (max-width:560px){ #stage-grid{grid-template-columns:repeat(2,1fr);} }
+  .stage-card{position:relative; text-align:left; padding:11px 12px; border-radius:13px; cursor:pointer;
+    border:1px solid rgba(150,175,255,.26); background:rgba(18,24,52,.66); color:var(--ink);
+    font:inherit; transition:transform .12s, background .12s, border-color .12s;}
+  .stage-card:hover:not([disabled]){transform:translateY(-2px); background:rgba(30,40,86,.8); border-color:rgba(255,179,71,.5);}
+  .stage-card[disabled]{opacity:.38; cursor:default;}
+  .stage-card .no{font-size:15px; font-weight:800; letter-spacing:.08em; color:var(--lumen);}
+  .stage-card .nm{font-size:11px; opacity:.72; line-height:1.4; margin-top:2px;}
+  .stage-card .meta{font-size:10px; opacity:.6; margin-top:5px; letter-spacing:.06em;}
+  .stage-card .star{position:absolute; top:8px; right:9px; font-size:13px; color:#ffd479; text-shadow:0 0 10px rgba(255,190,90,.8);}
+  .stage-card .lock{position:absolute; top:8px; right:9px; font-size:12px; opacity:.6;}
+
+  /* リザルト */
+  .result-big{font-size:clamp(26px,6vw,44px); font-weight:800; letter-spacing:.18em;}
+  .result-clear{color:#ffd9a6; text-shadow:0 0 26px rgba(255,179,71,.6);}
+  .result-dead{color:#ff9bb0; text-shadow:0 0 26px rgba(255,80,120,.5);}
+  #clear-best,#dead-best{font-size:12px; letter-spacing:.1em; color:#ffe2a8; min-height:1.2em;}
+
+  /* ---------- チュートリアルの吹き出し（§4.8） ---------- */
+  #tip{position:absolute; left:50%; top:22%; transform:translate(-50%,0) scale(.96);
+    max-width:min(86vw,520px); padding:11px 20px; border-radius:14px; text-align:center;
+    font-size:clamp(14px,2.4vw,18px); font-weight:700; letter-spacing:.06em; line-height:1.5;
+    color:#eef3ff; background:linear-gradient(180deg,rgba(26,34,70,.86),rgba(12,16,38,.86));
+    border:1px solid rgba(150,190,255,.45); box-shadow:0 0 26px rgba(80,140,255,.28);
+    opacity:0; pointer-events:none; transition:opacity .22s, transform .22s;}
+  #tip.on{opacity:1; transform:translate(-50%,0) scale(1);}
+  #tip .k{color:var(--lumen);}
+  #tip .k2{color:var(--umbra);}
+  #tip .finger{font-size:20px; margin-right:6px; vertical-align:-2px;}
 </style>
 </head>
 <body>
 <div id="app">
   <canvas id="gl"></canvas>
 
-  <div id="touchzones">
-    <div class="tz left" data-label="LUMEN / 左手"></div>
-    <div class="tz right" data-label="UMBRA / 右手"></div>
+  <div id="touchzones" data-ui="touchzones">
+    <div class="tz top" data-zone="top" data-label="UMBRA ／ 上半分"></div>
+    <div class="tz bottom" data-zone="bottom" data-label="LUMEN ／ 下半分"></div>
+    <div id="touch-split"></div>
+    <div class="thumb tl"></div><div class="thumb tr"></div>
+    <div class="thumb bl"></div><div class="thumb br"></div>
   </div>
 
   <div id="hud">
@@ -86,42 +145,66 @@
       <span class="flag" id="flag-mirror" style="display:none">MIRROR</span>
       <span class="flag" id="flag-swap" style="display:none">SWAP</span>
     </div>
+    <div id="tip" data-ui="tip"></div>
     <div class="hands">
       <div class="hand" id="hand-left" data-char="lumen">
-        <b id="hand-left-name">LUMEN</b><span id="hand-left-keys">A D / W / S</span>
+        <b id="hand-left-name">LUMEN</b><span id="hand-left-keys">下半分</span>
       </div>
       <div class="hand r" id="hand-right" data-char="umbra">
-        <b id="hand-right-name">UMBRA</b><span id="hand-right-keys">← → / ↑ / ↓</span>
+        <b id="hand-right-name">UMBRA</b><span id="hand-right-keys">上半分</span>
       </div>
     </div>
   </div>
 
-  <div class="screen on" id="screen-title">
+  <div class="screen on" id="screen-title" data-ui="screen-title">
     <h1><span class="l">DUO</span> <span class="u">RUN</span></h1>
+    <div class="label">LIGHT &amp; SHADOW</div>
     <div class="sub">
-      左手で<b style="color:var(--lumen)">LUMEN</b>（床）、右手で<b style="color:var(--umbra)">UMBRA</b>（天井）。<br>
-      PC: A/D・W・S ／ ←→・↑・↓　　スマホ: 画面の左半分と右半分をフリック<br>
-      UMBRAは重力が逆。↑は「床に向かって」跳ぶ。
+      画面の<b style="color:var(--lumen)">下半分</b>で LUMEN（床）、<b style="color:var(--umbra)">上半分</b>で UMBRA（天井）。<br>
+      フリックで操作。<b>足場から離れる向きがジャンプ</b>。<br>
+      下半分は<b style="color:var(--lumen)">上へ</b>、上半分は<b style="color:var(--umbra)">下へ</b>フリックでジャンプ。横フリックでレーン移動。
     </div>
     <div class="btns">
-      <button class="primary" id="btn-s0">仮ステージ S0</button>
-      <button class="second" id="btn-endless">仮エンドレス</button>
+      <button class="primary" id="btn-start" data-ui="start">START</button>
     </div>
+    <div class="label" id="title-best"></div>
   </div>
 
-  <div class="screen" id="screen-dead">
-    <div class="big">CRASH</div>
+  <div class="screen" id="screen-mode" data-ui="screen-mode">
+    <div class="neon big">モードを選ぶ</div>
+    <div class="btns">
+      <button class="primary" id="btn-mode-stage" data-ui="mode-stage">ステージ</button>
+      <button class="second" id="btn-mode-endless" data-ui="mode-endless">エンドレス</button>
+    </div>
+    <div class="sub">ステージ: 8つのゾーンを順に攻略／エンドレス: どこまで走れるか</div>
+    <div class="btns"><button class="ghost" data-ui="back-title">戻る</button></div>
+  </div>
+
+  <div class="screen" id="screen-stages" data-ui="screen-stages">
+    <div class="neon big">ステージ選択</div>
+    <div id="stage-grid" data-ui="stage-grid"></div>
+    <div class="btns"><button class="ghost" data-ui="back-mode">戻る</button></div>
+  </div>
+
+  <div class="screen" id="screen-dead" data-ui="screen-result-dead">
+    <div class="result-big result-dead">CRASH</div>
     <div class="sub"><span id="dead-dist">0 m</span><br><span id="dead-cp"></span></div>
+    <div class="label" id="dead-best"></div>
     <div class="btns">
-      <button class="primary" id="btn-retry">リトライ</button>
-      <button id="btn-title">タイトルへ</button>
+      <button class="primary" id="btn-retry" data-ui="retry">リトライ</button>
+      <button id="btn-title" data-ui="title">タイトルへ</button>
     </div>
   </div>
 
-  <div class="screen" id="screen-clear">
-    <div class="big">CLEAR</div>
+  <div class="screen" id="screen-clear" data-ui="screen-result-clear">
+    <div class="result-big result-clear">CLEAR</div>
     <div class="sub" id="clear-dist"></div>
-    <div class="btns"><button class="primary" id="btn-title2">タイトルへ</button></div>
+    <div class="label" id="clear-best"></div>
+    <div class="btns">
+      <button class="primary" id="btn-next" data-ui="next">次へ</button>
+      <button id="btn-retry2" data-ui="retry-clear">もう一度</button>
+      <button id="btn-title2" data-ui="title">タイトルへ</button>
+    </div>
   </div>
 </div>
 
@@ -139,9 +222,11 @@
 <script src="js/obstacles.js"></script>
 <script src="js/chunks.js"></script>
 <script src="js/runners.js"></script>
+<script src="js/setpieces.js"></script>
 <script src="js/zone_neon.js"></script>
 <script src="js/world.js"></script>
 <script src="js/input.js"></script>
+<script src="js/tutorial.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/bot.js"></script>
 <script src="js/core.js"></script>
@@ -154,14 +239,12 @@
 <script src="tests/test_bot.js"></script>
 <script src="tests/test_touch.js"></script>
 <script src="tests/test_p2a.js"></script>
+<script src="tests/test_p2a3.js"></script>
 
 <script>
   (function boot(){
-    // タッチ領域の表示（実機のタッチ端末か、縦長の狭い画面のとき）
-    function updateTouchUI(){
-      const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-      document.body.classList.toggle('touch', !!coarse || window.innerWidth < 560);
-    }
+    // iPhone/iPad 専用（契約§1）。タッチ領域は常時表示する
+    function updateTouchUI(){ document.body.classList.add('touch'); }
     updateTouchUI();
     Game.init(document.getElementById('gl'));
     UI.init(Game);
