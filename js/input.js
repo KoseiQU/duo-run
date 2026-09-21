@@ -97,7 +97,11 @@ const Input = {
     window.addEventListener('keyup', function (e) { Input.keyEvent(Input.codeOf(e), false); });
 
     const h = () => (el.clientHeight || window.innerHeight);
+    // UI（ボタン・画面パネル）上のタッチは横取りしない。ここで preventDefault すると
+    // iOS Safari が click を合成しなくなり、START が押せない（実機で発生 2026-09-21）。
+    const onUi = (e) => !!(e.target && e.target.closest && e.target.closest('button, .screen, a, input'));
     el.addEventListener('touchstart', function (e) {
+      if (onUi(e)) return;
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
@@ -105,6 +109,7 @@ const Input = {
       }
     }, { passive: false });
     el.addEventListener('touchmove', function (e) {
+      if (onUi(e)) return;
       e.preventDefault();
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
