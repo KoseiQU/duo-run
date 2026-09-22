@@ -165,4 +165,29 @@
       DUO.reset();
     }
   });
+  /* S7 鏡へのカット（§4.4「鏡が主役」）: 実機の画面比（横持ち・縦持ち・iPad）で大鏡が 20% 以上。
+     P5c-0 の前出し（3.2→5.6）だけでは横持ちで 11% だったので、カットで画角も絞る（fovAdd −13°） */
+  DUO.__suites.push({
+    name: 'P5c: S7 鏡へのカットで大鏡が画面の 20% 以上（812×375・375×812・1024×768）',
+    quick: false,
+    run(t) {
+      const In = I(), Sp = In.Setpieces, W = In.World;
+      [[812, 375], [375, 812], [1024, 768]].forEach((v) => {
+        DUO.reset(); DUO.start('S7', 4); DUO.bot('perfect'); DUO.skipTo(1240);
+        let g = 0;
+        while (Game.dist < 1300 && g++ < 4000) DUO.__step(1 / 60);
+        W.setViewport(v[0], v[1], 1);
+        let best = 0, cov = 0;
+        while ((Game.status === 'playing' || Game.status === 'goal') && g++ < 9000) {
+          DUO.pump(1 / 60);
+          const k = Sp.mirrorCutK(Game.dist);
+          if (k > best) { best = k; cov = Sp.mirrorOnScreen(Game.dist); }
+        }
+        W.resize();
+        t.ok(best > 0.95, v.join('×') + ': カットが山まで来る（' + best.toFixed(2) + '）');
+        t.ok(cov >= 0.20, v.join('×') + ': カットの山で大鏡が画面の ' + (cov * 100).toFixed(1) + '%（20%以上）');
+      });
+      DUO.reset();
+    }
+  });
 })();

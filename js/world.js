@@ -580,7 +580,8 @@ const World = {
       const mz = mb ? (mb.z0 + mb.z1) / 2 : CFG.CAM.LOOK_Z;
       /* 前へ出る量（2026-09-23 P5c）: 3.2 では出口の大鏡が画角の 17% にしかならず、
          §4.4 S7 の「鏡が主役のカット」に届かなかった（P5a 封緘時の既知の不合格）。
-         5.6 まで寄せると 20% を安全に超える（画角の縦横比が変わっても割らない余裕を取る）。構図はそのまま・寄りだけを強める。 */
+         5.6 まで寄せる。寄りだけでは横持ち（812×375）で 11% に留まるので、画角も絞る
+         （Setpieces の fovAdd がカットで −13°）。構図はそのまま・寄りだけを強める。 */
       World.camera.position.set(avgX * 0.10 * (1 - k) + sx, CFG.CAM.Y + sy + camUp,
                                 CFG.CAM.Z - 5.6 * k - push);
       World.camera.lookAt(sx * 0.5, CFG.H / 2 + sy * 0.5 + lookUp * 0.4,
