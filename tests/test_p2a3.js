@@ -65,7 +65,10 @@
       ];
       const gen = In.createGenerator(stage, 1);
       for (let d = 0; d < 900; d += 20) gen.ensure(d + In.CFG.SPAWN_AHEAD, d);
-      const intro = gen.obstacles.filter((o) => o.at <= 300).sort((a, b) => a.at - b.at);
+      /* 導入区間の長さ: 契約§4.8 の tip の猶予規則（tip は対象の speed×2.5秒手前・吹き出しは重ねない）
+         で、7つの紹介は最短でも 約 7×2.5秒×16m/s ≒ 280m＋助走 を要する（P5c で 300→約325m）。 */
+      const INTRO_END = 330;
+      const intro = gen.obstacles.filter((o) => o.at <= INTRO_END).sort((a, b) => a.at - b.at);
       want.forEach((w, i) => {
         const o = intro[i];
         t.ok(o && o.type === w[0] && o.surface === w[1],
@@ -75,7 +78,7 @@
       const both = intro.slice(6, 8);
       t.ok(both.length === 2 && Math.abs(both[0].at - both[1].at) < 1e-6 && both[0].surface !== both[1].surface,
            '最後は床と天井が同時に来る');
-      t.ok(intro.length >= 8, '導入区間（〜300m）に 8個の紹介障害物（' + intro.length + '個）');
+      t.ok(intro.length >= 8, '導入区間（〜' + INTRO_END + 'm）に 8個の紹介障害物（' + intro.length + '個）');
 
       /* 導入区間はスライディングを要求しない（S1 はスライド0%） */
       const list = gen.obstacles.filter((o) => o.at <= 900);

@@ -313,8 +313,14 @@
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
+         規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
+        const tw = In.Fair.tipWindows(g.events);
+        half.xa = (half.xa || 0) + In.Fair.tipOverlap(tw, 0, 600);
+        half.xb = (half.xb || 0) + In.Fair.tipOverlap(tw, 600, 1200);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
+          if (In.Fair.inTipWindow(tw, w.at)) return;
           if (w.at < 600) half.a += n; else half.b += n;
         });
       }
@@ -327,7 +333,7 @@
       /* 密度（契約§4.7 S4 は 6→10回/100m・±25%） */
       const dens = In.STAGE_DEFS.S4.density;
       t.eq(dens[0] + '-' + dens[1], '6-10', '密度の目安は 6→10回/100m');
-      const A = half.a / 50 / 6, B = half.b / 50 / 6;
+      const A = half.a / (50 * 600 - half.xa) * 100, B = half.b / (50 * 600 - half.xb) * 100;
       const wantA = In.U.lerp(dens[0], dens[1], 0.25), wantB = In.U.lerp(dens[0], dens[1], 0.75);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
            'S4 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');

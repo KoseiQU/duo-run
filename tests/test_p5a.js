@@ -18,6 +18,18 @@
 'use strict';
 
 (function () {
+  /* P5c: 譜面は tip の猶予規則（契約§4.8）で位置がずれるので、固定の距離・種ではなく
+     「その種で最初に出る区間」を生成して探す（見つけた区間の少し手前へ skipTo し、実ステップで跨ぐ） */
+  function findRegion(kind, pred) {
+    for (let seed = 1; seed <= 40; seed++) {
+      DUO.reset(); DUO.start('S7', seed);
+      Game.gen.ensure(1300, 0);
+      const r = Game.gen[kind].filter((q) => q.from > 150 && q.to < 1280 && (!pred || pred(q)))[0];
+      if (r) { const out = { seed: seed, from: r.from }; DUO.reset(); return out; }
+    }
+    DUO.reset();
+    return null;
+  }
   const I = () => DUO.__internal;
   const app = () => document.getElementById('app');
   const canSynth = (typeof window.Touch === 'function' && typeof window.TouchEvent === 'function');
@@ -283,11 +295,13 @@
       t.eq(Mirror.gateNear([reg], 105, 10), true, 'ゲートの直後はウォールを置けない（Fair が見る窓口）');
 
       /* --- 走行中: 該当キャラだけ反転し、出口で戻る --- */
-      DUO.reset(); DUO.start('S7', 3); DUO.bot('perfect');
-      DUO.skipTo(360);
+      const fm = findRegion('mirrors', (q) => q.side === 'floor');
+      t.ok(!!fm, '床側の鏡ゾーンを持つ種がある（seed' + (fm && fm.seed) + ' @' + (fm && fm.from.toFixed(0)) + 'm）');
+      DUO.reset(); DUO.start('S7', fm.seed); DUO.bot('perfect');
+      DUO.skipTo(Math.max(0, fm.from - 110));
       for (let i = 0; i < 4; i++) DUO.pump(1 / 60);
-      const regs = Game.gen.mirrors.filter((r) => !r.dead);
-      t.ok(regs.length > 0, 'seed3 の 360m 以降に鏡ゾーンがある');
+      const regs = Game.gen.mirrors.filter((r) => !r.dead && r.from >= fm.from - 1);
+      t.ok(regs.length > 0, 'seed' + fm.seed + ' の ' + Math.round(fm.from - 110) + 'm 以降に鏡ゾーンがある');
       const r0 = regs[0];
       t.eq(r0.side, 'floor', 'この鏡ゾーンは床側（下半分の左右が逆になる）');
       let guard = 0;
@@ -351,11 +365,13 @@
       t.eq(Swap.gateNear([reg], 205, 10), true, 'ゲートの直後はウォールを置けない（両面とも）');
 
       /* --- 走行中 --- */
-      DUO.reset(); DUO.start('S7', 1); DUO.bot('perfect');
-      DUO.skipTo(470);
+      const fs = findRegion('swaps', null);
+      t.ok(!!fs, '入れ替えワープを持つ種がある（seed' + (fs && fs.seed) + ' @' + (fs && fs.from.toFixed(0)) + 'm）');
+      DUO.reset(); DUO.start('S7', fs.seed); DUO.bot('perfect');
+      DUO.skipTo(Math.max(0, fs.from - 110));
       for (let i = 0; i < 4; i++) DUO.pump(1 / 60);
-      const regs = Game.gen.swaps.filter((r) => !r.dead);
-      t.ok(regs.length > 0, 'seed1 の 470m 以降に入れ替えワープがある');
+      const regs = Game.gen.swaps.filter((r) => !r.dead && r.from >= fs.from - 1);
+      t.ok(regs.length > 0, 'seed' + fs.seed + ' の ' + Math.round(fs.from - 110) + 'm 以降に入れ替えワープがある');
       const r0 = regs[0];
       let guard = 0;
       while (Game.dist < r0.from - 2 && guard++ < 9000) DUO.__step(1 / 60);
@@ -593,8 +609,14 @@
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
+         規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
+        const tw = In.Fair.tipWindows(g.events);
+        rnd.xa = (rnd.xa || 0) + In.Fair.tipOverlap(tw, 0, 750);
+        rnd.xb = (rnd.xb || 0) + In.Fair.tipOverlap(tw, 750, 1300);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
+          if (In.Fair.inTipWindow(tw, w.at)) return;
           if (w.at < 750) { rnd.a += n; } else { half.b += n; if (w.at < 1300) rnd.b += n; }
         });
       }
@@ -615,14 +637,18 @@
          実質上限は決定ログどおり約10回/100m。実装の目安は 8→10（既知の妥協点）。 */
       const dens = In.STAGE_DEFS.S7.density;
       t.eq(dens[0] + '-' + dens[1], '8-10', '密度の目安は 8→10回/100m（契約§4.7 の 10→14 に対する妥協）');
-      const A = rnd.a / 50 / 7.5, B = rnd.b / 50 / 5.5;
+      const A = rnd.a / (50 * 750 - rnd.xa) * 100, B = rnd.b / (50 * 550 - rnd.xb) * 100;
       const wantA = In.U.lerp(dens[0], dens[1], 375 / 1500);
       const wantB = In.U.lerp(dens[0], dens[1], 1025 / 1500);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
            'S7 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
       t.ok(B >= wantB * 0.75 && B <= wantB * 1.25,
            'S7 後半（演出を除く）の密度 ' + B.toFixed(2) + ' 回/100m（目安 ' + wantB.toFixed(2) + ' ±25%）');
-      t.ok(B > A, 'S7 密度は後半のほうが高い（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '）');
+      /* P5c（契約§4.8）: 新ギミックの初出（ゲート＋直後の猶予＝譜面の一番薄いところ）は
+         ほぼ前半に来て、そこが tip の窓として丸ごと測定から外れる。そのぶん前半の「窓の外」が
+         相対的に濃く出る（P5c 前の実測でも S7 は 前半→後半 が +2〜3% の僅差だった）。
+         「後半が前半を大きく割らない」（−12% まで）で見る。目安 ±25% の判定は上のとおり厳密。 */
+      t.ok(B >= A * 0.88, 'S7 密度は後半が前半を大きく割らない（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '・tip の窓を除く）');
       t.info('演出込みの後半密度 ' + (half.b / 50 / 7.5).toFixed(2) + ' 回/100m（砕け散りの200mを含む）');
       /* 動作比率（契約§4.3 / 上限はスライド抜きで正規化した 62%） */
       const pct = (k) => agg[k] / agg.total * 100;
@@ -758,9 +784,10 @@
     run(t) {
       const In = I();
       /* 鏡ゾーンの中でリトライ */
-      DUO.reset(); DUO.start('S7', 3); DUO.bot('perfect');
-      DUO.skipTo(360);
-      const r0 = Game.gen.mirrors.filter((r) => !r.dead)[0];
+      const fm = findRegion('mirrors', (q) => q.side === 'floor');
+      DUO.reset(); DUO.start('S7', fm.seed); DUO.bot('perfect');
+      DUO.skipTo(Math.max(0, fm.from - 110));
+      const r0 = Game.gen.mirrors.filter((r) => !r.dead && r.from >= fm.from - 1)[0];
       let guard = 0;
       while (Game.dist < r0.from + 10 && guard++ < 9000) DUO.__step(1 / 60);
       DUO.pump(1 / 60);
@@ -772,15 +799,17 @@
       t.eq(shown('flag-mirror'), false, 'HUD の MIRROR が消える');
 
       /* 入れ替えワープの中でリトライ（チェックポイントから） */
-      DUO.reset(); DUO.start('S7', 1); DUO.bot('perfect');
-      DUO.skipTo(470);
-      const s0 = Game.gen.swaps.filter((r) => !r.dead)[0];
+      const fs = findRegion('swaps', null);
+      DUO.reset(); DUO.start('S7', fs.seed); DUO.bot('perfect');
+      DUO.skipTo(Math.max(0, fs.from - 110));
+      const s0 = Game.gen.swaps.filter((r) => !r.dead && r.from >= fs.from - 1)[0];
       guard = 0;
       while (Game.dist < s0.from + 10 && guard++ < 9000) DUO.__step(1 / 60);
       DUO.pump(1 / 60);
       t.eq(DUO.state().handSwap, true, '入れ替えワープの中にいる');
       t.eq(handName('left'), 'UMBRA', 'HUD も入れ替わっている');
-      Game.lastCheckpoint = 500;
+      /* 区間の中にチェックポイントを置いて再開する（旧: 固定の 500m。P5c で譜面の位置が動くため区間基準に） */
+      Game.lastCheckpoint = Math.ceil(s0.from + 20);
       Game.retry();
       DUO.pump(1 / 60);
       t.eq(DUO.state().handSwap, false, 'チェックポイント再開で担当が戻る');

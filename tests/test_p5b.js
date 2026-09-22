@@ -369,7 +369,9 @@
       DUO.bot('perfect');
       const list = Game.gen.merges;
       Game.gen.ensure(1200, 0);
-      const reg = Game.gen.merges[0];
+      /* 2回目の合体区間で見る（1回目は初出の tip の窓＝契約§4.8 で直後の障害物が外れ、
+         ボットが入力しないまま抜けることがある） */
+      const reg = Game.gen.merges[1] || Game.gen.merges[0];
       t.ok(!!reg, '合体区間がある');
       if (reg) {
         DUO.skipTo(Math.max(0, reg.from - 140));
@@ -432,10 +434,14 @@
         Object.keys(flags).forEach((k) => { gimmick[k]++; });
         /* 密度（大演出の200m超を除いた区間で / 決定ログ 2026-09-22） */
         const half = spStart / 2;
-        const inA = g.obstacles.filter((o) => o.at >= CFG.LEAD_IN && o.at < half);
-        const inB = g.obstacles.filter((o) => o.at >= half && o.at < spStart);
-        densA.push(In.Fair.countDemands(inA, st.speedAt, opt).total / (half - CFG.LEAD_IN) * 100);
-        densB.push(In.Fair.countDemands(inB, st.speedAt, opt).total / (spStart - half) * 100);
+        /* P5c（契約§4.8）: tip の窓は「対象以外は置かない」区間なので除いて測る */
+        const tw = In.Fair.tipWindows(g.events);
+        const inA = g.obstacles.filter((o) => o.at >= CFG.LEAD_IN && o.at < half && !In.Fair.inTipWindow(tw, o.at));
+        const inB = g.obstacles.filter((o) => o.at >= half && o.at < spStart && !In.Fair.inTipWindow(tw, o.at));
+        densA.push(In.Fair.countDemands(inA, st.speedAt, opt).total /
+                   (half - CFG.LEAD_IN - In.Fair.tipOverlap(tw, CFG.LEAD_IN, half)) * 100);
+        densB.push(In.Fair.countDemands(inB, st.speedAt, opt).total /
+                   (spStart - half - In.Fair.tipOverlap(tw, half, spStart)) * 100);
         const c = In.Fair.countDemands(g.obstacles, st.speedAt, opt);
         ratio.lane += c.lane; ratio.jump += c.jump; ratio.slide += c.slide; ratio.total += c.total;
       }

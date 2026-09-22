@@ -7,7 +7,11 @@
 'use strict';
 
 const Tutorial = {
-  SHOW_T: 2.6,          // 表示時間（秒）
+  SHOW_T: 2.6,          // 表示時間（秒）… 対象の位置を持たない tip だけに使う
+  /* 契約§4.8（2026-09-23）: tip は **対象の通過で消す**。対象の位置（untilM）を持つ tip は
+     走行距離がそこ＋PASS_M を越えたら消す（時間では消さない＝説明中に消えない）。 */
+  PASS_M: 0.6,
+  untilM: null,
 
   /* 文言はタッチ前提（契約§1 iPhone/iPad専用）。指アイコン＋短い指示。
      ■ 改行は「句」の切れ目でしか起きないようにする（P2a-3 の残課題:
@@ -61,7 +65,7 @@ const Tutorial = {
 
   init() { Tutorial.el = document.getElementById('tip'); Tutorial.hide(); },
 
-  show(id) {
+  show(id, untilM) {
     const tip = Tutorial.TIPS[id];
     if (!tip || !Tutorial.el) return false;
     Tutorial.el.innerHTML = Tutorial.html(tip);
@@ -70,6 +74,7 @@ const Tutorial = {
     document.body.classList.add('tip-on');
     Tutorial.current = id;
     Tutorial.t = Tutorial.SHOW_T;
+    Tutorial.untilM = (typeof untilM === 'number') ? untilM : null;
     return true;
   },
 
@@ -79,17 +84,22 @@ const Tutorial = {
     document.body.classList.remove('tip-on');
     Tutorial.current = null;
     Tutorial.t = 0;
+    Tutorial.untilM = null;
   },
 
-  update(dt) {
+  update(dt, dist) {
     if (!Tutorial.current) return;
+    if (Tutorial.untilM !== null) {
+      if (typeof dist === 'number' && dist >= Tutorial.untilM + Tutorial.PASS_M) Tutorial.hide();
+      return;
+    }
     Tutorial.t -= dt;
     if (Tutorial.t <= 0) Tutorial.hide();
   },
 
   /* イベント入口（Game.onEvent から） */
   onEvent(e) {
-    if (e && e.type === 'tip' && e.params) Tutorial.show(e.params.id);
+    if (e && e.type === 'tip' && e.params) Tutorial.show(e.params.id, e.params.untilM);
   },
 
   reset() { Tutorial.hide(); }

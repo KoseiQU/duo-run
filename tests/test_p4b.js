@@ -540,8 +540,14 @@
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
+         規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
+        const tw = In.Fair.tipWindows(g.events);
+        rnd.xa = (rnd.xa || 0) + In.Fair.tipOverlap(tw, 0, 750);
+        rnd.xb = (rnd.xb || 0) + In.Fair.tipOverlap(tw, 750, 1300);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
+          if (In.Fair.inTipWindow(tw, w.at)) return;
           if (w.at < 750) { half.a += n; rnd.a += n; } else { half.b += n; if (w.at < 1300) rnd.b += n; }
         });
       }
@@ -561,7 +567,7 @@
          演出込みの実測値も info で残す（既知の妥協点）。 */
       const dens = In.STAGE_DEFS.S6.density;
       t.eq(dens[0] + '-' + dens[1], '8-12', '密度の目安は 8→12回/100m');
-      const A = rnd.a / 50 / 7.5, B = rnd.b / 50 / 5.5;
+      const A = rnd.a / (50 * 750 - rnd.xa) * 100, B = rnd.b / (50 * 550 - rnd.xb) * 100;
       /* 目安はその区間の**真ん中**の進行率で測る（前半 375m／後半のランダム区間 1025m） */
       const wantA = In.U.lerp(dens[0], dens[1], 375 / 1500);
       const wantB = In.U.lerp(dens[0], dens[1], 1025 / 1500);

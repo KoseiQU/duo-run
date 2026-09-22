@@ -619,7 +619,7 @@
          レーンの障害物を持たない（§4.5 改訂）ので、その手前までで測る。
          空中の密度は別の規範（§4.5 の隙間と到達時間）で test_p2c.js が見る。 */
       const meas = (id, len, upTo) => {
-        const half = { a: 0, b: 0 };
+        const half = { a: 0, b: 0 }, ex = { a: 0, b: 0 };
         let blanks = 0, bad = 0;
         for (let seed = 1; seed <= 50; seed++) {
           const st = In.makeStage(id);
@@ -628,13 +628,18 @@
           const l = g.obstacles.filter((o) => o.at <= len);
           if (In.Fair.validate(l, st.speedAt, { startLanes: [0] }).length) bad++;
           blanks += g.log.filter((c) => c.id === '(blank)').length;
+          /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
+           規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
+          const tw = In.Fair.tipWindows(g.events);
+          ex.a += In.Fair.tipOverlap(tw, 0, upTo / 2); ex.b += In.Fair.tipOverlap(tw, upTo / 2, upTo);
           In.Fair.walls(l, st.speedAt).forEach((w) => {
             const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
-            if (w.at >= upTo) return;
+            if (w.at >= upTo || In.Fair.inTipWindow(tw, w.at)) return;
             if (w.at < upTo / 2) half.a += n; else half.b += n;
           });
         }
-        return { a: half.a / 50 / (upTo / 2) * 100, b: half.b / 50 / (upTo / 2) * 100, blanks: blanks, bad: bad };
+        return { a: half.a / (50 * upTo / 2 - ex.a) * 100, b: half.b / (50 * upTo / 2 - ex.b) * 100,
+                 blanks: blanks, bad: bad };
       };
       const check = (id, len, dens, upTo) => {
         upTo = upTo || len;

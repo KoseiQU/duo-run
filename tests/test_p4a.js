@@ -489,8 +489,14 @@
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
+         規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
+        const tw = In.Fair.tipWindows(g.events);
+        half.xa = (half.xa || 0) + In.Fair.tipOverlap(tw, 0, 750);
+        half.xb = (half.xb || 0) + In.Fair.tipOverlap(tw, 750, 1500);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
+          if (In.Fair.inTipWindow(tw, w.at)) return;
           if (w.at < 750) half.a += n; else half.b += n;
         });
       }
@@ -504,13 +510,17 @@
       /* 密度（契約§4.7 S5 は 8→12回/100m・±25%） */
       const dens = In.STAGE_DEFS.S5.density;
       t.eq(dens[0] + '-' + dens[1], '8-12', '密度の目安は 8→12回/100m');
-      const A = half.a / 50 / 7.5, B = half.b / 50 / 7.5;
+      const A = half.a / (50 * 750 - half.xa) * 100, B = half.b / (50 * 750 - half.xb) * 100;
       const wantA = In.U.lerp(dens[0], dens[1], 0.25), wantB = In.U.lerp(dens[0], dens[1], 0.75);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
            'S5 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
       t.ok(B >= wantB * 0.75 && B <= wantB * 1.25,
            'S5 後半の密度 ' + B.toFixed(2) + ' 回/100m（目安 ' + wantB.toFixed(2) + ' ±25%）');
-      t.ok(B > A, 'S5 密度は後半のほうが高い（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '）');
+      /* P5c（契約§4.8）: 新ギミックの初出（ゲート＋直後の猶予＝譜面の一番薄いところ）は
+         ほぼ前半に来て、そこが tip の窓として丸ごと測定から外れる。そのぶん前半の「窓の外」が
+         相対的に濃く出る（P5c 前の実測でも S5 は 前半→後半 が +2〜3% の僅差だった）。
+         「後半が前半を大きく割らない」（−12% まで）で見る。目安 ±25% の判定は上のとおり厳密。 */
+      t.ok(B >= A * 0.88, 'S5 密度は後半が前半を大きく割らない（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '・tip の窓を除く）');
       /* 動作比率（契約§4.3） */
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S5 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');

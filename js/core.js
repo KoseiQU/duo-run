@@ -320,7 +320,7 @@ const Game = {
       if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
       Game.fireEvents();
       Setpieces.update(Game, d);
-      Tutorial.update(dt);
+      Tutorial.update(dt, Game.dist);
 
       if (Game.status === 'playing') {
         Game.collide();

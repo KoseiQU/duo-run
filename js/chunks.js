@@ -1611,6 +1611,20 @@ const INTRO_S1 = [
   { at: 262, tip: 'both',   floor: [{ lane: 0, type: 'ROVER' }], ceil: [{ lane: 1, type: 'ROVER' }] }
 ];
 
+/* ---------------------------------------------------------------- tip の対象（契約§4.8）
+   新ギミックの初出 tip が「何を」説明するか。チャンクの中で、この型のエントリの
+   **最初の1つ**を対象にする（型は並び順が優先順位。見つかった最初の型を使う）。
+   ・ゲートで始まる区間（海流・無重力・重力反転・鏡・入れ替え・合体）は **入口の通過** が
+     「対象の通過」（区間の全長を窓にすると区間の中身が全部消えてしまうため）。
+   ・レーザー網は枠（NETGATE）ではなく最初のビームを対象にする（跳ぶ／よけるのが本題）。 */
+const TIP_TARGET = {
+  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'], drop: ['DROPCEIL'],
+  cur: ['CURRENT'], lift: ['LIFTPAD'], door: ['DOOR'],
+  warp: ['GRAVWARP'], zero: ['ZEROG'], net: ['LASER_H', 'LASER_DIAG', 'NETGATE'],
+  mir: ['MIRRORZ'], swap: ['HANDSWAP'], dual: ['HANDSWAP'], merge: ['MERGE']
+};
+const TIP_ENTRY_ONLY = { CURRENT: 1, ZEROG: 1, GRAVWARP: 1, MIRRORZ: 1, HANDSWAP: 1, MERGE: 1 };
+
 const CHUNK_BY_ID = {};
 CHUNK_DEFS.forEach((c) => { CHUNK_BY_ID[c.id] = c; });
 
@@ -1723,6 +1737,10 @@ const STAGE_DEFS = {
     density: [8, 12],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     tipOnce: { cur: 'current', lift: 'liftpad', door: 'colordoor' },
+    /* P5c（契約§4.8 tip の猶予規則）: 初出が tip の窓ぶん場所を取るので、
+       まだ出していないギミックの札を少し重くして顔出しの率を保つ */
+    tipBoost: true,
+    tipMul: 2,
     /* 顔ぶれ: S5 の新チャンクが主役。基本形（柱・光線・跳び継ぎ）は深海スキンで顔が変わる。
        他ゾーン専用のギミック（崩れる橋・同時スイッチ・落ちる天井）は混ぜない（契約§4.4）。 */
     /* 跳び継ぎ（leap）を厚く入れて §4.3 の比率（レーン50%前後／ジャンプ35%前後）に寄せる。
@@ -1749,10 +1767,13 @@ const STAGE_DEFS = {
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     /* 28→34 m/s では「跳ぶ譜面」が密度で不利になる（ジャンプ連続は 0.70秒より詰められない）。
        比率の引きを強め、出せないスライドぶんをジャンプへ振り直す（§4.3 のレーン50%前後）。 */
-    ratioPull: 9,
+    /* P5c: tip の窓で初出チャンクの頭（跳びを含む）を外すぶんレーン寄りになるので 9 → 13 */
+    ratioPull: 13,
     mix: { lane: 0.49, jump: 0.47, slide: 0.04 },
     /* 新ギミック（重力反転・無重力・レーザーネット）を1回の走行で必ず顔出しさせる */
     tipBoost: true,
+    /* P5c（契約§4.8）: 初出は tip の窓（speed×3.5秒）ぶん場所を取るので、顔出しの率を保つよう強める */
+    tipMul: 9,
     tipOnce: { warp: 'gravwarp', zero: 'zerog', net: 'lasernet' },
     /* 顔ぶれ: S6 の新チャンクだけ。他ゾーン専用のギミック（崩れる橋・同時スイッチ・
        落ちる天井・海流・色の扉）は混ぜない（契約§4.4）。
@@ -1792,7 +1813,9 @@ const STAGE_DEFS = {
     tipBoost: true,
     /* ゲートのチャンクは猶予のぶん密度が低く、密度の重みに強く負けるので
        S6（×3）より強く引き上げる。まだ出していないギミックだけに掛かる。 */
-    tipMul: 9,
+    /* P5c（契約§4.8）: tip の窓のぶん初出が遅れ、重ね掛け（鏡と入れ替えの両方が出てから）
+       まで届かない走行が増えたので 9 → 40 に強める（tip 出現率を従来並みに保つ） */
+    tipMul: 40,
     /* 重ね掛け（dual）も「新ギミック」として1回の走行で必ず顔を出させる
        ＝ 契約§6 P5a「S7後半＝脳の負荷の最高点」 */
     tipOnce: { mir: 'mirrorzone', swap: 'handswap', dual: 'dualzone' },
@@ -2211,6 +2234,58 @@ const Fair = {
     return errs;
   },
 
+  /* tip の猶予規則（契約§4.8 2026-09-23）の検査。違反メッセージの配列を返す。
+     ・tip は対象の speed × LEAD_T 秒以上手前に出る
+     ・表示開始〜対象の通過後 speed × AFTER_T 秒の窓の中の必須動作は **対象のものだけ**
+     stats を渡すと、窓の中の「対象の必須動作（ウォール数）」を stats.nTarget に積む。 */
+  tipCheck(list, events, speedAt, opt, stats) {
+    const errs = [];
+    const walls = Fair.walls(list, speedAt, opt);
+    (events || []).filter((e) => e.type === 'tip').forEach((ev) => {
+      const p = ev.params || {};
+      if (p.targetAt === undefined || !p.target) { errs.push('tip ' + p.id + ' に対象の記録がない'); return; }
+      const want = speedAt(p.targetAt) * CFG.TIP.LEAD_T;
+      if (p.targetAt - ev.at < want - 0.01) {
+        errs.push('tip ' + p.id + ' の先行 ' + (p.targetAt - ev.at).toFixed(1) + 'm < ' + want.toFixed(1) + 'm');
+      }
+      const endWant = p.untilM + speedAt(p.untilM) * CFG.TIP.AFTER_T;
+      if (p.winEnd < endWant - 0.01) errs.push('tip ' + p.id + ' の窓が短い');
+      const tset = {};
+      p.target.forEach((u) => { tset[u] = true; });
+      let nT = 0;
+      walls.forEach((w) => {
+        if (w.atEnd < ev.at - 1e-6 || w.at > p.winEnd + 1e-6) return;
+        const other = w.items.filter((o) => !tset[o.uid] &&
+          (Obstacles.demand(o, 'floor') !== 'none' || Obstacles.demand(o, 'ceil') !== 'none'));
+        if (other.length) {
+          errs.push('tip ' + p.id + ' の窓に対象以外の必須動作 @' + w.at.toFixed(1) + '（' +
+                    other.map((o) => o.type).join(',') + '・窓 ' + ev.at.toFixed(1) + '〜' + p.winEnd.toFixed(1) + '）');
+        } else nT++;
+      });
+      if (stats) { stats.nTarget = stats.nTarget || []; stats.nTarget.push(nT); }
+    });
+    return errs;
+  },
+
+  /* tip の窓（契約§4.8）: [表示開始, 対象通過後 speed×1.0秒]。密度の検査はこの窓を除いて測る */
+  tipWindows(events) {
+    return (events || []).filter((e) => e.type === 'tip' && e.params && e.params.winEnd !== undefined)
+      .map((e) => [e.at, e.params.winEnd]);
+  },
+  inTipWindow(wins, at) { return wins.some((w) => at >= w[0] && at <= w[1]); },
+  tipOverlap(wins, a, b) {
+    /* 窓どうしが重なる（導入区間は前の窓の終わりと次の tip が重なる）ので、併合してから測る */
+    const ws = wins.map((w) => [Math.max(a, w[0]), Math.min(b, w[1])]).filter((w) => w[1] > w[0])
+      .sort((x, y) => x[0] - y[0]);
+    let s = 0, cur = null;
+    ws.forEach((w) => {
+      if (cur && w[0] <= cur[1]) cur[1] = Math.max(cur[1], w[1]);
+      else { if (cur) s += cur[1] - cur[0]; cur = [w[0], w[1]]; }
+    });
+    if (cur) s += cur[1] - cur[0];
+    return s;
+  },
+
   /* 必須動作の集計（契約§4.3 の動作比率。ウォール×面ごとに1動作と数える） */
   countDemands(list, speedAt, opt) {
     const res = { lane: 0, jump: 0, slide: 0, total: 0 };
@@ -2418,6 +2493,16 @@ function createGenerator(stage, seed) {
   let lastWallhole = false;     // 直前のチャンクが「壁の穴」を含んでいたか（連続禁止）
   let introPtr = 0;             // 導入区間の何番目まで置いたか
   const tipDone = {};           // 新ギミックの初出 tip を出したか（契約§4.8）
+  /* tip の窓の終わり（契約§4.8）。ここまでは対象以外の障害物を置かない */
+  let noDemandUntil = -1e9;
+  /* tip の窓の合計の長さ（重なりは併合）。密度の制御は窓を除いた距離で測る
+     （窓は規則で空けている区間なので、そこを「薄い」と数えて後ろを詰め込まない） */
+  let tipSpan = 0, tipSpanEnd = -1e9;
+  function noteTipWindow(a, b) {
+    const a2 = Math.max(a, tipSpanEnd);
+    if (b > a2) tipSpan += b - a2;
+    tipSpanEnd = Math.max(tipSpanEnd, b);
+  }
   /* 「この走行でまだ出していないギミック」を覚えておく（契約§4.4 S8「全部混在」）。
      1回の走行に入るチャンクは 7本前後しかないので、重みで貪欲に網羅させないと
      顔ぶれが偏る。tipBoost と同じ仕組みで、こちらは**毎回**効く。 */
@@ -2487,9 +2572,12 @@ function createGenerator(stage, seed) {
   /* これまでに置いた必須動作の内訳（比率の是正に使う）。
      終盤の大演出ぶんは最初から数に入れておく＝ランダム区間がその偏りを打ち消す。 */
   const got = { lane: 0, jump: 0, slide: 0, total: 0 };
+  /* 大演出の頭の障害物（大演出の手前に置くチャンクとの間隔を §4.7 で検査するのに使う / P5c） */
+  let spHead = [];
   const placed = { total: 0 };          // ランダム区間だけの実測（密度の制御に使う）
   if (stage.setpiece && Setpieces.DEFS[stage.setpiece]) {
     const sp0 = Setpieces.build(stage.setpiece, spStart, 0, stage.speedAt(spStart) / CFG.REF_SPEED, null);
+    if (sp0) spHead = sp0.items.filter((o) => o.at < spStart + 80);
     if (sp0) { seedMix = Fair.countDemands(sp0.items, stage.speedAt);
                got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total; }
   }
@@ -2518,8 +2606,10 @@ function createGenerator(stage, seed) {
     /* ※ この局所変数は「これまでに走った距離」。**外側の covered（顔ぶれの既出表）を
        隠さない名前にする**（P5b: 隠していたため coverFlags が一度も既出にならず、
        同じ網羅札ばかり引かれていた）。 */
-    const spanSoFar = Math.max(lastItemAt - CFG.LEAD_IN, 60);
-    const real = placed.total / spanSoFar * 100;
+    const spanSoFar = Math.max(lastItemAt - CFG.LEAD_IN - tipSpan, 60);
+    /* 走った距離（tip の窓を除く）が短いうちは実測が当てにならない（0件/60m で「薄い」と
+       判定して詰め込む）ので、目安どおりとみなす（P5c: 導入区間の窓を除くようにしたため） */
+    const real = (spanSoFar >= 120) ? placed.total / spanSoFar * 100 : wantDensity(m);
     const want = wantDensity(m) + U.clamp(wantDensity(m) - real, -2, 4);
     const scale = stage.speedAt(m) / CFG.REF_SPEED;
     const seam = seamFor(m);
@@ -2557,6 +2647,13 @@ function createGenerator(stage, seed) {
           wt = Math.max(wt, 0.9) * Math.pow(stage.coverMul || 6, Math.min(nNew, 3));
         }
       }
+      /* 未出のギミックを2つ以上抱える札は tip の窓が重なって置けない（契約§4.8）ので引かない */
+      if (stage.tipOnce) {
+        let np = 0;
+        const ks0 = Object.keys(stage.tipOnce);
+        for (let k = 0; k < ks0.length; k++) if (cands[i][ks0[k]] && !tipDone[ks0[k]]) np++;
+        if (np >= 2) wt *= 0.02;
+      }
       if (stage.tipOnce && stage.tipBoost) {
         const ks = Object.keys(stage.tipOnce);
         for (let k = 0; k < ks.length; k++) {
@@ -2577,15 +2674,97 @@ function createGenerator(stage, seed) {
   /* 置けるかどうか分からないうちは、同時スイッチ・海流ベルトの「区間」を
      本物の入れ物へ入れない（試し置きの残骸が走行中に効いてしまう）。
      ＝ 各試行はその場限りの local に積み、§4.7 を満たした時だけ移す。 */
-  function instantiate(def, startM, nowDist) {
+  function instantiate(def, startM, nowDist, drop) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
     const items = [];
+    const keyOf = new Map();      // 障害物 → 由来のエントリ（'f3' / 'c1'）。tip の窓の検査に使う
     const local = { syncs: [], currents: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
-    (def.floor || []).forEach((e) => put(items, e, 'floor', startM + e.at * scale, nowDist, scale, local));
-    (def.ceil || []).forEach((e) => put(items, e, 'ceil', startM + e.at * scale, nowDist, scale, local));
+    const putAll = (list, surface, pre) => (list || []).forEach((e, i) => {
+      const key = pre + i;
+      if (drop && drop[key]) return;
+      const n0 = items.length;
+      put(items, e, surface, startM + e.at * scale, nowDist, scale, local);
+      for (let k = n0; k < items.length; k++) keyOf.set(items[k], key);
+    });
+    putAll(def.floor, 'floor', 'f');
+    putAll(def.ceil, 'ceil', 'c');
     items.sort((a, b) => a.at - b.at);
     const evs = (def.events || []).map((e) => ({ at: startM + e.at * scale, type: e.type, params: e.params || null, done: false }));
-    return { items: items, events: evs, lengthM: def.lengthM * scale, startM: startM, id: def.id, local: local };
+    return { items: items, events: evs, lengthM: def.lengthM * scale, startM: startM, id: def.id, local: local,
+             keyOf: keyOf };
+  }
+
+  /* ------------------------------------------------------------------------
+     tip つきの置き方（契約§4.8 tip の猶予規則）
+       ・tip は対象の speed × LEAD_T 秒手前に出す
+       ・表示開始〜対象の通過後 speed × AFTER_T 秒は、対象以外の必須動作を置かない（両面）
+     チャンクの中で窓に入る「対象以外の必須動作」は **エントリごと外す**（初出の1回だけ
+     譜面が軽くなる）。ゲート・海流など当たり判定を持たないエントリは残す。
+     置けなければ null（呼び出し側は別のチャンクを選ぶ）。
+     ------------------------------------------------------------------------ */
+  function placeTipped(def, flag, nowDist, tail) {
+    const types = TIP_TARGET[flag] || [];
+    const ents = [];
+    (def.floor || []).forEach((e, i) => ents.push({ key: 'f' + i, e: e }));
+    (def.ceil || []).forEach((e, i) => ents.push({ key: 'c' + i, e: e }));
+    let tgt = null;
+    for (let k = 0; k < types.length && !tgt; k++) {
+      ents.forEach((x) => { if (x.e.type === types[k] && (!tgt || x.e.at < tgt.e.at)) tgt = x; });
+    }
+    if (!tgt) return null;
+    const scale = stage.speedAt(cursor) / CFG.REF_SPEED;
+    const tOff = tgt.e.at * scale;
+    /* 窓の始まり（tip の表示開始）は、それまでに置いた障害物（＝前の tip の対象も含む）より後ろ。
+       対象そのものは前の tip の窓（対象通過後 speed×1.0秒）が明けてから。 */
+    const base = lastItemAt + 1.0;
+    const leadAt = (m) => m - stage.speedAt(m) * CFG.TIP.LEAD_T;
+    /* 対象の位置 T を「leadAt(T) ≥ base」になる最小へ（速度は位置で変わるので2回回す） */
+    let T = base + stage.speedAt(base) * CFG.TIP.LEAD_T;
+    T = Math.max(base + stage.speedAt(T) * CFG.TIP.LEAD_T, noDemandUntil + 0.5);
+    for (let pad = 0; pad <= 30; pad += 3) {
+      const startM = Math.max(cursor, T + pad - tOff);
+      let drop = {}, inst = null, win = null;
+      for (let it = 0; it < 4; it++) {
+        inst = instantiate(def, startM, nowDist, drop);
+        const tItems = inst.items.filter((o) => inst.keyOf.get(o) === tgt.key);
+        if (!tItems.length) { inst = null; break; }
+        const tFirst = Math.min.apply(null, tItems.map((o) => o.at));
+        const tLast = TIP_ENTRY_ONLY[tgt.e.type] ? tFirst : Math.max.apply(null, tItems.map((o) => o.at));
+        win = { tipAt: leadAt(tFirst), tFirst: tFirst, tLast: tLast,
+                end: tLast + stage.speedAt(tLast) * CFG.TIP.AFTER_T,
+                uids: tItems.map((o) => o.uid) };
+        /* 窓に入る（または対象より手前の）「対象以外の必須動作」を持つエントリを外す */
+        let added = false;
+        Fair.walls(inst.items, stage.speedAt, { merges: merges.concat(inst.local.merges) }).forEach((w) => {
+          /* 窓の中だけでなく **対象より手前** も外す（前のチャンクとの間に割り込ませない） */
+          if (w.at > win.end + 0.5) return;
+          w.items.forEach((o) => {
+            const k = inst.keyOf.get(o);
+            if (k === tgt.key || drop[k]) return;
+            if (Obstacles.demand(o, 'floor') === 'none' && Obstacles.demand(o, 'ceil') === 'none') return;
+            drop[k] = true; added = true;
+          });
+        });
+        if (!added) break;
+      }
+      if (!inst || !win) return null;
+      if (win.tipAt < base - 1e-6) continue;
+      /* 大演出にはみ出すなら置かない（起点を後ろへずらした分を含めて見る） */
+      if (!setpieceDone && isFinite(spStart) && startM + chunkStats(def).lastAt * scale > spStart) return null;
+      /* 大演出の手前に窓がはみ出すなら置かない */
+      if (!setpieceDone && isFinite(spStart) && win.end > spStart - 1) return null;
+      const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
+                                 { startLanes: 'any', reactBoth: stage.reactBoth,
+                                   currents: currents.concat(inst.local.currents),
+                                   zeros: zeros.concat(inst.local.zeros),
+                                   warps: warps.concat(inst.local.warps),
+                                   mirrors: mirrors.concat(inst.local.mirrors),
+                                   swaps: swaps.concat(inst.local.swaps),
+                                   merges: merges.concat(inst.local.merges) });
+      if (errs.length) continue;
+      return { inst: inst, win: win, dropped: Object.keys(drop).length };
+    }
+    return null;
   }
   /* 試行が通った時だけ、区間を本物の入れ物へ移す */
   function commit(inst) {
@@ -2607,17 +2786,36 @@ function createGenerator(stage, seed) {
   }
 
   /* 導入区間（実寸・固定） */
+  /* 導入区間の位置は **tip の猶予規則（契約§4.8）** から決める:
+     前の対象の窓（通過後 speed×1.0秒）が明けてから、次の tip を speed×2.5秒 手前に出す。
+     INTRO の at は「これより手前には置かない」下限（最初の1つ＝60m）。 */
   function appendIntro(nowDist) {
     const it = stage.intro[introPtr++];
+    /* 次の tip は前の対象の通過（＋体の奥行きぶん）の後に出す＝吹き出しが重ならない。
+       対象は前の窓（通過後 speed×1.0秒）が明けてから。 */
+    const base = lastItemAt + 1.0;
+    let at = it.at;
+    if (it.tip) {
+      let T = base + stage.speedAt(base) * CFG.TIP.LEAD_T;
+      T = Math.max(base + stage.speedAt(T) * CFG.TIP.LEAD_T, noDemandUntil + 0.5);
+      at = Math.max(at, Math.ceil(T * 2) / 2);
+    }
     const items = [];
-    (it.floor || []).forEach((e) => put(items, e, 'floor', it.at, nowDist));
-    (it.ceil || []).forEach((e) => put(items, e, 'ceil', it.at, nowDist));
+    (it.floor || []).forEach((e) => put(items, e, 'floor', at, nowDist));
+    (it.ceil || []).forEach((e) => put(items, e, 'ceil', at, nowDist));
     items.sort((a, b) => a.at - b.at);
     items.forEach((o) => out.push(o));
     noteItems(items);
-    if (it.tip) events.push({ at: Math.max(2, it.at - 30), type: 'tip', params: { id: it.tip }, done: false });
-    log.push({ id: 'intro:' + it.tip, startM: it.at - 8, lengthM: 16, intro: true });
-    cursor = it.at + ((introPtr < stage.intro.length) ? 8 : 40);
+    if (it.tip) {
+      const winEnd = at + stage.speedAt(at) * CFG.TIP.AFTER_T;
+      events.push({ at: Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T), type: 'tip',
+                    params: { id: it.tip, untilM: at, targetAt: at, winEnd: winEnd,
+                              target: items.map((o) => o.uid) }, done: false });
+      noDemandUntil = Math.max(noDemandUntil, winEnd);
+      noteTipWindow(Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T), winEnd);
+    }
+    log.push({ id: 'intro:' + it.tip, startM: at - 8, lengthM: 16, intro: true });
+    cursor = at + ((introPtr < stage.intro.length) ? 8 : 40);
     return true;
   }
 
@@ -2690,13 +2888,66 @@ function createGenerator(stage, seed) {
          そこから §4.7 を満たすまで少しずつ後ろへずらす。 */
       /* 継ぎ目は「このチャンクを置いたときに密度の目安どおりになる長さ」。
          詰めすぎても §4.7 の反応窓で弾かれるので、下限は speed*0.2秒 で切る。 */
+      /* 新ギミックの初出は tip つきで置く（契約§4.8）。置けなければ別のチャンクを選ぶ
+         （tip なしで初出させない＝「説明なしの初見」を作らない）。
+         1本に未出のギミックが2つ以上あると、tip の窓が重なって規則を満たせないので後回し。 */
+      /* ゴールの先（大演出の後ろ）は走らないので tip は要らない */
+      const pend = (stage.tipOnce && !setpieceDone)
+        ? Object.keys(stage.tipOnce).filter((f) => def[f] && !tipDone[f]) : [];
+      if (pend.length) {
+        const r = (pend.length === 1) ? placeTipped(def, pend[0], nowDist, tail) : null;
+        if (!r) {
+          cands = cands.filter((d) => d !== def);
+          /* 候補が尽きたら「未出のギミックを持たない札」で埋める（空白を作らない） */
+          if (!cands.length) {
+            cands = candidates(cursor).filter((d) => !Object.keys(stage.tipOnce).some((f) => d[f] && !tipDone[f]));
+            if (!setpieceDone && isFinite(spStart)) {
+              const sc2 = stage.speedAt(cursor) / CFG.REF_SPEED;
+              const fit2 = cands.filter((d) => d.lengthM * sc2 <= spStart - cursor);
+              if (fit2.length) cands = fit2;
+            }
+          }
+          if (!cands.length) break;
+          continue;
+        }
+        const inst = r.inst;
+        commit(inst);
+        inst.items.forEach((o) => out.push(o));
+        noteItems(inst.items);
+        noteDemands(inst.items);
+        inst.events.forEach((e) => events.push(e));
+        tipDone[pend[0]] = true;
+        events.push({ at: Math.max(2, r.win.tipAt), type: 'tip',
+                      params: { id: stage.tipOnce[pend[0]], untilM: r.win.tLast, targetAt: r.win.tFirst,
+                                winEnd: r.win.end, target: r.win.uids }, done: false });
+        noDemandUntil = Math.max(noDemandUntil, r.win.end);
+        noteTipWindow(Math.max(2, r.win.tipAt), r.win.end);
+        if (forced && def[forced]) forcePtr++;
+        if (stage.coverFlags) stage.coverFlags.forEach((f) => { if (def[f]) covered[f] = true; });
+        log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM, tip: pend[0],
+                   tipAt: r.win.tipAt, winEnd: r.win.end, dropped: r.dropped,
+                   firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
+        cursor = Math.max(cursor, inst.startM + st.lastAt * scale);
+        lastWallhole = !!def.wallhole;
+        return true;
+      }
       const need = st.demands / Math.max(wantDensity(cursor), 0.5) * 100 - st.span * scale;
       const gap = U.clamp(need, stage.speedAt(cursor) * 0.18, seam);
       const wantFirst = (lastItemAt > -1e9) ? (lastItemAt + gap) : (cursor + st.firstAt * scale);
       for (let pad = 0; pad <= 40; pad += 3) {
-        const startM = Math.max(cursor - st.firstAt * scale, wantFirst + pad - st.firstAt * scale);
+        /* tip の窓（契約§4.8）が明けるまでは次のチャンクを始めない */
+        const startM = Math.max(cursor - st.firstAt * scale, wantFirst + pad - st.firstAt * scale,
+                                noDemandUntil + 0.5 - st.firstAt * scale);
+        /* 起点が cursor より後ろへずれた分で大演出にはみ出すなら、このチャンクはやめる
+           （tip の窓明けを待つと起点が後ろへずれる / P5c） */
+        if (!setpieceDone && isFinite(spStart) && startM + st.lastAt * scale > spStart) {
+          log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: spStart - cursor });
+          cursor = spStart;
+          return appendSetpiece(nowDist);
+        }
         const inst = instantiate(def, startM, nowDist);
-        const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
+        /* 大演出の頭との間隔も §4.7 で見る（起点が後ろへずれると大演出に詰まる / P5c） */
+        const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
                                    { startLanes: 'any', reactBoth: stage.reactBoth,
                                      currents: currents.concat(inst.local.currents),
                                      zeros: zeros.concat(inst.local.zeros),
@@ -2710,16 +2961,6 @@ function createGenerator(stage, seed) {
           noteItems(inst.items);
           noteDemands(inst.items);
           inst.events.forEach((e) => events.push(e));
-          /* 新ギミックの初出に短い指示（契約§4.8）。最初の障害物の 1.8秒手前に出す */
-          if (stage.tipOnce) {
-            Object.keys(stage.tipOnce).forEach((flag) => {
-              if (!def[flag] || tipDone[flag]) return;
-              tipDone[flag] = true;
-              const firstAt = inst.startM + st.firstAt * scale;
-              events.push({ at: Math.max(2, firstAt - stage.speedAt(firstAt) * 1.8),
-                            type: 'tip', params: { id: stage.tipOnce[flag] }, done: false });
-            });
-          }
           if (forced && def[forced]) forcePtr++;
           if (stage.coverFlags) stage.coverFlags.forEach((f) => { if (def[f]) covered[f] = true; });
           log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM,
