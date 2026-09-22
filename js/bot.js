@@ -176,6 +176,17 @@ const Bot = {
       Input.freeAim(a.x, a.y, 'bot');
       return;
     }
+    /* 合体区間（契約§4.5 / S8）: 動かす体は1つ（床を走っている方）だけ。
+       出す入力も人間と同じ経路＝ 移動は左手・ジャンプ/スライドは右手（§4.5 の割当）。 */
+    if (game.merged) {
+      const r = game.mergeLead();
+      const cmd = Bot.decideFor(game, r, delay);
+      if (cmd) {
+        const hand = (cmd.act === 'left' || cmd.act === 'right') ? 'left' : 'right';
+        Input.push(hand, cmd.act);
+      }
+      return;
+    }
     for (let i = 0; i < game.runners.length; i++) {
       const r = game.runners[i];
       const cmd = Bot.decideFor(game, r, delay);

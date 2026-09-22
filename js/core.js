@@ -18,6 +18,7 @@ const Game = {
   killer: null,          // {runner, obstacle}
   botMode: null,         // null | 'perfect' | 'delay250'
   handSwap: false,       // 入れ替えワープのフック（§4.5）
+  merged: false,         // 合体区間の中か（§4.5 / S8）。Merge（距離の関数）が唯一の出所
   flipT: 0,              // 重力反転の回転演出の残り（秒・見た目だけ / §4.5 S6）
   flipN: 0,              // この走行で面が入れ替わった回数（偶数＝既定の向き）
   runners: [],
@@ -26,6 +27,8 @@ const Game = {
   genPtr: 0,
   eventLog: [],
   goalT: 0,              // ゴール演出の経過（§4.8 ゴールゲート→ポーズ→リザルト）
+  allClearT: 0,          // 全クリア演出の経過（S8 クリア＝全8ステージ制覇 / §6 P5b）
+  ALLCLEAR_T: 2.2,       // 全クリア演出の長さ（秒）
   slowT: 0,              // 減速帯（§4.4 S3）の残り時間。速度が一時的に落ちる
   bestUpdated: false,    // 直近のリザルトでベスト更新したか
   stats: { frames: 0 },
@@ -86,6 +89,42 @@ const Game = {
   /* 面が既定（LUMEN=床 / UMBRA=天井）から入れ替わっているか */
   flipped() { return Game.runners[0].surface !== 'floor'; },
 
+  /* --- 合体区間（契約§4.5 / §4.4 S8 / P5b） --------------------------------
+     区間の中では2体が1体になる。**合体体＝床を走っている方**（lead）で、
+     もう1体（passenger）は毎フレーム lead の姿をそのまま写す。
+     判定・入力・ボットはすべて lead だけを見る（＝天井側の障害物に当たらない）。 */
+  mergeLead() { return Game.runners.filter((r) => r.surface === 'floor')[0] || Game.runners[0]; },
+  mergePassenger() { const l = Game.mergeLead(); return Game.runners.filter((r) => r !== l)[0] || null; },
+  /* 合体の度合い 0..1（見た目だけ。World が読む） */
+  mergeK(m) {
+    if (!Game.gen || !Game.gen.merges) return 0;
+    return Merge.kAt(Game.gen.merges, (m === undefined) ? Game.dist : m, Game.speed);
+  },
+  /* 入口で合体／出口で分離（Merge が跨ぎを検出して呼ぶ）。
+     出口では **合体体のレーン（＝最寄りレーン）** へ2体が戻る（契約§6 P5b）。 */
+  onMergeChange(on) {
+    const lead = Game.mergeLead(), other = Game.mergePassenger();
+    const lane = lead.laneTo;
+    Game.runners.forEach((r) => {
+      r.laneFrom = lane; r.laneTo = lane; r.laneVal = lane; r.laneT = CFG.LANE_T;
+      r.laneBuf = 0;
+    });
+    if (!on && other) { other.act = 'run'; other.actT = 0; }
+    if (typeof HUD !== 'undefined' && HUD.mergeCue) HUD.mergeCue(on);
+    return lane;
+  },
+  /* 合体中は passenger が lead の姿をそのまま写す（判定は lead だけ） */
+  syncMerged() {
+    if (!Game.merged) return false;
+    const lead = Game.mergeLead(), other = Game.mergePassenger();
+    if (!other) return false;
+    other.laneFrom = lead.laneFrom; other.laneTo = lead.laneTo;
+    other.laneVal = lead.laneVal; other.laneT = lead.laneT;
+    other.act = lead.act; other.actT = lead.actT; other.jumpT = lead.jumpT;
+    other.laneBuf = lead.laneBuf;
+    return true;
+  },
+
   /* --- 開始・再開 --------------------------------------------------------- */
   start(stageId, seed) {
     Game.stage = makeStage(stageId);
@@ -109,6 +148,7 @@ const Game = {
     if (!Game.stage) return;
     const from = (Game.stage.endless || fromStart) ? 0 : Game.lastCheckpoint;
     if (fromStart) Game.lastCheckpoint = 0;
+    if (typeof UI !== 'undefined' && UI.allClearHide) UI.allClearHide();
     Game.resetRun(from);
     Game.status = 'playing';
     UI.show('play');
@@ -122,9 +162,12 @@ const Game = {
     Game.killer = null;
     Game.flipT = 0;
     Game.flipN = 0;
+    Game.merged = false;
     Zero.cur = 1;
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
     if (typeof HUD !== 'undefined' && HUD.gravCue) HUD.gravCue(false);
+    if (typeof HUD !== 'undefined' && HUD.mergeCue) HUD.mergeCue(false);
+    if (typeof UI !== 'undefined' && UI.allClearHide) UI.allClearHide();
     UI.show('title');
   },
 
@@ -153,6 +196,9 @@ const Game = {
     /* 鏡ゾーン・入れ替えワープ（§4.5 / S7）も必ず既定へ戻す
        （左右の反転は Runners.reset が、担当の入れ替えはここが受け持つ）。 */
     Game.handSwap = false;
+    /* 合体区間（§4.5 / S8）も必ず既定（2体）へ戻す */
+    Game.merged = false;
+    if (typeof HUD !== 'undefined' && HUD.mergeCue) HUD.mergeCue(false);
     Game.speed = Game.stage.speedAt(fromM);
     /* 重力反転（§4.5 / S6）: 面は必ず既定（LUMEN=床 / UMBRA=天井）から始める */
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
@@ -173,9 +219,11 @@ const Game = {
     /* 鏡ゾーン・入れ替えワープも同じ（片道だけ通った状態を作らない / P5a） */
     Mirror.killBefore(Game.gen.mirrors, fromM + runway);
     Swap.killBefore(Game.gen.swaps, fromM + runway);
-    Game.active = Swap.dropOrphans(Mirror.dropOrphans(Warp.dropOrphans(Zero.dropOrphans(Current.dropOrphans(
+    /* 合体区間も同じ（入口を通り過ぎたのに1体のまま、を作らない / P5b） */
+    Merge.killBefore(Game.gen.merges, fromM + runway);
+    Game.active = Merge.dropOrphans(Swap.dropOrphans(Mirror.dropOrphans(Warp.dropOrphans(Zero.dropOrphans(Current.dropOrphans(
       Sync.dropOrphans(Game.gen.obstacles.filter((o) => o.at >= fromM + runway), fromM + runway),
-      fromM + runway), fromM + runway), fromM + runway), fromM + runway), fromM + runway);
+      fromM + runway), fromM + runway), fromM + runway), fromM + runway), fromM + runway), fromM + runway);
     Game.active.forEach((o) => { o.spawnDist = fromM; });
     Game.genPtr = Game.gen.obstacles.length;
     /* 再開位置より手前のイベントだけ「済み」にする。
@@ -198,7 +246,16 @@ const Game = {
       const u = U.clamp(Game.goalT / Game.GOAL_T, 0, 1);
       Game.dist += Game.speed * (1 - U.smooth(u)) * dt;
       Game.runners.forEach((r) => Runners.update(r, dt * (1 - u)));
-      if (Game.goalT >= Game.GOAL_T) Game.onClear();
+      if (Game.goalT >= Game.GOAL_T) Game.afterGoal();
+      return;
+    }
+
+    /* 全クリア演出（S8 ＝ 最終ステージ / 契約§6 P5b）: 2体が並んでポーズしたまま、
+       全ゾーンの色が流れる。終わったら通常のリザルトへ。 */
+    if (Game.status === 'allclear') {
+      Game.allClearT += dt;
+      Game.runners.forEach((r) => Runners.update(r, 0));
+      if (Game.allClearT >= Game.ALLCLEAR_T) Game.onClear();
       return;
     }
 
@@ -256,6 +313,10 @@ const Game = {
       Mirror.update(Game);
       /* 入れ替えワープ（§4.5 / S7）: 上下の担当を入れ替える */
       Swap.update(Game);
+      /* 合体区間（§4.5 / S8）: 跨いだゲートで合体／分離する。
+         判定（collide）より先に置く＝そのフレームから「1体ぶんの判定」になる。 */
+      Merge.update(Game);
+      Game.syncMerged();
       if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
       Game.fireEvents();
       Setpieces.update(Game, d);
@@ -283,6 +344,31 @@ const Game = {
        レーン移動もジャンプ／スライドも無く、操作は Input の自由飛行モードが受ける。
        ＝ ここへ流れてきた1動作ずつの入力は捨てる（人間もボットも同じ1か所）。 */
     if (Setpieces.duoLocked()) return;
+    /* 合体区間（契約§4.5 / S8）: 2体は1体（合体体）。**両手で1体を動かす**。
+       本作のタッチは「画面の上下＝担当」（§4.2）なので、契約の
+       「左手=移動・右手=ジャンプ/スライド」を上下へ読み替える:
+         下半分の横フリック → レーン移動（上下フリックは効かない）
+         上半分の上フリック → ジャンプ ／ 上半分の下フリック → スライディング
+       キーボード（開発・テスト用・ボット）は契約のまま
+         左手 A/D = 移動 ／ 右手 ↑ = ジャンプ・↓ = スライド。
+       入れ替えワープ（handSwap）はこの区間では効かない（担当が1体しかない）。 */
+    if (Game.merged) {
+      const r = Game.mergeLead();
+      for (let i = 0; i < q.length; i++) {
+        const it = q[i];
+        let act = null;
+        if (it.zone) {
+          if (it.zone === 'bottom') act = (it.dir === 'left' || it.dir === 'right') ? it.dir : null;
+          else act = (it.dir === 'up') ? 'jump' : (it.dir === 'down') ? 'slide' : null;
+        } else {
+          if (it.hand === 'left') act = (it.act === 'left' || it.act === 'right') ? it.act : null;
+          else act = (it.act === 'jump' || it.act === 'slide') ? it.act : null;
+        }
+        if (act) Runners.input(r, act);
+      }
+      Game.syncMerged();
+      return;
+    }
     for (let i = 0; i < q.length; i++) {
       const it = q[i];
       if (it.zone) {
@@ -323,11 +409,15 @@ const Game = {
       if (hit) Game.onHit(Game.runners[0], { type: 'AIR_' + hit.kind, lane: 0, at: hit.at });
       return;
     }
+    /* 合体区間（契約§4.5 / S8）: 判定は **床を走っている1体ぶん**だけ。
+       天井側には誰も居ないので、天井側の障害物には当たらない。 */
+    const lead = Game.merged ? Game.mergeLead() : null;
     for (let i = 0; i < Game.active.length; i++) {
       const o = Game.active[i];
       if (Math.abs(o.at - Game.dist) > 4) continue;
       for (let k = 0; k < Game.runners.length; k++) {
         const r = Game.runners[k];
+        if (lead && r !== lead) continue;
         if (!Obstacles.affects(o, r.surface)) continue;
         /* 当たり判定は Obstacles.hits だけを通す（動く／点滅する障害物も同じ道） */
         if (!Obstacles.hits(o, Runners.box(r), Game.dist)) continue;
@@ -381,8 +471,25 @@ const Game = {
     Game.goalT = 0;
     Tutorial.hide();
   },
+  /* ゴール演出のあと。最終ステージ（S8）なら **全クリア演出**を挟む（§6 P5b） */
+  afterGoal() {
+    if (Game.stage && Game.stage.id === 'S8') { Game.startAllClear(); return; }
+    Game.onClear();
+  },
+  /* 全クリア（8ステージすべて）: localStorage に印を残し、短い演出へ */
+  startAllClear() {
+    Game.status = 'allclear';
+    Game.allClearT = 0;
+    U.lsSet('allclear', true);
+    if (typeof UI !== 'undefined' && UI.allClearShow) UI.allClearShow();
+    return true;
+  },
+  allClearK() {
+    return (Game.status === 'allclear') ? U.clamp(Game.allClearT / Game.ALLCLEAR_T, 0, 1) : 0;
+  },
   onClear() {
     Game.status = 'clear';
+    if (typeof UI !== 'undefined' && UI.allClearHide) UI.allClearHide();
     Game.bestUpdated = Game.saveBest(true);
     const cd = document.getElementById('clear-dist');
     if (cd) cd.textContent = Math.floor(Game.stage.lengthM) + ' m 完走 ／ ' + Game.stage.name;
@@ -481,6 +588,12 @@ const Game = {
       /* 鏡ゾーン・入れ替えワープ（§4.5 / S7） */
       mirrors: Mirror.snapshot(Game),
       swaps: Swap.snapshot(Game),
+      /* 合体区間（§4.5 / S8）: 1体になっているか・合体の度合い・区間 */
+      merged: Game.merged,
+      mergeK: +Game.mergeK().toFixed(3),
+      merges: Merge.snapshot(Game),
+      mergeLead: Game.merged ? Game.mergeLead().id : null,
+      allClearK: +Game.allClearK().toFixed(3),
       /* 画面の上下が今どちらのキャラを担当しているか（§4.2 / 入れ替えワープ） */
       zoneOwner: { bottom: (Game.runnerForZone('bottom') || {}).id || null,
                    top: (Game.runnerForZone('top') || {}).id || null },

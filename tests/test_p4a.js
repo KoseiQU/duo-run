@@ -116,7 +116,7 @@
            FISH_TAIL       … 動く部品（bands から毎フレーム置く） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
                      /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
-                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
+                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                     WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
                      ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
                      LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],

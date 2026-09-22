@@ -81,6 +81,9 @@
              実体は MIRGATE×2 / SWAPGATE×2 で、規則は Mirror / Swap が持つ。 */
           if (e.type === 'MIRRORZ') { t.ok(typeof In.Mirror.expand === 'function', d.id + ': MIRRORZ は Mirror が展開する'); return; }
           if (e.type === 'HANDSWAP') { t.ok(typeof In.Swap.expand === 'function', d.id + ': HANDSWAP は Swap が展開する'); return; }
+          /* MERGE も同じ「譜面上の型」（P5b / 契約§4.5 合体区間）。
+             実体は MERGEGATE×2 で、規則は Merge が持つ。 */
+          if (e.type === 'MERGE') { t.ok(typeof In.Merge.expand === 'function', d.id + ': MERGE は Merge が展開する'); return; }
           t.ok(!!In.OBS[e.type], d.id + ': 未定義の障害物型を使っていない (' + e.type + ')');
           t.ok(e.type !== 'WALLSOLID', d.id + ': WALLSOLID はチャンクに直接書かない');
         });
@@ -173,7 +176,7 @@
            FISH_TAIL       … 動く部品（bands から毎フレーム置く / LASER_SCAN と同じ理由） */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
                      /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
-                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
+                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                     WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
                      ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
                      LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],

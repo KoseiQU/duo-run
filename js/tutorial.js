@@ -46,7 +46,11 @@ const Tutorial = {
                      '<b class="k">下半分</b>が<b class="k2">上のキャラ</b>を動かす'] },
     shardstep: { ph: ['<span class="finger">👆</span>鏡の床が砕けた', '<b>揺れる足場</b>へ跳べ'] },
     dualzone: { ph: ['<span class="finger">🌀</span>鏡と入れ替えが<b>同時</b>に効く',
-                     '担当も左右も入れ替わっている'] }
+                     '担当も左右も入れ替わっている'] },
+    /* S8 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
+    mergerun: { ph: ['<span class="finger">🤝</span>2人が<b>1体</b>になった',
+                     '<b class="k">下半分</b>で<b>横へ移動</b>',
+                     '<b class="k2">上半分</b>で<b>↑跳ぶ ↓潜る</b>'] }
   },
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },

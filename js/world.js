@@ -418,7 +418,18 @@ const World = {
       /* DUO体（契約§4.5 改訂）: 発射台で2人が寄って手を繋ぎ、1体として断面を飛ぶ。
          着地で元の面（床＝LUMEN / 天井＝UMBRA）へ戻る。0→1→0 で滑らかに入れ替える。 */
       const duoK = Setpieces.duoK(World._dist);
-      const dk = U.smooth(duoK);
+      /* 合体区間（契約§4.5 / S8）: 2体が **床の上で** 手を繋いで1体になって走る
+         （床と天井の中間ではない）。位置は「床を走っている方」から引くので、
+         見た目と判定（合体体＝床の1体）が必ず一致する。 */
+      const mk = (typeof Game !== 'undefined' && Game.mergeK) ? Game.mergeK(World._dist) : 0;
+      /* 全クリア演出（契約§6 P5b「2体が並んでポーズ」/ S8 クリア）: 天井側も床へ降りて
+         **横に並ぶ**。寄り方は合体区間と同じ仕組み（床を走っている方が基準）だが、
+         姿勢は手を繋ぐのではなく **ゴールの万歳ポーズ** のまま。 */
+      const ak = (typeof Game !== 'undefined' && Game.status === 'allclear' && Game.allClearK)
+        ? U.clamp(Game.allClearK() / 0.16, 0, 1) : 0;
+      const standK = Math.max(mk, ak);      // 床の上で横に並ぶ度合い
+      const pairK = Math.max(duoK, mk);     // 手を繋いだ DUO体の姿勢を取る度合い
+      const dk = U.smooth(Math.max(duoK, standK));
       const side = (r.id === 'lumen') ? -1 : 1;
       let px = x, py = footY, rz = (up === 1) ? 0 : Math.PI;
       /* 重力反転ワープ（契約§4.5 / S6「0.4秒の回転演出」）: 体ごと上下が入れ替わる。
@@ -436,6 +447,11 @@ const World = {
         px = U.lerp(x, FF.body.x + side * FF.PAIR_DX, dk);
         py = U.lerp(footY, FF.body.y + lift - 0.45, dk);     // 体の中心を断面の y に合わせる
         rz = U.lerp(rz, 0, dk);                              // 天井側は起き上がって向き合う
+      } else if (standK > 0.001 && typeof Game !== 'undefined' && Game.mergeLead) {
+        const lead = Game.mergeLead();
+        px = U.lerp(x, Runners.x(lead) + side * FF.PAIR_DX, dk);
+        py = U.lerp(footY, Runners.footOffset(lead) + lift, dk);
+        rz = U.lerp(rz, 0, dk);                              // 天井側は床へ降りて起き上がる
       }
       v.group.position.set(px, py, 0);
       v.group.rotation.set(0, 0, rz);
@@ -444,7 +460,7 @@ const World = {
 
       const sw = Math.sin(t * 15);
       const arms = v.parts.arms, legs = v.parts.legs;
-      if (duoK > 0.001) {
+      if (pairK > 0.001) {
         /* DUO体の姿勢: 内側の腕を水平に伸ばして手を繋ぎ、外側の腕は広げる */
         const fl = Math.sin(t * 2.2) * 0.06;
         const inner = (side < 0) ? 1 : 0;                    // 相手の側にある腕
@@ -459,7 +475,7 @@ const World = {
         });
         legs[0].rotation.x = U.lerp(sw * 0.62, -0.28 + fl, dk);
         legs[1].rotation.x = U.lerp(-sw * 0.62, -0.14 - fl, dk);
-      } else if (typeof Game !== 'undefined' && Game.status === 'goal') {
+      } else if (typeof Game !== 'undefined' && (Game.status === 'goal' || Game.status === 'allclear')) {
         /* ゴール演出: 両手を挙げてポーズ */
         const u = U.clamp(Game.goalT / 0.35, 0, 1);
         v.body.rotation.set(0, 0, 0);
@@ -576,7 +592,9 @@ const World = {
       const k = U.smooth(lb);
       /* カットごとに引く量が違う（近いカット2ほど前へ出て、岩の輪郭を画面に収める） */
       const cut = (fx.lookBackCut === undefined) ? 0 : fx.lookBackCut;
-      const back = Setpieces.ROCK.CUT_BACK[Math.max(0, cut)] || Setpieces.ROCK.CUT_BACK[0];
+      /* 演出ごとに「どれだけ前へ出るか」は違う（fx.lookBackDist が優先） */
+      const back = (fx.lookBackDist !== undefined) ? fx.lookBackDist
+                 : (Setpieces.ROCK.CUT_BACK[Math.max(0, cut)] || Setpieces.ROCK.CUT_BACK[0]);
       World.camera.position.set(avgX * 0.10 + sx, CFG.CAM.Y + 0.9 * k + sy + camUp, CFG.CAM.Z - back * k - push);
       World.camera.lookAt(sx * 0.5, CFG.CAM.LOOK_Y + 0.45 * k + sy * 0.5 + lookUp,
                           U.lerp(CFG.CAM.LOOK_Z, 26, k));

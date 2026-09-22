@@ -34,6 +34,8 @@
   /* S6（宇宙ステーション）の状態表示: 重力反転中 / 無重力区間（契約§4.5） */
   #flag-grav{color:#ffd45e; border-color:rgba(255,212,94,.85); box-shadow:0 0 12px rgba(255,200,60,.35);}
   #flag-zero{color:#8fe4ff; border-color:rgba(143,228,255,.85); box-shadow:0 0 12px rgba(120,210,255,.35);}
+  /* S8（コア）の状態表示: 合体区間（契約§4.5） */
+  #flag-merge{color:#ffb070; border-color:rgba(255,176,112,.9); box-shadow:0 0 14px rgba(255,140,60,.42);}
 
   .hands{position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
     display:flex; justify-content:space-between; padding:0 14px;}
@@ -136,6 +138,29 @@
   #tip .finger{font-size:17px; margin-right:4px; vertical-align:-2px;}
   @media (orientation:landscape){ #tip{max-width:min(64vw,520px); font-size:13px; padding:5px 13px;} }
 
+  /* ---------- 全クリア演出（S8 クリア = 全8ステージ制覇 / §6 P5b） ----------
+     2体が並んでポーズするのは World（3D）側。ここは文字と
+     「全ゾーンの色が流れる帯」を受け持つ。2.2秒で消える。 */
+  #allclear{position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:10px; pointer-events:none;
+    opacity:0; transition:opacity .25s;}
+  #allclear.on{opacity:1;}
+  #allclear .ac-main{font-size:clamp(30px,min(10vw,13vh),68px); font-weight:800; letter-spacing:.24em;
+    color:#fff2dc; text-shadow:0 0 22px rgba(255,190,110,.9),0 0 60px rgba(255,120,60,.5),0 2px 10px rgba(0,0,0,.7);}
+  #allclear.on .ac-main{animation:acPop .7s cubic-bezier(.2,1.5,.4,1) 1;}
+  @keyframes acPop{0%{transform:scale(.55); opacity:0;} 60%{transform:scale(1.06); opacity:1;} 100%{transform:scale(1);}}
+  #allclear .ac-sub{font-size:clamp(11px,2.2vw,15px); letter-spacing:.2em; color:#e8eeff; opacity:.9;}
+  /* 全ゾーンの色が流れる帯（ネオン→遺跡→深海→宇宙→鏡→コア） */
+  #allclear .ac-bar{width:min(78vw,540px); height:6px; border-radius:99px; overflow:hidden;
+    background:linear-gradient(90deg,#ff5ad0,#b99a6a,#2f9e92,#b4bcc8,#c07aff,#ff4a26,#ff5ad0);
+    background-size:200% 100%; box-shadow:0 0 20px rgba(255,150,80,.5);}
+  #allclear.on .ac-bar{animation:acFlow 2.2s linear 1;}
+  @keyframes acFlow{from{background-position:0% 0;} to{background-position:-200% 0;}}
+
+  /* 全クリアの印（ステージ選択） */
+  #stages-allclear{font-size:12px; letter-spacing:.18em; color:#ffd9a6;
+    text-shadow:0 0 16px rgba(255,170,80,.7);}
+
   /* ---------- ゾーン切替の暗転（§6 P3a 切替を繋ぐ簡易演出） ---------- */
   #zonefade{position:absolute; inset:0; background:#05070f; opacity:0; pointer-events:none;}
   #zonefade.on{animation:zoneFade .42s ease-out 1;}
@@ -185,6 +210,12 @@
 
   <div id="zonefade"></div>
 
+  <div id="allclear" data-ui="allclear">
+    <div class="ac-main">ALL CLEAR</div>
+    <div class="ac-bar"></div>
+    <div class="ac-sub">LUMEN &amp; UMBRA — 8 ZONES</div>
+  </div>
+
   <div id="touchzones" data-ui="touchzones">
     <div class="tz top" data-zone="top"></div>
     <div class="tz bottom" data-zone="bottom"></div>
@@ -202,6 +233,7 @@
       <span class="flag" id="flag-swap" style="display:none">SWAP</span>
       <span class="flag" id="flag-grav" style="display:none">GRAVITY</span>
       <span class="flag" id="flag-zero" style="display:none">ZERO-G</span>
+      <span class="flag" id="flag-merge" style="display:none">MERGE</span>
     </div>
     <div id="tip" data-ui="tip"></div>
     <div id="cue" data-ui="cue"><div id="cue-main">JUMP!</div><div id="cue-sub"></div></div>
@@ -243,6 +275,7 @@
 
   <div class="screen" id="screen-stages" data-ui="screen-stages">
     <div class="neon big">ステージ選択</div>
+    <div id="stages-allclear" style="display:none"></div>
     <div id="stage-grid" data-ui="stage-grid"></div>
     <div class="btns"><button class="ghost" data-ui="back-mode">戻る</button></div>
   </div>
@@ -315,6 +348,7 @@
 <script src="tests/test_p4a.js"></script>
 <script src="tests/test_p4b.js"></script>
 <script src="tests/test_p5a.js"></script>
+<script src="tests/test_p5b.js"></script>
 
 <script>
   (function boot(){

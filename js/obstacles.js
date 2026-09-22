@@ -178,6 +178,14 @@ const OBS = {
   SHARDGAP: { span: 3, depth: 5.20, y0: -1.60, y1: 0.04, both: false, safe: ['jump'],
               motion: 'shard', noPass: true, label: '割れた鏡の床' },
 
+  /* ------------------------------------------------------------------------
+     S8「コア」の新ギミック（契約§4.4 / §4.5 / P5b）
+     ------------------------------------------------------------------------ */
+  /* 合体区間のゲート: **当たり判定を持たない**（通るだけ）。
+     2体が中央で1体になる／出口で分離する規則は Merge が唯一の出所。 */
+  MERGEGATE: { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
+               ghost: true, harmless: true, gate: true, merge: true, label: '合体ゲート' },
+
   /* 減速帯（瓦礫の山）: 巨岩の追跡で使う**死なない**障害物。
      ジャンプで越えなければ速度が一時的に -20%（契約§4.4 S3 の大演出）。
      公平性（§4.7）の扱いは通常のジャンプ要求と同じ＝間隔も生存経路も守られる。 */
@@ -912,6 +920,104 @@ const Swap = {
     const list = (game.gen && game.gen.swaps) ? game.gen.swaps : [];
     return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
                .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1) }));
+  }
+};
+
+/* ============================================================================
+   Merge — 合体区間（契約§4.5「合体区間」/ §4.4 S8）の**時刻規則の唯一の出所**
+
+   ■ 形
+     専用ゲートが2枚で1組（入口 from ／ 出口 to）。区間の中では2体が中央で
+     **1体（合体体）**になり、床を走る。区間の長さは「秒」で書く。
+
+   ■ 操作（契約§4.5 を本作の上下タッチ規則（§4.2）で読んだ形）
+       下半分の横フリック  → レーン移動
+       上半分の上フリック  → ジャンプ ／ 上半分の下フリック → スライディング
+       キーボード（開発・テスト用）は契約のまま 左手 A/D＝移動・右手 ↑/↓
+     ＝ 読み手は Game.applyInput の1か所だけ（人間もキーもボットも同じ経路）。
+
+   ■ 判定
+     合体体は **床を走っている方**（重力反転中なら UMBRA）1体ぶん。
+     天井側の障害物には当たらない（誰も天井に居ないため）。
+     Fair は合体区間の中の **天井の要求を落とす**（＝譜面も同じ前提で書ける）。
+
+   ■ 規則（重力反転ワープ・入れ替えワープと同じ流儀で、距離＝時刻として書く）
+     ・合体／分離は **走行距離がゲートを跨いだ瞬間**に起きる（フレーム非依存）。
+     ・ゲートの直後 CFG.MERGE.GRACE_T 秒（1.0秒）は **両面とも**障害物を置かない。
+     ・出口では合体体のレーン（＝最寄りレーン）へ2体が戻る。
+   ============================================================================ */
+const Merge = {
+  /* 譜面の1エントリ（type:'MERGE'）を実体へ展開する。
+     params.mrg = { n: 区間の長さ（秒。省略時 CFG.MERGE.N_T） } */
+  expand(items, e, surface, at, nowDist, scale, sink) {
+    const p = (e.params && e.params.mrg) || {};
+    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
+    const n = (p.n === undefined) ? CFG.MERGE.N_T : p.n;
+    const to = at + n * unit;
+    const reg = { from: at, to: to, unit: unit, n: n, gates: [at, to], dead: false };
+    reg.gates.forEach((m, i) => {
+      const o = Obstacles.make('MERGEGATE', 'floor', e.lane || 0, m, nowDist,
+                               { mrg: { unitM: unit, exit: i === 1 } });
+      o.reg = reg;
+      items.push(o);
+    });
+    if (sink) sink.push(reg);
+    return reg;
+  },
+
+  /* その距離が合体区間の中か（＝1体になっているか）。判定・入力・ボットの窓口 */
+  activeAt(list, m) {
+    if (!list) return false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.dead && m > r.from && m <= r.to) return true;
+    }
+    return false;
+  },
+  /* 合体の度合い 0..1（見た目だけ）。入口の手前 JOIN_T 秒で 0→1、
+     出口のあと SPLIT_T 秒で 1→0。DUO体（大ジャンプ）の duoK と同じ形。 */
+  kAt(list, m, speed) {
+    if (!list) return 0;
+    const sp = Math.max(4, speed || CFG.REF_SPEED);
+    let k = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead) continue;
+      if (m > r.from && m <= r.to) return 1;
+      if (m <= r.from) k = Math.max(k, U.clamp(1 - (r.from - m) / (sp * CFG.MERGE.JOIN_T), 0, 1));
+      else k = Math.max(k, U.clamp(1 - (m - r.to) / (sp * CFG.MERGE.SPLIT_T), 0, 1));
+    }
+    return k;
+  },
+  crossed(list, a, b) { return Mirror.crossed(list, a, b, null); },
+  gateNear(list, atM, windowM) { return Mirror.gateNear(list, atM, windowM, null); },
+  /* 区間が a〜b に少しでも掛かるか（Fair が天井の要求を落とす判断に使う） */
+  overlaps(list, a, b) {
+    if (!list) return false;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (!r.dead && b > r.from && a < r.to) return true;
+    }
+    return false;
+  },
+
+  /* 毎フレーム1回（Game.step から）。prevDist → dist の間に跨いだゲートを実行する */
+  update(game) {
+    const list = (game.gen && game.gen.merges) ? game.gen.merges : null;
+    const was = game.merged;
+    game.merged = Merge.activeAt(list, game.dist);
+    if (game.merged === was) return 0;
+    game.onMergeChange(game.merged);
+    return 1;
+  },
+
+  dropOrphans(list, cutM) { return list.filter((o) => !(o.reg && o.reg.from < cutM)); },
+  killBefore(regs, cutM) { Mirror.killBefore(regs, cutM); },
+  snapshot(game) {
+    const list = (game.gen && game.gen.merges) ? game.gen.merges : [];
+    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 300)
+               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1),
+                              lenM: +(r.to - r.from).toFixed(1) }));
   }
 };
 

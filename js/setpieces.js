@@ -276,7 +276,91 @@ const Setpieces = {
         { at: 162, type: 'shatter.mirror' },
         { at: 200, type: 'shatter.end' }
       ]
+    },
+
+    /* ====================================================================
+       S8「全崩壊エスケープ」（契約§4.4 / P5b）
+       キーフレーム（演出開始からの相対 m。速度で伸縮しない実寸）:
+         0       予告（HUD「ALL COLLAPSE!」）＋ **崩落前線**が背後に現れ、
+                 走った端から床と天井が落ちていく
+         2〜45   **振り返りカット1**（カメラが背後を向き、迫る崩落の壁が画面を埋める。
+                 43m ＝ 42.6 m/s で 1.0秒）。この窓には障害物を置かない。
+                 カット明けからは **視認距離ぶん（1.4秒 = 60m）** 空ける
+         105〜178 **崩落の中を走る**: 落ちる天井（DROPCEIL）の連鎖と
+                 崩れる橋（BRIDGE）。床＝レーン移動／天井＝ジャンプで別々の要求
+         188     **床が丸ごと抜けて放り出される** → 合体（DUO体）→ 自由飛行
+         188〜258 破片を避けて飛ぶ（§4.5 の自由飛行をそのまま流用。1.6秒）
+         258     対岸の崩れかけた床へ**着地**（分離・2.0秒の猶予＝障害物なし）
+         264〜307 **振り返りカット2**（崩落はもう目の前。1.0秒）
+         312     **重力反転ワープ**（天地が返る）→ そのまま着地
+         314〜350 出口の光が差す（**カットの外**＝前を向いたまま光へ突っ込む）
+         350     ゴールへ
+       ■ 既知の妥協点: 契約§4.4 は「終盤200m」だが、S8 の速度（42〜44 m/s）では
+         200m ＝ 4.6秒しかなく、**カット1.0秒＋カット明けの視認距離1.4秒＋
+         自由飛行1.6秒＋着地猶予2.0秒**だけで使い切ってしまう。契約の全ビート
+         （崩落→大ジャンプ→崩落の中→反転→着地→出口）を、どの段階も
+         §4.7 を崩さずに収めるために **350m（約8.2秒）** にしてある。
+       ■ P5b 監査で直した点: 振り返りカット2 と「出口の光」が重なっていて、
+         **光へ向かう絵が一度も前から見えていなかった**（カメラが背後を向いたまま
+         ゴールしていた）。カット2を着地直後へ寄せ、光はカットの外に出した。
+       §4.7 は通常どおり（演出でも理不尽な死を作らない）。
+       ==================================================================== */
+    collapseall: {
+      id: 'collapseall',
+      lengthM: 350,
+      /* 間合い（実寸 m・速度 42.6〜44 で書く。§4.7 の下限に +6%の余裕）
+           ウォール間隔          0.45秒 → 20m
+           ジャンプ→ジャンプ    0.70秒 → 31m
+           ジャンプ→レーン移動  0.92秒 → 41m */
+      floor: [
+        /* 崩落の中を走る（落ちる天井の連鎖 → 崩れる橋） */
+        { at: 105, lane: 0,  type: 'DROPCEIL' },   // 床＝レーン移動／天井＝ジャンプ
+        { at: 137, lane: -1, type: 'DROPCEIL' },
+        { at: 169, lane: 1,  type: 'BRIDGE' },     // 踏んだら 0.4秒で落ちる
+        /* 着地したあと、天地が返る（契約§4.4「…→反転→着地」）。
+           ゲートは当たり判定を持たない（ghost）ので着地猶予には数えない。
+           戻りのゲートはゴールの先になる＝ この走行では1回だけ反転する。 */
+        { at: 312, lane: 0,  type: 'GRAVWARP', params: { warp: { backT: 2.0 } } }
+      ],
+      ceil: [
+        { at: 169, lane: 0,  type: 'ROVER' }
+      ],
+      air: true,                     // 自由飛行の区間を持つ演出（§4.5 を流用）
+      landRel: 258,                  // 着地（＝この後 GRACE_T 秒は障害物なし）
+      events: [
+        { at: 0,   type: 'fall.start' },
+        { at: 48,  type: 'fall.run' },
+        { at: 188, type: 'fall.launch' },
+        { at: 258, type: 'fall.land' },
+        { at: 312, type: 'fall.flip' },
+        { at: 350, type: 'fall.end' }
+      ]
     }
+  },
+
+  /* ---- 全崩壊エスケープのキーフレーム（距離 m。すべてここから引く） --------
+     大ジャンプ（BJ）・区画爆発（BL）と同じ形の表なので、自由飛行の仕組みを
+     そのまま流用できる。発射台の勾配は無い（床が抜けて落ちる）。 */
+  CA: {
+    RAMP0: 0, RAMP1: 0, LIP: 188, LAND: 258, END: 350,
+    RAMP_H: 0,            // 勾配なし（床が抜ける）
+    KICK: 0,
+    ARC: 2.6,             // 放り出された弧
+    ARC_PEAK: 0.30,
+    SETTLE: 10,           // 着地の沈み込みが収まるまでの距離
+    SETTLE_D: 0.72,
+    /* 振り返りカット（契約§8 の決定ログ「カメラを向けるカット」/ 巨岩と同じ方式）。
+       1.0秒 ＝ 42.4〜44 m/s で 43m。窓には障害物を置かない。 */
+    BACK: [[2, 45], [264, 307]],
+    CUT_BACK: 4.2,        // カット中にカメラを前へ出す量（崩落の壁を画面に収める）
+    /* 崩落前線（背後の壁）。2体の後ろ GAP0 → GAP1 まで詰めてくる（追いつきはしない） */
+    GAP0: 34, GAP1: 13, CLOSE_M: 250,
+    SWAY: 2.4,
+    WALL_W: 26, WALL_H: 22, WALL_D: 16,   // 崩落の壁（振り返りカットで映る塊）
+    DEB_N: 30,            // 舞う瓦礫の数
+    FLIP_AT: 312,         // 重力反転ワープ（相対 m）
+    EXIT0: 314,           // 出口の光が差し始める（相対 m。**振り返りカット2の外**）
+    SPIN: 2.2             // 放り出されて回る量（rad・見た目だけ）
   },
 
   /* ---- 鏡の砕け散りのキーフレーム（距離 m。すべてここから引く） ------------ */
@@ -396,6 +480,7 @@ const Setpieces = {
     if (!s) return null;
     if (s.id === 'bigjump') return Setpieces.BJ;
     if (s.id === 'blastout') return Setpieces.BL;
+    if (s.id === 'collapseall') return Setpieces.CA;
     return null;
   },
   airActive() { return !!Setpieces.keys(); },
@@ -477,6 +562,24 @@ const Setpieces = {
       if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('ALARM', '減圧警報の中を走り抜けろ');
     } else if (e.type === 'blast.end') {
       if (Setpieces.state) Setpieces.state.phase = 'done';
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'fall.start') {
+      Setpieces.state = { id: 'collapseall', startM: e.at, t: 0, phase: 'ramp', land: 0,
+                          front: e.at - Setpieces.CA.GAP0, gap: Setpieces.CA.GAP0,
+                          speed: (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN,
+                          course: null, split: -1 };
+      Setpieces.makeAir(e.at);
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('ALL COLLAPSE!', '世界が背後から崩れる', 'high');
+    } else if (e.type === 'fall.run') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('RUN!', '崩れる橋と落ちる天井を抜けろ');
+    } else if (e.type === 'fall.launch') {
+      if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
+    } else if (e.type === 'fall.land') {
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('ESCAPE', '出口の光へ');
+    } else if (e.type === 'fall.flip') {
+      /* 重力反転は Warp（距離の関数）が実行する。ここは合図だけ */
+    } else if (e.type === 'fall.end') {
+      if (Setpieces.state) { Setpieces.state.phase = 'done'; Setpieces.state.ending = true; }
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     } else if (e.type === 'shatter.start') {
       Setpieces.state = { id: 'shatter', startM: e.at, t: 0 };
@@ -674,6 +777,93 @@ const Setpieces = {
     const u = U.clamp((rel - B.LIP) / (B.LAND - B.LIP), 0, 1);
     /* 飛び出しで一気に回り、着地に向けて姿勢が戻る */
     return B.SPIN * Math.sin(Math.PI * u) * (1 - u * 0.25);
+  },
+
+  /* ---- 全崩壊エスケープ（距離の関数。フレームに依存しない / 契約§4.4 S8） -- */
+  fallActive() { const s = Setpieces.state; return !!(s && s.id === 'collapseall'); },
+  _frel(m) {
+    const s = Setpieces.state;
+    return (s && s.id === 'collapseall') ? (m - s.startM) : null;
+  },
+  /* 振り返りカットの強さ 0..1（0→1→0）。World.syncCamera がこれを読んで背後を向く。
+     巨岩の lookBack と同じ仕組み・同じ約束（契約§8 の決定ログ）。 */
+  fallBackK(m) {
+    const rel = Setpieces._frel(m);
+    if (rel === null) return 0;
+    let k = 0;
+    for (let i = 0; i < Setpieces.CA.BACK.length; i++) {
+      const w = Setpieces.CA.BACK[i];
+      if (rel > w[0] && rel < w[1]) k = Math.max(k, Math.sin(Math.PI * (rel - w[0]) / (w[1] - w[0])));
+    }
+    return k;
+  },
+  fallBackCut(m) {
+    const rel = Setpieces._frel(m);
+    if (rel === null) return -1;
+    for (let i = 0; i < Setpieces.CA.BACK.length; i++) {
+      const w = Setpieces.CA.BACK[i];
+      if (rel > w[0] && rel < w[1]) return i;
+    }
+    return -1;
+  },
+  /* 崩落前線との距離（m）。演出なので**絶対に追いつかない** */
+  fallGap() { const s = Setpieces.state; return (s && s.id === 'collapseall') ? s.gap : Infinity; },
+  /* 迫られている度合い 0..1（カメラ揺れ・明かり・霧に使う） */
+  fallProx(m) {
+    const s = Setpieces.state;
+    if (!s || s.id !== 'collapseall') return 0;
+    const C = Setpieces.CA;
+    return U.clamp(1 - (s.gap - C.GAP1) / (C.GAP0 - C.GAP1), 0, 1);
+  },
+  /* 崩落の壁の外接箱（世界座標）。カットの可視性の測定窓口 */
+  fallBox(m) {
+    const s = Setpieces.state, C = Setpieces.CA;
+    if (!s || s.id !== 'collapseall') return null;
+    const z = s.gap;
+    return { x0: -C.WALL_W / 2, x1: C.WALL_W / 2,
+             y0: CFG.H / 2 - C.WALL_H / 2, y1: CFG.H / 2 + C.WALL_H / 2,
+             z0: z - C.WALL_D / 2, z1: z + C.WALL_D / 2 };
+  },
+  /* 崩落の壁が画面をどれだけ覆っているか 0..1（描いていないときは 0） */
+  fallOnScreen(m) {
+    const f = Setpieces.fall;
+    if (!f || !f.wall.visible) return 0;
+    if (typeof World === 'undefined' || !World.ready) return 0;
+    const b = Setpieces.fallBox(m);
+    return b ? World.projectCoverage(b) : 0;
+  },
+  /* 大演出の間はゾーンの区間パターンを **開放区間** に固定する（ゾーンが読む）。
+     壁があると、背後の崩落と出口の光が隠れて画面に映らない。 */
+  fallOpenSection(m) {
+    const rel = Setpieces._frel(m);
+    return rel !== null && rel > -24 && rel < Setpieces.CA.END + 24;
+  },
+  /* 振り返りカットのあいだ、回廊の小物を間引く割合 0..1（ゾーンが読む） */
+  fallClearK(m) {
+    const k = Setpieces.fallBackK(m);
+    return 0.85 * U.smooth(U.clamp(k * 1.4, 0, 1));
+  },
+  /* 崩落前線の火が回廊を照らす強さ 0..1（ゾーンが読む） */
+  fallLightK(m) {
+    const rel = Setpieces._frel(m);
+    if (rel === null) return 0;
+    return U.clamp(0.35 + 0.65 * Setpieces.fallProx(m), 0, 1);
+  },
+  /* 出口の光 0..1（崩落を抜けて外へ / 契約§4.4「…→着地→出口の光へ」） */
+  fallExit(m) {
+    const rel = Setpieces._frel(m);
+    if (rel === null) return 0;
+    const C = Setpieces.CA;
+    return U.clamp((rel - C.EXIT0) / (C.END - C.EXIT0), 0, 1);
+  },
+  /* 放り出された DUO体の回転（見た目だけ・契約§4.4「回転しながら」） */
+  fallSpin(m) {
+    const s = Setpieces.state, C = Setpieces.CA;
+    if (!s || s.id !== 'collapseall') return 0;
+    const rel = m - s.startM;
+    if (rel < C.LIP) return 0;
+    const u = U.clamp((rel - C.LIP) / (C.LAND - C.LIP), 0, 1);
+    return C.SPIN * Math.sin(Math.PI * u) * (1 - u * 0.25);
   },
 
   /* ---- 鏡の砕け散り（距離の関数。フレームに依存しない / 契約§4.4 S7） ----- */
@@ -1003,6 +1193,15 @@ const Setpieces = {
         Setpieces.landing(game);                  // 着地で強制分離（契約§4.5）
       }
       if (s.phase === 'land') s.land = rel - B.LAND;
+      /* 全崩壊エスケープ（§4.4 S8）: 崩落前線は背後を追ってくる（追いつきはしない）。
+         位置は走行距離の関数＋ゆらぎで、**後退はさせない**（崩れた床は戻らない）。 */
+      if (s.id === 'collapseall') {
+        const C = Setpieces.CA;
+        const base = U.lerp(C.GAP0, C.GAP1, U.smooth(U.clamp(rel / C.CLOSE_M, 0, 1)))
+                   + C.SWAY * Math.sin(s.t * 1.15);
+        s.gap = Math.max(C.GAP1 * 0.8, base);
+        s.front = Math.max(s.front, game.dist - s.gap);
+      }
       return;
     }
     if (s.id === 'rockchase') {
@@ -1077,6 +1276,13 @@ const Setpieces = {
       if (ahead < -6 || ahead > 56) return 0;
       return (0.008 + 0.05 * side) * (1 - U.clamp(ahead / 56, 0, 1)) * Math.sin(s.t * 22 + atM * 1.8);
     }
+    if (s && s.id === 'collapseall') {
+      /* 全崩壊: 背後の崩落が近いほど前方の床と天井まで震える（落とさない） */
+      const p = Setpieces.fallProx(dist);
+      const ahead = atM - dist;
+      if (ahead < -6 || ahead > 54) return 0;
+      return (0.014 + 0.065 * p) * (1 - U.clamp(ahead / 54, 0, 1)) * Math.sin(s.t * 32 + atM * 2.1);
+    }
     if (s && s.id === 'shatter') {
       /* 鏡の砕け散り: 割れていく床と天井が震える（落とさない＝公平性に影響しない） */
       const k = Math.max(Setpieces.shatterCrackK(dist), Setpieces.shatterBreakK(dist) * 0.7);
@@ -1101,7 +1307,8 @@ const Setpieces = {
   /* 路面タイルの落下量 0..1（World.syncCorridor から。1 で消える） */
   tileFall(atM, surface, lane) {
     const s = Setpieces.state;
-    if (!s || s.id !== 'collapse') return 0;
+    /* 全崩壊エスケープ（§4.4 S8）も同じ仕組み＝崩落前線より後ろの路面が落ちる */
+    if (!s || (s.id !== 'collapse' && s.id !== 'collapseall')) return 0;
     if (atM >= s.front) return 0;
     /* タイルごとに少しずつ落ち始めをずらす（一斉に落ちると板っぽい） */
     const h = Math.abs(Math.sin(atM * 12.9898 + lane * 4.1414 + (surface === 'ceil' ? 2.7 : 0))) % 1;
@@ -1199,6 +1406,36 @@ const Setpieces = {
         rage: r, exit: q
       };
     }
+    if (s.id === 'collapseall') {
+      const C = Setpieces.CA, m = s.dist || s.startM, rel = m - s.startM;
+      const lift = Setpieces.viewLift(m);
+      const g = (s.phase === 'glide')
+        ? U.clamp((rel - C.LIP) / 14, 0, 1) * U.clamp((C.LAND - rel) / 10, 0, 1)
+        : 0;
+      const impact = (s.phase === 'land') ? Math.max(0, 1 - s.land / C.SETTLE) : 0;
+      const p = Setpieces.fallProx(m);
+      const back = Setpieces.fallBackK(m);
+      const ex = Setpieces.fallExit(m);
+      /* 崩落の熱で霧が赤く焦げ、出口に近づくと白い外光へ抜ける */
+      const col = new THREE.Color(0x44242e).lerp(new THREE.Color(0x6e1c10), U.clamp(p * 0.8, 0, 1))
+                                           .lerp(new THREE.Color(0xffd8b0), U.clamp(ex * 0.55, 0, 1));
+      return {
+        shake: 0.018 + 0.085 * p * (0.7 + 0.3 * Math.sin(s.t * 31))
+             + 0.18 * impact * (0.6 + 0.4 * Math.sin(s.t * 41)) + 0.012 * g,
+        fovAdd: 3 + 7 * g + 4 * impact + 5 * p + 6 * ex,
+        camBack: 1.4 * g,
+        camUp: lift + 0.50 * g + 0.30 * back,
+        lookUp: lift - 0.70 * g + 0.30 * ex,
+        fogFar: U.lerp(88, 200, Math.max(g, Math.max(back * 0.8, ex))),
+        fogColor: col.getHex(),
+        glide: g,
+        /* 振り返りカット（§4.4 S8）: World.syncCamera がこれを読んで背後を向く */
+        lookBack: back,
+        lookBackCut: Setpieces.fallBackCut(m),
+        lookBackDist: C.CUT_BACK,
+        prox: p, exit: ex
+      };
+    }
     if (s.id === 'shatter') {
       const m = s.dist || s.startM;
       const cr = Setpieces.shatterCrackK(m), br = Setpieces.shatterBreakK(m);
@@ -1283,6 +1520,155 @@ const Setpieces = {
     Setpieces._buildFish(scene);
     Setpieces._buildBlast(scene);
     Setpieces._buildShatter(scene);
+    Setpieces._buildFall(scene);
+  },
+
+  /* ---- 全崩壊エスケープ（S8）の造形 --------------------------------------
+     ・**崩落前線＝背後から迫る「世界の断面」**。振り返りカットのときだけ描く
+       （前向きのカメラより手前に来るので、ふだん描くと画面を塞ぐ／
+        契約§8 の決定ログ: 巨大演出はカメラを向けるカット方式）。
+     ・ふだんは「飛んでくる瓦礫・赤い照り返し・地響き・落ちていく路面」で迫りを見せる。
+     ・形: 砕けた岩の壁＋そこから噴き出す火＋千切れた構造材（他ゾーンの断片が混ざる）。 */
+  _buildFall(scene) {
+    const C = Setpieces.CA;
+    const g = new THREE.Group();
+    g.visible = false;
+    scene.add(g);
+
+    /* 崩落の壁（カットで正面に見える塊）。岩・火・千切れた梁の3材質 */
+    const wall = new THREE.Group();
+    g.add(wall);
+    const rock = [];
+    for (let i = 0; i < 90; i++) {
+      const h1 = ZoneKit.hash(i, 911), h2 = ZoneKit.hash(i, 919), h3 = ZoneKit.hash(i, 929);
+      const sx = 1.4 + h1 * 5.2, sy = 1.4 + h2 * 5.0, sz = 1.2 + h3 * 4.4;
+      rock.push({ g: ZoneKit.box(sx, sy, sz),
+                  p: [(h1 - 0.5) * C.WALL_W, (h2 - 0.5) * C.WALL_H, (h3 - 0.5) * C.WALL_D],
+                  r: [h1 * 3, h2 * 3, h3 * 3] });
+    }
+    wall.add(new THREE.Mesh(ZoneKit.merge(rock),
+                            new THREE.MeshLambertMaterial({ color: 0x3a2228, flatShading: true })));
+    /* 割れ目から噴き出す火（明部。輪郭が「燃えながら崩れている」と読める） */
+    const fire = [];
+    for (let i = 0; i < 26; i++) {
+      const h1 = ZoneKit.hash(i, 937), h2 = ZoneKit.hash(i, 941), h3 = ZoneKit.hash(i, 947);
+      fire.push({ g: ZoneKit.box(0.7 + h1 * 2.0, 0.7 + h2 * 2.2, 0.6 + h3 * 1.6),
+                  p: [(h1 - 0.5) * C.WALL_W * 0.92, (h2 - 0.5) * C.WALL_H * 0.92,
+                      (h3 - 0.5) * C.WALL_D * 0.5 - 1.5],
+                  r: [h2 * 3, h1 * 3, h3 * 3] });
+    }
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6a2a, fog: true });
+    wall.add(new THREE.Mesh(ZoneKit.merge(fire), fireMat));
+    Setpieces._fallFireMat = fireMat;
+    /* 千切れた構造材（他ゾーンの断片が巻き込まれている＝コアの世界観） */
+    const beams = [];
+    for (let i = 0; i < 20; i++) {
+      const h1 = ZoneKit.hash(i, 953), h2 = ZoneKit.hash(i, 967), h3 = ZoneKit.hash(i, 971);
+      beams.push({ g: ZoneKit.box(0.35 + h1 * 0.4, 0.35 + h2 * 0.4, 3 + h3 * 7),
+                   p: [(h1 - 0.5) * C.WALL_W, (h2 - 0.5) * C.WALL_H, (h3 - 0.5) * C.WALL_D - 2],
+                   r: [h3 * 3, h1 * 3, h2 * 3] });
+    }
+    wall.add(new THREE.Mesh(ZoneKit.merge(beams),
+                            new THREE.MeshLambertMaterial({ color: 0x9aa4b8, flatShading: true })));
+
+    /* 前へ飛んでくる瓦礫（ふだんはこれが「迫っている」を見せる） */
+    const deb = new THREE.InstancedMesh(new THREE.BoxGeometry(0.45, 0.45, 0.45),
+                                        new THREE.MeshLambertMaterial({ color: 0x6a4a44, flatShading: true }),
+                                        C.DEB_N);
+    deb.frustumCulled = false;
+    deb.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    g.add(deb);
+
+    /* 出口の光（前方の白い膜。崩落を抜けた先＝ゴール） */
+    const exit = new THREE.Mesh(new THREE.PlaneGeometry(CFG.HALF_W * 2 + 2.4, CFG.H + 2.4),
+                                new THREE.MeshBasicMaterial({ color: 0xffe6c0, transparent: true,
+                                                              opacity: 0, depthWrite: false, fog: false }));
+    exit.position.set(0, CFG.H / 2, 0);
+    exit.renderOrder = 5;
+    exit.visible = false;
+    scene.add(exit);
+
+    Setpieces.fall = { group: g, wall: wall, deb: deb, exit: exit,
+                       dummy: new THREE.Object3D(), n: C.DEB_N };
+  },
+
+  _hideFall() {
+    const f = Setpieces.fall;
+    if (!f) return;
+    if (f.group.visible) f.group.visible = false;
+    if (f.exit.visible) { f.exit.visible = false; f.exit.material.opacity = 0; }
+  },
+  /* 崩落前線・瓦礫・出口の光の更新（距離の関数。フレームに依存しない） */
+  _syncFall(dist, t) {
+    const s = Setpieces.state, f = Setpieces.fall, d = Setpieces.dust;
+    if (!f || !s) return;
+    const C = Setpieces.CA;
+    const p = Setpieces.fallProx(dist);
+    f.group.visible = true;
+    /* 壁を描くのは **振り返りカットの間だけ**（前向きのカメラには映らないため） */
+    f.wall.visible = (Setpieces.fallBackK(dist) > 0.02);
+    f.group.position.set(0, CFG.H / 2 - 0.3, s.gap);
+    f.wall.rotation.z = Math.sin(t * 0.7) * 0.04;
+    if (Setpieces._fallFireMat) {
+      Setpieces._fallFireMat.color.setHex(0xff6a2a).multiplyScalar(0.7 + 0.3 * Math.abs(Math.sin(t * 9.3)));
+    }
+    /* 前へ飛んでくる瓦礫（群の原点＝崩落前線から見た位置） */
+    const o = f.dummy;
+    /* 出口へ近づくほど瓦礫は減る（崩落を抜けた＝もう降ってこない）。
+       P5b 監査: 出口のカットで瓦礫が2体を完全に隠していたので、
+       **前へ出る量を 2m までに抑え、ex で細らせる**。 */
+    const ex = Setpieces.fallExit(dist);
+    const debK = 1 - 0.92 * U.smooth(U.clamp(ex * 1.25, 0, 1));
+    for (let i = 0; i < f.n; i++) {
+      const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+      const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+      const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+      const u = (h1 + t * 0.42 + i * 0.017) % 1;
+      o.position.set((h2 - 0.5) * 6.6, (h3 < 0.5 ? 0.4 : CFG.H - 0.4) + (h3 - 0.5) * 2.4,
+                     -C.WALL_D * 0.4 - u * (s.gap + 2));
+      o.rotation.set(t * (1.3 + h1) + i, t * 0.9 + i, t * (0.7 + h2));
+      /* 群の原点は 2体の**後ろ**（z = gap）なので、u が進むと瓦礫はカメラの前を
+         横切る。近いほど画面を塞ぐので、**通り過ぎる前に消す**
+         （P5b 監査: 出口のカットで2体が瓦礫に完全に隠れていた）。 */
+      o.scale.setScalar((0.4 + h3 * 1.0) * U.clamp((1 - u) * 1.8, 0, 1) * debK);
+      o.updateMatrix();
+      f.deb.setMatrixAt(i, o.matrix);
+    }
+    f.deb.instanceMatrix.needsUpdate = true;
+    /* 出口の光（崩落を抜けた先。ゴールの手前に立つ白い膜） */
+    f.exit.visible = ex > 0.01;
+    if (f.exit.visible) {
+      f.exit.material.opacity = 0.10 + 0.55 * ex;
+      /* **カメラに被せない**（P5b 監査: 膜が目の前に来て画面を塗り潰した）。
+         12m より手前へは来ない＝2体が光を背に走る絵になる。 */
+      f.exit.position.z = -Math.max(12, (s.startM + C.END) - dist);
+    }
+    /* 粉塵を赤黒く染めて使い回す */
+    if (d) {
+      d.mat.color.setHex(0xd07a4a);
+      d.mat.opacity = (0.16 + 0.24 * p) * debK;
+      const o2 = d.dummy;
+      for (let i = 0; i < d.count; i++) {
+        const h1 = Math.abs(Math.sin(i * 12.9898)) % 1;
+        const h2 = Math.abs(Math.sin(i * 78.233)) % 1;
+        const h3 = Math.abs(Math.sin(i * 39.425)) % 1;
+        const u = (h1 + (t * 0.3 + i * 0.013)) % 1;
+        const zM = s.gap - u * (s.gap + 34);
+        o2.position.set((h2 - 0.5) * 6.8, (h3 < 0.5 ? 0.3 : CFG.H - 0.3) + (h3 - 0.5) * 2.8, zM);
+        o2.rotation.set(t * (0.6 + h1) + i, t * 0.4 + i, t * (0.3 + h2));
+        o2.scale.setScalar((0.4 + h3 * 1.4) * (1 - u * 0.3));
+        o2.updateMatrix();
+        d.mesh.setMatrixAt(i, o2.matrix);
+      }
+      d.mesh.instanceMatrix.needsUpdate = true;
+    }
+    /* 崩落前線の明かり（後ろから赤く照らす） */
+    if (Setpieces.emberLight) {
+      Setpieces.emberLight.color.setHex(0xff6a34);
+      Setpieces.emberLight.intensity = (18 + 26 * p) * (0.85 + 0.15 * Math.sin(s.t * 8.7));
+      Setpieces.emberLight.distance = 48;
+      Setpieces.emberLight.position.set(0, CFG.H / 2, Math.max(4, s.gap - 6));
+    }
   },
 
   /* ---- 巨大魚（S5「巨大魚の通過」）の造形 --------------------------------
@@ -2317,6 +2703,13 @@ const Setpieces = {
       Zones.setGlide(fx && fx.glide ? fx.glide : 0);
       FF.syncView(dist, t, Setpieces.viewLift(dist), Setpieces.duoK(dist));
     }
+    if (s && s.id === 'collapseall') {
+      Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._hideFish();
+      Setpieces._hideBlast(); Setpieces._hideShatter();
+      Setpieces._syncFall(dist, t);
+      return;
+    }
+    Setpieces._hideFall();
     if (s && s.id === 'shatter') {
       Setpieces._hideRock(); Setpieces._hideTemple(); Setpieces._hideFish(); Setpieces._hideBlast();
       Setpieces._syncShatter(dist, t);
@@ -2459,6 +2852,7 @@ const Setpieces = {
     Setpieces._hideFish();
     Setpieces._hideBlast();
     Setpieces._hideShatter();
+    Setpieces._hideFall();
     if (Setpieces.dust) { Setpieces.dust.mat.opacity = 0; Setpieces.dust.mat.color.copy(Setpieces.dust.base); }
     if (Setpieces.emberLight) {
       Setpieces.emberLight.intensity = 0;

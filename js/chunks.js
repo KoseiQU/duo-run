@@ -1190,7 +1190,410 @@ const CHUNK_DEFS = [
             { at: 9.9, lane: 1, type: 'PILLAR' }, { at: 14.8, lane: -1, type: 'LASER_V' },
             { at: 19.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 24.6, lane: 1, type: 'PILLAR' }],
-    ceil: [], events: [] }
+    ceil: [], events: [] },
+
+  /* ==========================================================================
+     S8「コア」（契約§4.4 / §4.5 / P5b）＝ **全部混在**
+     ------------------------------------------------------------------------
+     新ギミック:
+       MERGE     合体区間。専用ゲート2枚で1組。区間の中では2体が中央で
+                 **1体（合体体）**になり、床を走る。
+                 操作（契約§4.5 を本作の上下タッチ規則（§4.2）で読んだ形）:
+                   下半分の横フリック → レーン移動
+                   上半分の上フリック → ジャンプ ／ 下フリック → スライディング
+                 判定は床の1体ぶん＝天井側の障害物には当たらない
+                 （Fair が合体区間の天井の要求を落とす）。
+                 params.mrg = { n: 区間の長さ（秒） }。ゲートの直後 1.0秒は
+                 **両面とも**ウォールを置けない。S8 では必ず2回出る（forceAt）。
+     顔ぶれ: S3〜S7 の全ギミックが同居する。1本のチャンクに **2つ以上**の
+     ギミックを重ねて入れ、短く（30〜54 基準m）刻む。速度 32〜44 では
+     チャンク1本が 110〜215 実mに伸びるので、短くしないと1回の走行で
+     顔ぶれが出そろわない。
+     ------------------------------------------------------------------------
+     ■ 間合いの決まり（基準速度＝1秒 = 10 基準m。§4.7 の下限に +9%の余裕）
+         ウォール間隔（レーン→なんでも）   0.45秒 → 4.9 基準m
+         ジャンプ → ジャンプ（同じ面）     0.70秒 → 7.7
+         ジャンプ → レーン移動（同じ面）   0.92秒 → 10.0
+         各種ゲート → 次のウォール         1.00秒 → 10.9
+     ========================================================================== */
+
+  /* --- 主役: 跳2・レーン3 の繰り返し（密度と §4.3 の比率を同時に作る） ------
+     ■ **札は短く刻む**（span 20〜30 基準m）。速度 32〜44 ではチャンク1本が
+       span × 3.2〜4.4 実mに伸びるので、長い札だと1回の走行に 5本しか入らず
+       「全部混在」が成立しない（P5b 実測）。 */
+  { id: 's8_mix_a', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.7, lane: -1, type: 'GAP' },
+            { at: 23.7, lane: 0, type: 'PILLAR' }, { at: 28.6, lane: 1, type: 'LASER_V' },
+            { at: 33.5, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_mix_b', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1, net: 1, moving: 1,
+    floor: [{ at: 6, lane: 1, type: 'LASER_LOW' }, { at: 13.7, lane: 0, type: 'ROVER' },
+            { at: 23.7, lane: -1, type: 'LASER_V' },
+            { at: 28.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 33.5, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 6, lane: -1, type: 'ROVER' }, { at: 13.7, lane: 1, type: 'GAP' }], events: [] },
+  { id: 's8_mix_c', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, moving: 1,
+    /* 点滅（消えている方を走り抜ける）＋ ワイド梁（空いた1レーンへ）。
+       天井の跳びは「床が both 型でない場所」に置き、次の天井要求まで 10.0 空ける。 */
+    floor: [{ at: 6, lane: 1, type: 'LASER_V', params: { blink: { onAtArrival: true } } },
+            { at: 10.9, lane: -1, type: 'WIDEBAR' }, { at: 20.9, lane: 0, type: 'PILLAR' },
+            { at: 25.8, lane: 1, type: 'LASER_V', params: { blink: { onAtArrival: false } } },
+            { at: 30.7, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 10.9, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 密度の工兵: both 型（柱・光柱）の縫い。1エントリで両面に要求が出る ---
+     4.9 基準m おき ＝ §4.7 の反応窓ちょうど。速度 37 で 約11回/100m。 */
+  { id: 's8_weave_a', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 9.9, lane: 1, type: 'LASER_V' },
+            { at: 14.8, lane: -1, type: 'PILLAR' }, { at: 19.7, lane: 0, type: 'LASER_V' },
+            { at: 24.6, lane: 1, type: 'PILLAR' }, { at: 29.5, lane: -1, type: 'LASER_V' },
+            { at: 34.4, lane: 0, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  { id: 's8_weave_b', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, net: 1, moving: 1,
+    floor: [{ at: 5, lane: 1, type: 'LASER_V' },
+            { at: 9.9, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 14.8, lane: 1, type: 'PILLAR' },
+            { at: 19.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0.5 } } },
+            { at: 24.6, lane: -1, type: 'LASER_V' },
+            { at: 29.5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 34.4, lane: 1, type: 'PILLAR' }],
+    ceil: [], events: [] },
+  /* --- 比率の工兵: 両面が 7.7 基準m おきに跳ぶ（§4.7 ジャンプ連続の下限） --- */
+  { id: 's8_leap_a', zone: 'core', lengthM: 42, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.7, lane: -1, type: 'GAP' },
+            { at: 21.4, lane: 1, type: 'LASER_LOW' }, { at: 29.1, lane: 0, type: 'ROVER' },
+            { at: 36.8, lane: -1, type: 'GAP' }],
+    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'LASER_LOW' },
+            { at: 21.4, lane: -1, type: 'GAP' }, { at: 29.1, lane: 1, type: 'ROVER' },
+            { at: 36.8, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_leap_b', zone: 'core', lengthM: 42, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1, net: 1,
+    floor: [{ at: 6, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
+            { at: 13.7, lane: 0, type: 'ROVER' }, { at: 21.4, lane: 1, type: 'GAP' },
+            { at: 29.1, lane: -1, type: 'ROVER' }, { at: 36.8, lane: 0, type: 'LASER_LOW' }],
+    ceil:  [{ at: 13.7, lane: 1, type: 'GAP' }, { at: 21.4, lane: -1, type: 'ROVER' },
+            { at: 29.1, lane: 0, type: 'LASER_LOW' }, { at: 36.8, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 崩れる橋＋振り子の刃（S3 の顔ぶれ / 契約§4.4） ---------------------- */
+  { id: 's8_bridge', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    bridge: 1, pend: 1, moving: 1,
+    floor: [{ at: 6, lane: 0, type: 'BRIDGE' }, { at: 13.7, lane: -1, type: 'GAP' },
+            { at: 23.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 28.6, lane: 1, type: 'PILLAR' }, { at: 33.5, lane: -1, type: 'LASER_V' },
+            { at: 38.4, lane: 0, type: 'PILLAR' }, { at: 43.3, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_bridge_b', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    bridge: 1, lift: 1, leap: 1,
+    floor: [{ at: 6, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 13.7, lane: 0, type: 'BRIDGE' }, { at: 21.4, lane: -1, type: 'GAP' },
+            { at: 31.4, lane: 1, type: 'PILLAR' }, { at: 36.3, lane: -1, type: 'LASER_V' },
+            { at: 41.2, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 6, lane: -1, type: 'ROVER' }, { at: 13.7, lane: 1, type: 'GAP' },
+            { at: 21.4, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's8_pend', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    pend: 1, moving: 1, door: 1,
+    floor: [{ at: 6, lane: 1, type: 'DOOR' },
+            { at: 12.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
+            { at: 17.8, lane: -1, type: 'PILLAR' },
+            { at: 22.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 27.6, lane: 1, type: 'LASER_V' }, { at: 37.6, lane: -1, type: 'PILLAR' },
+            { at: 42.5, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 27.6, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* --- 同時スイッチ＋落ちる天井／無重力（S4・S6 の顔ぶれ） ----------------- */
+  { id: 's8_sync', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, sync: 1, drop: 1,
+    floor: [{ at: 6, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
+            { at: 25, lane: 0, type: 'DROPCEIL' }, { at: 34.9, lane: 1, type: 'PILLAR' },
+            { at: 39.8, lane: -1, type: 'LASER_V' }, { at: 44.7, lane: 0, type: 'PILLAR' }],
+    ceil:  [], events: [] },
+  { id: 's8_sync_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, sync: 1, zero: 1,
+    floor: [{ at: 3, lane: 0, type: 'ZEROG', params: { zero: { n: 3.4 } } },
+            { at: 7, lane: 0, type: 'SYNCSW', params: { sync: { cl: 0, safe: 0, csafe: 0 } } },
+            { at: 26, lane: 1, type: 'ROVER' }, { at: 38.4, lane: -1, type: 'PILLAR' },
+            { at: 43.3, lane: 0, type: 'LASER_V' }, { at: 48.2, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 26, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* --- 落ちる天井の連鎖（床＝レーン移動／天井＝ジャンプ） ------------------- */
+  { id: 's8_drop', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, drop: 1,
+    floor: [{ at: 6, lane: 0, type: 'DROPCEIL' }, { at: 14, lane: 1, type: 'DROPCEIL' },
+            { at: 22, lane: -1, type: 'DROPCEIL' }, { at: 32.1, lane: 0, type: 'PILLAR' },
+            { at: 37, lane: 1, type: 'LASER_V' }, { at: 41.9, lane: -1, type: 'PILLAR' }],
+    ceil:  [], events: [] },
+  { id: 's8_drop_door', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, drop: 1, door: 1,
+    floor: [{ at: 6, lane: 1, type: 'DOOR' }, { at: 10.9, lane: 0, type: 'PILLAR' },
+            { at: 20.9, lane: -1, type: 'DROPCEIL' }, { at: 30.9, lane: 1, type: 'LASER_V' },
+            { at: 35.8, lane: 0, type: 'PILLAR' }, { at: 40.7, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 10.9, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* --- 海流ベルト＋浮上足場／色の扉（S5 の顔ぶれ） ------------------------- */
+  { id: 's8_cur', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, cur: 1, lift: 1,
+    /* 押し出しは 9・19・29 基準m。ウォールはその 5.0 あとに置く（§4.7 の 0.45秒） */
+    floor: [{ at: 4, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
+            { at: 14, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 24, lane: 1, type: 'PILLAR' }, { at: 34, lane: -1, type: 'LASER_V' },
+            { at: 38.9, lane: 0, type: 'PILLAR' }, { at: 43.8, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's8_cur_door', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, cur: 1, door: 1,
+    floor: [{ at: 4, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: 1, n: 3 } } },
+            { at: 14, lane: 1, type: 'DOOR' }, { at: 24, lane: 0, type: 'PILLAR' },
+            { at: 34, lane: -1, type: 'LASER_V' }, { at: 44, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 44, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's8_lift', zone: 'core', lengthM: 36, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, lift: 1, pend: 1, moving: 1,
+    floor: [{ at: 6, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 13.7, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 23.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
+            { at: 28.6, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'GAP' }], events: [] },
+
+  /* --- 重力反転ワープ／無重力（S6 の顔ぶれ） -------------------------------
+     ゲートの前後 1.0秒（10.9 基準m）はウォールを置けないので、区間は短く取る。 */
+  { id: 's8_warp', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, warp: 1, net: 1,
+    floor: [{ at: 4, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.0 } } },
+            { at: 15.2, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 20.1, lane: 1, type: 'PILLAR' },
+            { at: 35, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 39.9, lane: -1, type: 'PILLAR' }, { at: 44.8, lane: 0, type: 'LASER_V' },
+            { at: 49.7, lane: 1, type: 'PILLAR' }],
+    ceil:  [], events: [] },
+  { id: 's8_warp_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, warp: 1, drop: 1,
+    floor: [{ at: 4, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.0 } } },
+            { at: 15.2, lane: 1, type: 'PILLAR' }, { at: 20.1, lane: -1, type: 'LASER_V' },
+            { at: 35, lane: 0, type: 'DROPCEIL' }, { at: 45, lane: 1, type: 'PILLAR' },
+            { at: 49.9, lane: -1, type: 'LASER_V' }],
+    ceil:  [], events: [] },
+  { id: 's8_zero', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, zero: 1, leap: 1, net: 1,
+    /* 無重力の中は滞空が 1.5倍＝「跳→跳」9.8／「跳→横」12.2 基準m が要る */
+    floor: [{ at: 3, lane: 0, type: 'ZEROG', params: { zero: { n: 3.6 } } },
+            { at: 6, lane: 0, type: 'ROVER' }, { at: 18.5, lane: -1, type: 'GAP' },
+            { at: 31, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 35.9, lane: 1, type: 'PILLAR' }, { at: 40.8, lane: -1, type: 'LASER_V' },
+            { at: 45.7, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 18.5, lane: 0, type: 'LASER_LOW' }], events: [] },
+
+  /* --- レーザーネット（契約§4.5「S8 は密度アップ」＝1区画に 5〜6本） ------ */
+  { id: 's8_net_a', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, net: 1, moving: 1,
+    /* 区画（ゲート＋26基準m）の中に **5本**（斜め2・横ビーム2・縦光柱1） */
+    floor: [{ at: 3, lane: 0, type: 'NETGATE' },
+            { at: 8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 12.9, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_MID, y1: CFG.NET.Y_MID2, phase: 0 } } },
+            { at: 12.9, lane: 1, type: 'PILLAR' },
+            { at: 17.8, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 22.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 27.6, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } }],
+    ceil:  [{ at: 27.6, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's8_net_b', zone: 'core', lengthM: 44, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, net: 1, moving: 1, pend: 1,
+    /* 区画の中に **6本**（斜め3・横ビーム1・縦光柱2）＝ 契約§4.5 の上限 */
+    floor: [{ at: 3, lane: 0, type: 'NETGATE' },
+            { at: 8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 12.9, lane: 1, type: 'LASER_V' },
+            { at: 17.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: 1 } } },
+            { at: 22.7, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_MID2, y1: CFG.NET.Y_MID, phase: 0 } } },
+            { at: 22.7, lane: 1, type: 'PILLAR' },
+            { at: 27.6, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
+            { at: 32.5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: 0 } } },
+            { at: 37.4, lane: -1, type: 'LASER_V' }],
+    ceil:  [], events: [] },
+
+  /* --- 鏡ゾーン／入れ替えワープ（S7 の顔ぶれ） ----------------------------- */
+  { id: 's8_mir', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, mir: 1, bridge: 1,
+    floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 2.2 } } },
+            { at: 15.2, lane: 0, type: 'BRIDGE' }, { at: 22.9, lane: 1, type: 'GAP' },
+            { at: 37.9, lane: -1, type: 'PILLAR' }, { at: 42.8, lane: 0, type: 'LASER_V' },
+            { at: 47.7, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 15.2, lane: -1, type: 'ROVER' }, { at: 22.9, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_mir_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, mir: 1, net: 1,
+    floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 2.2 } } },
+            { at: 15.2, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 20.1, lane: -1, type: 'PILLAR' },
+            { at: 25, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 37.9, lane: 1, type: 'PILLAR' }, { at: 42.8, lane: -1, type: 'LASER_V' },
+            { at: 47.7, lane: 0, type: 'PILLAR' }],
+    ceil:  [], events: [] },
+  { id: 's8_swap', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, swap: 1, lift: 1,
+    floor: [{ at: 4, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.2 } } },
+            { at: 15.2, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 22.9, lane: 1, type: 'GAP' }, { at: 37.9, lane: 0, type: 'PILLAR' },
+            { at: 42.8, lane: -1, type: 'LASER_V' }, { at: 47.7, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 15.2, lane: -1, type: 'ROVER' }, { at: 22.9, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_swap_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
+    swap: 1, pend: 1, moving: 1,
+    /* 入れ替えの出口ゲートは at 26。その直後 10.9 はウォールを置けない */
+    floor: [{ at: 4, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.2 } } },
+            { at: 15.2, lane: 1, type: 'PILLAR' },
+            { at: 20.1, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
+            { at: 25, lane: -1, type: 'LASER_V' },
+            { at: 37.9, lane: 0, type: 'PILLAR' }, { at: 42.8, lane: 1, type: 'LASER_V' },
+            { at: 47.7, lane: -1, type: 'PILLAR' }],
+    ceil:  [], events: [] },
+
+  /* ==========================================================================
+     「全部混在」の網羅札（契約§4.4 S8）— **1本で3〜4ギミック**
+     ------------------------------------------------------------------------
+     速度 32〜44 では 1本のチャンクが基準mの 3.2〜4.4倍に伸びる。合体区間が
+     必ず2回（1回あたり 52基準m ≒ 220実m）入るので、**ランダム区間に置ける札は
+     3〜4本しかない**。12種のギミックをその中で顔出しさせるため、
+     顔ぶれを4組に割って「組ごとに1本」で覆う:
+       fam_net   レーザーネット ＋ 色の扉 ＋ 浮上足場 ＋ 落ちる天井
+       fam_cur   海流ベルト ＋ 振り子の刃 ＋ 同時スイッチ
+       fam_zero  無重力 ＋ 鏡ゾーン ＋ 崩れる橋
+       fam_warp  重力反転ワープ ＋ 入れ替えワープ ＋ 落ちる天井
+     どの3組を出すかは **シードで回す**（STAGE_DEFS.S8.forcePlan）。
+     ------------------------------------------------------------------------
+     ■ 間合いの決まり（基準速度＝1秒 = 10 基準m。§4.7 の下限に +7%の余裕）
+         ウォール間隔（レーン→なんでも）   0.45秒 → 4.9 基準m
+         ジャンプ → ジャンプ（同じ面）     0.70秒 → 7.7
+         ジャンプ → レーン移動（同じ面）   0.92秒 → 10.0
+         無重力の中（滞空1.5倍）           跳→跳 10.5 ／ 跳→横 13.2
+         各種ゲート → 次のウォール         1.00秒 → 10.9
+     ■ 密度の工兵は DROPCEIL（落ちる天井）: 1エントリで **床＝レーン移動 /
+       天井＝ジャンプ** の2要求が出る。7.7 おきに並べれば密度も §4.3 の比率も稼げる。
+     ========================================================================== */
+
+  /* --- ネット＋扉＋浮上足場＋落ちる天井（ゲート無し＝いちばん濃い 7.1回/100m） */
+  { id: 's8_cov_net_a', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    net: 1, door: 1, lift: 1, drop: 1, moving: 1, cover: 1, fam_net: 1,
+    floor: [{ at: 1, lane: 0, type: 'NETGATE' },
+            { at: 3, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 7.9, lane: 1, type: 'LASER_V' },
+            { at: 12.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 17.7, lane: 1, type: 'DOOR' },
+            { at: 22.6, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 32.6, lane: -1, type: 'DROPCEIL' }, { at: 40.3, lane: 1, type: 'DROPCEIL' }],
+    ceil:  [{ at: 17.7, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's8_cov_net_b', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    net: 1, door: 1, lift: 1, drop: 1, moving: 1, cover: 1, fam_net: 1,
+    floor: [{ at: 1, lane: 0, type: 'NETGATE' },
+            { at: 3, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_MID, y1: CFG.NET.Y_MID2, phase: 0 } } },
+            { at: 3, lane: 1, type: 'PILLAR' },
+            { at: 7.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 12.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: 0 } } },
+            { at: 17.7, lane: -1, type: 'DOOR' },
+            { at: 22.6, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 32.6, lane: 0, type: 'DROPCEIL' }, { at: 40.3, lane: -1, type: 'DROPCEIL' }],
+    ceil:  [{ at: 17.7, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 海流ベルト＋振り子の刃＋同時スイッチ（4.8回/100m・跳び4割） ---------
+     押し出しは 9・19・29 基準m。ウォールはその 1.0 あと（押し出しの直前
+     0.45秒には置けない＝ Fair が弾く）。**流されながら跳ぶ**のがこの札の主題。
+     同時スイッチのパッド(35)と橋(48)の間にも 1枚だけ置ける（6 ／ 7 基準m）。 */
+  { id: 's8_cov_cur_a', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    cur: 1, pend: 1, sync: 1, moving: 1, leap: 1, cover: 1, fam_cur: 1,
+    floor: [{ at: 0, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
+            { at: 10, lane: 0, type: 'ROVER' }, { at: 20, lane: -1, type: 'GAP' },
+            { at: 30, lane: 1, type: 'PILLAR' },
+            { at: 35, lane: 0, type: 'SYNCSW', params: { sync: { cl: 0, safe: 0, csafe: 0 } } },
+            { at: 41, lane: -1, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } }],
+    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 20, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_cov_cur_b', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    cur: 1, pend: 1, sync: 1, moving: 1, leap: 1, cover: 1, fam_cur: 1,
+    floor: [{ at: 0, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: 1, n: 3 } } },
+            { at: 10, lane: 1, type: 'GAP' }, { at: 20, lane: 0, type: 'ROVER' },
+            { at: 30, lane: -1, type: 'PILLAR' },
+            { at: 35, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
+            { at: 41, lane: 1, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } }],
+    ceil:  [{ at: 10, lane: -1, type: 'LASER_LOW' }, { at: 20, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 無重力＋鏡ゾーン＋崩れる橋（跳ぶ要求が 8割＝§4.3 の比率を作る札） ---
+     無重力の中は滞空 1.5倍。§4.7 の下限は 跳→跳 9.8／跳→横 12.0 基準m だが、
+     **チャンクの中でも速度は上がり続ける**ので下限ちょうどでは弾かれる
+     （P5b 実測: 37.81m < 38.00m でこの札が一度も選ばれなかった）。10.5／13.2 を使う。 */
+  { id: 's8_cov_zero_a', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    zero: 1, mir: 1, bridge: 1, leap: 1, cover: 1, fam_zero: 1,
+    floor: [{ at: 0, lane: 0, type: 'ZEROG', params: { zero: { n: 2.0 } } },
+            { at: 3, lane: 0, type: 'ROVER' }, { at: 13.5, lane: -1, type: 'GAP' },
+            { at: 26.7, lane: 1, type: 'PILLAR' },
+            { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 2.0 } } },
+            { at: 41, lane: 0, type: 'BRIDGE' }, { at: 48.7, lane: 1, type: 'GAP' }],
+    ceil:  [{ at: 3, lane: 1, type: 'ROVER' }, { at: 13.5, lane: 0, type: 'LASER_LOW' },
+            { at: 41, lane: -1, type: 'ROVER' }, { at: 48.7, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_cov_zero_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    zero: 1, mir: 1, bridge: 1, leap: 1, cover: 1, fam_zero: 1,
+    floor: [{ at: 0, lane: 0, type: 'ZEROG', params: { zero: { n: 2.0 } } },
+            { at: 3, lane: 1, type: 'LASER_LOW' }, { at: 13.5, lane: 0, type: 'ROVER' },
+            { at: 26.7, lane: -1, type: 'PILLAR' },
+            { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 2.0 } } },
+            { at: 41, lane: 1, type: 'BRIDGE' }, { at: 48.7, lane: 0, type: 'GAP' }],
+    ceil:  [{ at: 3, lane: -1, type: 'GAP' }, { at: 13.5, lane: 1, type: 'ROVER' },
+            { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 48.7, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* --- 入れ替えワープ＋重力反転ワープ＋落ちる天井（ゲート2組＝いちばん薄い）
+     ゲートの直後 1.0秒（10.9 基準m）は両面ともウォールを置けないので、
+     **区間の中に詰めて置く**（区間の長さ backT を 2.6 に取って2枚ぶん稼ぐ）。 */
+  { id: 's8_cov_warp_a', zone: 'core', lengthM: 56, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
+    swap: 1, warp: 1, drop: 1, cover: 1, fam_warp: 1,
+    floor: [{ at: 0, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.6 } } },
+            { at: 11.2, lane: -1, type: 'DROPCEIL' }, { at: 18.9, lane: 1, type: 'DROPCEIL' },
+            { at: 27, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.6 } } },
+            { at: 38.2, lane: 0, type: 'PILLAR' }, { at: 43.1, lane: -1, type: 'LASER_V' },
+            { at: 48, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 48, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's8_cov_warp_b', zone: 'core', lengthM: 56, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
+    swap: 1, warp: 1, drop: 1, cover: 1, fam_warp: 1,
+    floor: [{ at: 0, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.6 } } },
+            { at: 11.2, lane: 1, type: 'DROPCEIL' }, { at: 18.9, lane: -1, type: 'DROPCEIL' },
+            { at: 27, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.6 } } },
+            { at: 38.2, lane: 1, type: 'PILLAR' }, { at: 43.1, lane: 0, type: 'LASER_V' },
+            { at: 48, lane: -1, type: 'GAP' }],
+    ceil:  [{ at: 48, lane: 1, type: 'ROVER' }], events: [] },
+
+  /* --- 合体区間（契約§4.4 S8「合体区間」/ §4.5）: S8 で必ず2回 ------------
+     区間は 3.2秒 ＝ 速度 32〜44 で 102〜141m（契約「100〜150m」）。
+     区間の中は **床だけ**（天井には誰も居ない）＝ 要求は1体ぶんしか置けず、
+     どうしても薄くなる（**既知の妥協点**）。ゲートの直後 1.0秒（10.9 基準m）は
+     両面ともウォールを置けないので、入口と出口でさらに 21.8 が空く。
+     そのぶん **区間の中は詰められるだけ詰め、出口の猶予明けに濃い尾を付ける**。 */
+  { id: 's8_merge_a', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
+    merge: 1, leap: 1, drop: 1,
+    floor: [{ at: 0, lane: 0, type: 'PILLAR' },
+            { at: 4, lane: 0, type: 'MERGE', params: { mrg: { n: 3.2 } } },
+            /* --- ここから合体体（1体）: 跳ぶ→跳ぶ→横へ --- */
+            { at: 15, lane: 0, type: 'ROVER' }, { at: 22.7, lane: -1, type: 'GAP' },
+            { at: 32.7, lane: 1, type: 'PILLAR' },
+            /* --- 出口ゲートは at 36。猶予（10.9）の明けから2体ぶんの尾 --- */
+            { at: 47, lane: 0, type: 'PILLAR' }, { at: 51.9, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 51.9, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's8_merge_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
+    merge: 1, net: 1, moving: 1, drop: 1,
+    floor: [{ at: 0, lane: 0, type: 'LASER_V' },
+            { at: 4, lane: 0, type: 'MERGE', params: { mrg: { n: 3.2 } } },
+            { at: 15, lane: 1, type: 'PILLAR' },
+            { at: 19.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
+            { at: 24.8, lane: -1, type: 'LASER_V' }, { at: 29.7, lane: 1, type: 'PILLAR' },
+            { at: 47, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
+            { at: 51.9, lane: 1, type: 'GAP' }],
+    ceil:  [{ at: 51.9, lane: 0, type: 'LASER_LOW' }], events: [] },
+  /* --- 壁の穴・つなぎ ------------------------------------------------------ */
+  { id: 's8_wallhole', zone: 'core', lengthM: 34, difficulty: 5, minSpeed: 0, s8: 1, wallhole: 1, dense: 1,
+    floor: [{ at: 8, lane: 1, type: 'WALLHOLE' }, { at: 18, lane: 0, type: 'PILLAR' },
+            { at: 22.9, lane: -1, type: 'LASER_V' }, { at: 27.8, lane: 1, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's8_fill_a', zone: 'core', lengthM: 24, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1,
+    floor: [{ at: 4, lane: 0, type: 'PILLAR' }, { at: 8.9, lane: 1, type: 'LASER_V' },
+            { at: 13.8, lane: -1, type: 'PILLAR' }, { at: 18.7, lane: 0, type: 'LASER_V' }],
+    ceil: [], events: [] },
+  { id: 's8_fill_b', zone: 'core', lengthM: 26, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, net: 1,
+    floor: [{ at: 4, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: 1 } } },
+            { at: 8.9, lane: 1, type: 'PILLAR' }, { at: 13.8, lane: -1, type: 'LASER_V' },
+            { at: 18.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } }],
+    ceil: [], events: [] },
+  /* --- 落ちる天井の縫い（密度と §4.3 の比率を同時に作る主力の短い札） ------
+     1エントリで 床＝レーン移動／天井＝ジャンプ。7.7 基準m おき（跳→跳の下限）に
+     並べると 7.7 あたり2要求＝速度40で 約6.5回/100m・ジャンプ 50%。 */
+  { id: 's8_fill_c', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, drop: 1,
+    floor: [{ at: 4, lane: 0, type: 'PILLAR' }, { at: 8.9, lane: 1, type: 'LASER_V' },
+            { at: 13.8, lane: -1, type: 'PILLAR' },
+            { at: 18.7, lane: 0, type: 'DROPCEIL' }, { at: 26.4, lane: 1, type: 'DROPCEIL' }],
+    ceil: [], events: [] },
+  { id: 's8_fill_d', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, drop: 1, net: 1,
+    floor: [{ at: 4, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
+            { at: 8.9, lane: -1, type: 'PILLAR' }, { at: 13.8, lane: 1, type: 'LASER_V' },
+            { at: 18.7, lane: -1, type: 'DROPCEIL' }, { at: 26.4, lane: 0, type: 'DROPCEIL' }],
+    ceil: [], events: [] },
+  /* --- 両面が跳ぶ短い札（ジャンプ比率の工兵） ------------------------------ */
+  { id: 's8_fill_e', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, leap: 1,
+    floor: [{ at: 4, lane: 0, type: 'ROVER' }, { at: 11.7, lane: -1, type: 'GAP' },
+            { at: 19.4, lane: 1, type: 'LASER_LOW' }, { at: 27.1, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 4, lane: 1, type: 'ROVER' }, { at: 11.7, lane: 0, type: 'LASER_LOW' },
+            { at: 19.4, lane: -1, type: 'GAP' }, { at: 27.1, lane: 1, type: 'ROVER' }], events: [] }
 ];
 
 /* ---------------------------------------------------------------- 導入区間（S1）
@@ -1217,7 +1620,7 @@ const STAGE_DEFS = {
   S0: {
     id: 'S0', name: '仮ステージ S0', zone: 'neon', lengthM: 900,
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
-    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id)
   },
   /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
      冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
@@ -1229,7 +1632,7 @@ const STAGE_DEFS = {
     /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
        「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
        ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id)
       .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
       .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b'])
   },
@@ -1415,12 +1818,83 @@ const STAGE_DEFS = {
       .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s7 && c.wallhole).map((c) => c.id))
   },
+  /* S8 コア（契約 §4.4）: 1500m / 32→44 / チェックポイント 500・1000 /
+     **全部混在**（S3〜S7 の全ギミック）＋ 新ギミック＝合体区間（必ず2回）。
+     終盤は大演出「全崩壊エスケープ」。ランク4〜5。
+     ■ 密度: 契約§4.7 の目安は 10→14回/100m だが、32〜44 m/s では
+       「ウォール間隔 0.45秒」の下限から **理論上限が 2/(44×0.45)×100 ＝ 10.1回/100m**
+       （全部レーン移動・両面同時要求）で、§4.3 の比率（ジャンプ 35%前後）と
+       両立する実質上限は決定ログどおり **約10回/100m**。速度が S7 より上がるぶん
+       さらに薄くなるので、ステージの目安は 8→9 に置く（既知の妥協点）。
+     ■ 顔ぶれ: 1回の走行に入るチャンクは 7本前後しかない（速度で 130〜260実mに伸びる）。
+       そのうち2本は合体区間（契約どおり必ず2回・exclusive ＋ forcePlan）に取られるので、
+       残り4〜5本で12種を顔出しさせる必要がある。**1本で3〜4ギミックを持つ
+       「網羅札」（cov_*）を4本で12種ちょうどを覆う**形にし、coverFlags の重みで
+       互いを選び合わせる。 */
+  S8: {
+    id: 'S8', name: 'S8 コア', zone: 'core', lengthM: 1500,
+    /* S8 の新チャンクはすべて rank5。minRank 4 にすると前半に S8 の札が
+       1枚も候補に入らない（maxRankAt が前半で 4 に留まる）ので 5 で固定する。 */
+    speedFrom: 32, speedTo: 44, minRank: 5, maxRank: 5, setpiece: 'collapseall',
+    /* density ＝ **生成器の狙い**（継ぎ目をどこまで詰めるか）。§4.7 の下限まで
+       詰めさせたいので高いまま置く。ただし S8 は契約が要求する構造そのもの
+       （合体区間2回＝1体ぶんの要求しか置けない／12種のギミックのうち5種が
+       ゲート・区間型で直後 1.0秒の猶予が要る）のせいで、この狙いには届かない。
+       機械テストは実測できる帯 densityReal で判定する（**既知の妥協点**）。 */
+    density: [8, 9],
+    densityReal: [5, 5],
+    reactBoth: CFG.FAIR.REACT_BOTH_LATE,
+    ratioPull: 10,
+    mix: { lane: 0.55, jump: 0.42, slide: 0.03 },
+    tipBoost: true,
+    tipMul: 9,
+    tipOnce: { merge: 'mergerun' },
+    /* 合体区間は「強制されたときだけ」候補に入る＝回数がぶれない（必ず2回） */
+    exclusive: ['merge'],
+    /* 走行の骨格（契約§4.4 S8）: **網羅札 → 合体 → 網羅札 → 合体 → 網羅札**。
+       ・合体区間は必ず2回（契約§4.4）。
+       ・ランダム区間に置ける札は 3〜4本しかないので、12種のギミックは
+         4組の網羅札（fam_*）で覆い、**どの3組を出すかをシードで回す**
+         （= どの組も 3/4 = 75% のシードで顔を出す）。
+       ・at は「そこまで来たら次は必ずこの顔ぶれ」の敷居。前の札が終わった
+         時点の cursor より小さく取ってあるので、順に消化されていく。 */
+    forcePlan(rng) {
+      /* 4組を**シードで混ぜて**先頭3組を使う。mulberry32 の**出だしは偏る**
+         （seed 1〜50 の1発目を4分割すると 11/9/22/8）ので、4回空引きして暖める。 */
+      const f = ['fam_net', 'fam_cur', 'fam_zero', 'fam_warp'];
+      if (rng) { rng(); rng(); rng(); rng(); }
+      for (let i = f.length - 1; i > 0; i--) {
+        const j = Math.floor((rng ? rng() : 0) * (i + 1));
+        const t = f[i]; f[i] = f[j]; f[j] = t;
+      }
+      return [{ at: 90, flag: f[0] }, { at: 150, flag: 'merge' },
+              { at: 400, flag: f[1] }, { at: 500, flag: 'merge' },
+              { at: 800, flag: f[2] }];
+    },
+    /* 「全部混在」（契約§4.4 S8）: まだ出していないギミックを持つ札を強く引く。
+       網羅札（cov_*）は1本で3〜4種を持つので、この重みで4本が互いを選び合う。
+       合体は forcePlan が受け持つのでここには入れない。 */
+    coverFlags: ['bridge', 'pend', 'sync', 'drop', 'cur', 'lift', 'door',
+                 'warp', 'zero', 'net', 'mir', 'swap'],
+    coverMul: 6,
+    /* 顔ぶれ: S8 の新チャンク（網羅札＋短い工兵札）＋
+       先行ステージの rank4〜5 のチャンク（ゾーン依存のスキンはコアの混在スキンが
+       障害物ごとに寄り親を選ぶので、そのまま混ぜられる / 契約§5）。
+       **長い先行チャンクは入れない**（1本で 250実m を超えると網羅の枠を潰す）。 */
+    chunkPool: CHUNK_DEFS.filter((c) => c.s8).map((c) => c.id)
+      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.cover).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.fill).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_mix') === 0).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_weave') === 0).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_leap') === 0).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => !c.s8 && c.difficulty >= 4 && !c.fill && !c.dual && c.lengthM <= 58).map((c) => c.id))
+  },
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
     /* 最初から入っているのは S1 の顔ぶれ（基本セット）だけ。
        遺跡の新ギミックは S3 をクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id)
   }
 };
 
@@ -1428,12 +1902,15 @@ const STAGE_DEFS = {
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
   S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
-  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id),
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id),
   S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id),       // 崩れる橋・振り子の刃
   S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id),       // 同時スイッチ・落ちる天井
   S5: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),       // 海流ベルト・浮上足場・色の扉
   S6: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id),       // 重力反転・無重力・レーザーネット
-  S7: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id)        // 鏡ゾーン・入れ替えワープ
+  S7: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id),       // 鏡ゾーン・入れ替えワープ
+  /* S8 の顔ぶれ（全部混在）。合体区間は S8 専用の演出なのでエンドレスには持ち込まない
+     （区間の途中で 1000m ごとのゾーン切替に当たると「1体のまま景色が変わる」ため）。 */
+  S8: CHUNK_DEFS.filter((c) => c.s8 && !c.merge).map((c) => c.id)
 };
 function endlessPool(cleared) {
   let pool = STAGE_DEFS.endless.chunkPool.slice();
@@ -1499,7 +1976,7 @@ const Fair = {
   /* ウォールに束ねる（**要求のないウォールも残した全部**）。
      「跳躍帯を塞ぐだけの帯」（レーザーネットの横ビームが中央に来た場合など）は
      demand が付かないので walls() から落ちる。それを検査するためにここを分けている。 */
-  wallsAll(list, speedAt) {
+  wallsAll(list, speedAt, opt) {
     /* **当たり判定を持たない実体（ghost）はウォールに数えない**。
        海流の帯・色の扉（同色）・ワープのゲート・無重力の粒子・ネットの枠は
        通り抜けるだけなので、これが混ざるとウォールの位置（at / atEnd）が
@@ -1513,9 +1990,16 @@ const Fair = {
       if (w && (o.at - w.at) <= sp * CFG.FAIR.SIMUL) { w.items.push(o); w.atEnd = o.at; }
       else out.push({ at: o.at, atEnd: o.at, items: [o] });
     }
+    /* 合体区間（契約§4.5 / S8）: 2体は1体になって **床だけ**を走る。
+       天井側には誰も居ないので、その区間の天井の要求は最初から存在しない。
+       ＝ 譜面・ボット・不変条件・動作比率がすべて同じ前提で会話する。 */
+    const merges = (opt && opt.merges && opt.merges.length) ? opt.merges : null;
     out.forEach((w) => {
+      const inMerge = merges ? Merge.activeAt(merges, w.at) : false;
+      w.inMerge = inMerge;
       w.demand = {};
       Fair.SIDES.forEach((s) => {
+        if (inMerge && s === 'ceil') { w.demand[s] = null; return; }
         /* 要求する動作は Obstacles.demand（＝到達時の占有 occ）から引く。
            点滅 OFF で通れる障害物はここで 'none' になり、要求に数えられない。 */
         const kinds = w.items.map((o) => Obstacles.demand(o, s)).filter((k) => k !== 'none');
@@ -1531,8 +2015,8 @@ const Fair = {
   },
   /* どちらの面にも何も要求しないウォール（点滅OFFで通れるレーザーだけ 等）は
      「壁」ではないので数えない＝反応窓や動作比率を汚さない */
-  walls(list, speedAt) {
-    return Fair.wallsAll(list, speedAt).filter((w) => w.demand.floor || w.demand.ceil);
+  walls(list, speedAt, opt) {
+    return Fair.wallsAll(list, speedAt, opt).filter((w) => w.demand.floor || w.demand.ceil);
   },
 
   /* そのウォール・その面で、各レーンに残る安全な動作（到達時の占有から） */
@@ -1560,7 +2044,7 @@ const Fair = {
   validate(list, speedAt, opt) {
     opt = opt || {};
     const errs = [];
-    const all = Fair.wallsAll(list, speedAt);
+    const all = Fair.wallsAll(list, speedAt, opt);
     const walls = all.filter((w) => w.demand.floor || w.demand.ceil);
 
     /* **跳躍帯を塞ぐだけの帯を作らない**（契約§4.5 レーザーネットの「中央」/ P4b）。
@@ -1569,6 +2053,7 @@ const Fair = {
        走れて かつ 跳べるレーンが1つも無いウォールを違反とする。 */
     all.forEach((w) => {
       Fair.SIDES.forEach((side) => {
+        if (w.inMerge && side === 'ceil') return;         // 合体区間の天井には誰も居ない
         if (w.demand[side]) return;                       // 何かを要求するウォールは対象外
         const acts = Fair.laneActs(w, side);
         if (!CFG.LANES.some((l) => acts[l].run)) return;   // 走れない＝別の違反で拾われる
@@ -1671,6 +2156,19 @@ const Fair = {
       });
     }
 
+    /* 合体区間（契約§4.5 / S8）: **入口・出口のゲートの直後 1.0秒は障害物を置かない**。
+       1体になる／2体に戻る瞬間は、手の割当ごと切り替わるので立て直す時間が要る。
+       入れ替えワープと同じく **両面**に効く。 */
+    if (opt.merges && opt.merges.length) {
+      walls.forEach((w) => {
+        const sp = speedAt(w.at);
+        if (Merge.gateNear(opt.merges, w.at, sp * CFG.MERGE.GRACE_T)) {
+          errs.push('合体ゲートの直後にウォール @' + w.at.toFixed(1) +
+                    '（' + CFG.MERGE.GRACE_T + '秒の猶予が要る）');
+        }
+      });
+    }
+
     /* 生存経路（各ウォールで生存レーンが1つ以上＋前ウォールから到達可能） */
     Fair.SIDES.forEach((side) => {
       let reach = opt.startLanes === 'any' ? CFG.LANES.slice() : (opt.startLanes || [0]).slice();
@@ -1686,6 +2184,8 @@ const Fair = {
            どのレーンへも動ける）。判断がやり直しになる区切りで到達可能性を戻す。 */
         if (opt.mirrors && Mirror.crossed(opt.mirrors, prevAt, w.at, side)) reach = CFG.LANES.slice();
         if (opt.swaps && Swap.crossed(opt.swaps, prevAt, w.at)) reach = CFG.LANES.slice();
+        /* 合体／分離でも同じ（直後 1.0秒は障害物なしなのでどのレーンへも動ける） */
+        if (opt.merges && Merge.crossed(opt.merges, prevAt, w.at)) reach = CFG.LANES.slice();
         /* 前のウォールを「通り抜けきる」までは横に動けない（動くと真横の障害物に刺さる）。
            その通過距離を引いた残りで何レーンぶん動けるかを数える。 */
         const passM = Fair.maxDepth() + Math.max(CFG.BODY_D, CFG.SLIDE_D);
@@ -1712,9 +2212,9 @@ const Fair = {
   },
 
   /* 必須動作の集計（契約§4.3 の動作比率。ウォール×面ごとに1動作と数える） */
-  countDemands(list, speedAt) {
+  countDemands(list, speedAt, opt) {
     const res = { lane: 0, jump: 0, slide: 0, total: 0 };
-    Fair.walls(list, speedAt).forEach((w) => {
+    Fair.walls(list, speedAt, opt).forEach((w) => {
       Fair.SIDES.forEach((s) => {
         const k = w.demand[s];
         if (!k) return;
@@ -1779,6 +2279,9 @@ const Fair = {
     const errs = [];
     const until = landM + speedAt(landM) * FF.GRACE_T;
     list.forEach((o) => {
+      /* **当たり判定を持たない実体（ghost）は障害物ではない**（ゲート・帯・粒子）。
+         wallsAll がウォールに数えないのと同じ扱い（2026-09-22 P4b の決定）。 */
+      if (OBS[o.type].ghost) return;
       if (o.at >= landM && o.at < until - 1e-6) {
         errs.push('着地猶予の中に障害物: ' + o.type + ' @' + o.at.toFixed(1) +
                   '（' + landM.toFixed(1) + '〜' + until.toFixed(1) + 'm は空ける）');
@@ -1882,6 +2385,8 @@ function expandEntry(items, e, surface, at, nowDist, scale, sink) {
   if (e.type === 'MIRRORZ') { Mirror.expand(items, e, surface, at, nowDist, scale, sink && sink.mirrors); return; }
   /* 入れ替えワープ（契約§4.5 / S7）: 紫の枠2枚。上下の担当が入れ替わる */
   if (e.type === 'HANDSWAP') { Swap.expand(items, e, surface, at, nowDist, scale, sink && sink.swaps); return; }
+  /* 合体区間（契約§4.5 / S8）: 専用ゲート2枚。区間の中は2体が1体になって床を走る */
+  if (e.type === 'MERGE') { Merge.expand(items, e, surface, at, nowDist, scale, sink && sink.merges); return; }
   if (e.type === 'DROPCEIL') {
     /* 落ちる天井の時刻規則（予告→落下→着地）は「その地点の1秒ぶんの距離」で持つ */
     const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
@@ -1913,7 +2418,18 @@ function createGenerator(stage, seed) {
   let lastWallhole = false;     // 直前のチャンクが「壁の穴」を含んでいたか（連続禁止）
   let introPtr = 0;             // 導入区間の何番目まで置いたか
   const tipDone = {};           // 新ギミックの初出 tip を出したか（契約§4.8）
+  /* 「この走行でまだ出していないギミック」を覚えておく（契約§4.4 S8「全部混在」）。
+     1回の走行に入るチャンクは 7本前後しかないので、重みで貪欲に網羅させないと
+     顔ぶれが偏る。tipBoost と同じ仕組みで、こちらは**毎回**効く。 */
+  const covered = {};
   let setpieceDone = false;     // 終盤の大演出を置いたか
+  /* 「決まった回数・決まった場所に必ず出す」顔ぶれ（契約§4.4 S8「合体区間は2回」）。
+     stage.forceAt = [{at, flag}] の順に、cursor がその距離を越えたら
+     そのフラグを持つチャンクだけを候補にする。置けたら次へ進む。
+     stage.exclusive に挙げたフラグは、**強制されたときしか**候補に入らない
+     ＝ 回数がぶれない（何度も出たり一度も出なかったりしない）。 */
+  let forcePtr = 0;
+  const forcePlan = (typeof stage.forcePlan === 'function') ? stage.forcePlan(rng) : (stage.forceAt || null);
   const spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
     ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
   const out = [];               // 生成済み障害物（at 昇順）
@@ -1923,8 +2439,9 @@ function createGenerator(stage, seed) {
   const warps = [];             // 重力反転ワープの組（Warp が面の入れ替えを判定する / P4b）
   const mirrors = [];           // 鏡ゾーンの組（Mirror が左右反転を判定する / P5a）
   const swaps = [];             // 入れ替えワープの組（Swap が担当の入れ替えを判定する / P5a）
+  const merges = [];            // 合体区間（Merge が合体／分離を判定する / P5b）
   const sink = { syncs: syncs, currents: currents, zeros: zeros, warps: warps,
-                 mirrors: mirrors, swaps: swaps };
+                 mirrors: mirrors, swaps: swaps, merges: merges };
   const events = [];            // チャンクの events（P2以降のフック）
   const log = [];               // {id, startM, lengthM}
   let seedMix = null;           // 大演出が持ち込む必須動作の内訳（比率の是正に使う）
@@ -1954,6 +2471,10 @@ function createGenerator(stage, seed) {
     const sp = stage.speedAt(m);
     const pool = stage.chunkPool.map((id) => CHUNK_BY_ID[id]).filter(Boolean);
     let c = pool.filter((d) => d.difficulty <= rank && sp >= (d.minSpeed || 0));
+    /* 回数を決めてある顔ぶれ（合体区間）は、強制のときしか出さない */
+    if (stage.exclusive && stage.exclusive.length) {
+      c = c.filter((d) => !stage.exclusive.some((f) => d[f]));
+    }
     /* 壁の穴（唯一のスライディング要素）は連続させない（契約§4.3） */
     if (lastWallhole) {
       const c2 = c.filter((d) => !d.wallhole);
@@ -1972,8 +2493,9 @@ function createGenerator(stage, seed) {
     if (sp0) { seedMix = Fair.countDemands(sp0.items, stage.speedAt);
                got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total; }
   }
-  function noteDemands(items) {
-    const c = Fair.countDemands(items, stage.speedAt);
+  function noteDemands(items, local) {
+    const c = Fair.countDemands(items, stage.speedAt,
+                                { merges: merges.concat((local && local.merges) || []) });
     got.lane += c.lane; got.jump += c.jump; got.slide += c.slide; got.total += c.total;
     placed.total += c.total;
   }
@@ -1993,8 +2515,11 @@ function createGenerator(stage, seed) {
   function pick(cands, m) {
     /* 実測が目安に届いていなければ、その差ぶんだけ目安を上げて選ぶ（簡単な制御）。
        チャンクは速度で伸びるので、同じ顔ぶれでも後半ほど薄くなる。それを押し返す。 */
-    const covered = Math.max(lastItemAt - CFG.LEAD_IN, 60);
-    const real = placed.total / covered * 100;
+    /* ※ この局所変数は「これまでに走った距離」。**外側の covered（顔ぶれの既出表）を
+       隠さない名前にする**（P5b: 隠していたため coverFlags が一度も既出にならず、
+       同じ網羅札ばかり引かれていた）。 */
+    const spanSoFar = Math.max(lastItemAt - CFG.LEAD_IN, 60);
+    const real = placed.total / spanSoFar * 100;
     const want = wantDensity(m) + U.clamp(wantDensity(m) - real, -2, 4);
     const scale = stage.speedAt(m) / CFG.REF_SPEED;
     const seam = seamFor(m);
@@ -2018,6 +2543,20 @@ function createGenerator(stage, seed) {
          持つチャンクを重くしないと「一度も見ないままゴール」が起きる。
          既に封緘したステージの譜面を動かさないよう、stage.tipBoost を立てた
          ステージだけに効かせる（S6 から）。 */
+      /* まだ出していないギミックを持つ札を重くする（S8 の「全部混在」） */
+      if (stage.coverFlags) {
+        let nNew = 0;
+        for (let k = 0; k < stage.coverFlags.length; k++) {
+          const f = stage.coverFlags[k];
+          if (cands[i][f] && !covered[f]) nNew++;
+        }
+        if (nNew) {
+          /* ゲートを持つ札（鏡・入れ替え・重力反転・海流）は猶予のぶん密度が低く、
+             密度の重みでは必ず負ける。**密度の重みごと上書き**したうえで、
+             まだ出していないギミックを**多く抱える札ほど強く**引く。 */
+          wt = Math.max(wt, 0.9) * Math.pow(stage.coverMul || 6, Math.min(nNew, 3));
+        }
+      }
       if (stage.tipOnce && stage.tipBoost) {
         const ks = Object.keys(stage.tipOnce);
         for (let k = 0; k < ks.length; k++) {
@@ -2041,7 +2580,7 @@ function createGenerator(stage, seed) {
   function instantiate(def, startM, nowDist) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
     const items = [];
-    const local = { syncs: [], currents: [], zeros: [], warps: [], mirrors: [], swaps: [] };
+    const local = { syncs: [], currents: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
     (def.floor || []).forEach((e) => put(items, e, 'floor', startM + e.at * scale, nowDist, scale, local));
     (def.ceil || []).forEach((e) => put(items, e, 'ceil', startM + e.at * scale, nowDist, scale, local));
     items.sort((a, b) => a.at - b.at);
@@ -2057,6 +2596,7 @@ function createGenerator(stage, seed) {
     inst.local.warps.forEach((wp) => warps.push(wp));
     inst.local.mirrors.forEach((mr) => mirrors.push(mr));
     inst.local.swaps.forEach((sw) => swaps.push(sw));
+    inst.local.merges.forEach((mg) => merges.push(mg));
     inst.local = null;
   }
 
@@ -2089,7 +2629,8 @@ function createGenerator(stage, seed) {
     const tail = out.slice(-8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
                                { startLanes: 'any', reactBoth: stage.reactBoth, currents: currents,
-                                 zeros: zeros, warps: warps, mirrors: mirrors, swaps: swaps });
+                                 zeros: zeros, warps: warps, mirrors: mirrors, swaps: swaps,
+                                 merges: merges });
     if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
     inst.items.forEach((o) => out.push(o));
     noteItems(inst.items);
@@ -2117,6 +2658,15 @@ function createGenerator(stage, seed) {
     if (stage.intro && introPtr < stage.intro.length) return appendIntro(nowDist);
     if (!setpieceDone && cursor >= spStart) return appendSetpiece(nowDist);
     let cands = candidates(cursor);
+    /* 決まった場所で必ず出す顔ぶれ（S8 の合体区間＝2回 / 契約§4.4） */
+    let forced = null;
+    if (forcePlan && forcePtr < forcePlan.length && cursor >= forcePlan[forcePtr].at) {
+      const flag = forcePlan[forcePtr].flag;
+      const sp0 = stage.speedAt(cursor);
+      const only = stage.chunkPool.map((id) => CHUNK_BY_ID[id]).filter(Boolean)
+        .filter((d) => d[flag] && sp0 >= (d.minSpeed || 0));
+      if (only.length) { cands = only; forced = flag; }
+    }
     const tail = out.slice(-10);
     const seam = seamFor(cursor);
     /* 大演出の手前に大きな空白を作らない: 残りに収まるチャンクがあればそれを使う */
@@ -2152,7 +2702,8 @@ function createGenerator(stage, seed) {
                                      zeros: zeros.concat(inst.local.zeros),
                                      warps: warps.concat(inst.local.warps),
                                      mirrors: mirrors.concat(inst.local.mirrors),
-                                     swaps: swaps.concat(inst.local.swaps) });
+                                     swaps: swaps.concat(inst.local.swaps),
+                                     merges: merges.concat(inst.local.merges) });
         if (!errs.length) {
           commit(inst);
           inst.items.forEach((o) => out.push(o));
@@ -2169,6 +2720,8 @@ function createGenerator(stage, seed) {
                             type: 'tip', params: { id: stage.tipOnce[flag] }, done: false });
             });
           }
+          if (forced && def[forced]) forcePtr++;
+          if (stage.coverFlags) stage.coverFlags.forEach((f) => { if (def[f]) covered[f] = true; });
           log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM,
                      firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
           cursor = Math.max(cursor, inst.startM + st.lastAt * scale);
@@ -2196,6 +2749,7 @@ function createGenerator(stage, seed) {
     warps: warps,
     mirrors: mirrors,
     swaps: swaps,
+    merges: merges,
     events: events,
     log: log,
     /* untilM まで生成しておく。nowDist は視認距離の記録用 */

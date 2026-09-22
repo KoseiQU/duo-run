@@ -150,7 +150,7 @@
                      ZEROFIELD: ['x', 'y', 'z'], NETGATE: ['x', 'y', 'z'],
                      LASER_H: ['x', 'y', 'z'], LASER_DIAG: ['x', 'y', 'z'],
                      /* S7: ゲートは ghost、割れた鏡の床は「足場＋裂け目」を毎フレーム置く */
-                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'],
+                     MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'],
                      SHARDGAP: ['x', 'y', 'z'] };
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);

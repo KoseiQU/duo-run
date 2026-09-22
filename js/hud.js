@@ -12,7 +12,7 @@ const HUD = {
   init() {
     const ids = ['hud-dist', 'hud-speed', 'hud-stage', 'hand-left', 'hand-right',
                  'hand-left-name', 'hand-right-name', 'hand-left-keys', 'hand-right-keys',
-                 'flag-mirror', 'flag-swap', 'flag-grav', 'flag-zero',
+                 'flag-mirror', 'flag-swap', 'flag-grav', 'flag-zero', 'flag-merge',
                  'dead-dist', 'dead-cp', 'dead-best',
                  'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub',
                  'sync', 'sync-main', 'sync-sub', 'cur', 'cur-f', 'cur-c'];
@@ -95,6 +95,14 @@ const HUD = {
     return true;
   },
 
+  /* 合体区間（契約§4.5 / S8）: 1体になっている間だけ表示する。
+     チップの案内も「両手で1体を動かす」割当に差し替える（§4.5 を上下タッチで読んだ形）。 */
+  mergeCue(on) {
+    const e = HUD.el['flag-merge'] || (HUD.el['flag-merge'] = document.getElementById('flag-merge'));
+    if (e) e.style.display = on ? '' : 'none';
+    return !!on;
+  },
+
   /* 重力反転ワープ（契約§4.5 / S6）: 面が入れ替わっている間だけ表示する。
      手アイコンは surface から引いているので、表示そのものは勝手に入れ替わる。 */
   gravCue(on) {
@@ -114,20 +122,39 @@ const HUD = {
     HUD._set('hud-dist', Math.floor(g.dist) + ' m');
     HUD._set('hud-speed', g.speed.toFixed(1) + ' m/s');
     HUD._set('hud-stage', g.stage ? g.stage.name : '');
+    /* 全クリア演出（§6 P5b）の間は、操作の案内と状態フラグを伏せる
+       （もう操作しないし、最後の画面に「GRAVITY」などが残ると邪魔になる）。 */
+    const fin = (g.status === 'allclear');
+    ['hand-left', 'hand-right'].forEach((id) => {
+      const e = HUD.el[id] || (HUD.el[id] = document.getElementById(id));
+      if (e) e.style.opacity = fin ? '0' : '';
+    });
+    if (fin) {
+      ['flag-mirror', 'flag-swap', 'flag-grav', 'flag-zero', 'flag-merge'].forEach((id) => {
+        const e = HUD.el[id];
+        if (e) e.style.display = 'none';
+      });
+      return;
+    }
     /* 担当アイコン: 画面の下半分＝床のキャラ／上半分＝天井のキャラ（§4.2 改訂）。
        重力反転ワープで面が入れ替わっても、画面の位置と担当は一致し続ける。 */
     /* 入れ替えワープ（§4.5 / S7）で担当が入れ替わったら、**チップごと入れ替わる**
        （名前・色・フリックの向きの案内が、その半分がいま動かすキャラのものになる）。
        どちらを担当しているかは Game.runnerForZone の1か所だけが決める。 */
+    /* 合体区間（§4.5 / S8）: 2体は1体。両手で1体を動かすので、チップは
+       「下半分＝移動／上半分＝跳ぶ・潜る」に差し替える（名前は合体体の名前）。 */
+    const mg = !!g.merged;
     [['left', 'bottom', '下半分'], ['right', 'top', '上半分']].forEach((c) => {
-      const r = g.runnerForZone ? g.runnerForZone(c[1])
-                                : g.runners.filter((x) => x.surface === (c[1] === 'top' ? 'ceil' : 'floor'))[0];
+      const r = mg ? (g.mergeLead ? g.mergeLead() : null)
+                   : (g.runnerForZone ? g.runnerForZone(c[1])
+                      : g.runners.filter((x) => x.surface === (c[1] === 'top' ? 'ceil' : 'floor'))[0]);
       if (!r) return;
       const box = HUD.el['hand-' + c[0]];
       if (box) box.setAttribute('data-char', r.id);
-      HUD._set('hand-' + c[0] + '-name', r.id.toUpperCase());
+      HUD._set('hand-' + c[0] + '-name', mg ? 'DUO' : r.id.toUpperCase());
       HUD._set('hand-' + c[0] + '-keys',
-               c[2] + (r.surface === 'floor' ? ' ↑跳ぶ ↓潜る' : ' ↓跳ぶ ↑潜る'));
+               mg ? (c[2] + (c[0] === 'left' ? ' ←→移動' : ' ↑跳ぶ ↓潜る'))
+                  : (c[2] + (r.surface === 'floor' ? ' ↑跳ぶ ↓潜る' : ' ↓跳ぶ ↑潜る')));
     });
     /* S6: 重力反転中／無重力区間（契約§4.5）。どちらも「今どうなっているか」を面と
        滞空倍率（Zero.cur）から引くだけ＝表示と判定が必ず一致する。 */
@@ -140,7 +167,8 @@ const HUD = {
     }
     const anyMirror = g.runners.some((r) => r.mirrored);
     if (HUD.el['flag-mirror']) HUD.el['flag-mirror'].style.display = anyMirror ? '' : 'none';
-    if (HUD.el['flag-swap']) HUD.el['flag-swap'].style.display = g.handSwap ? '' : 'none';
+    if (HUD.el['flag-swap']) HUD.el['flag-swap'].style.display = (g.handSwap && !g.merged) ? '' : 'none';
+    if (HUD.el['flag-merge']) HUD.el['flag-merge'].style.display = g.merged ? '' : 'none';
   }
 };
 
@@ -156,7 +184,7 @@ const UI = {
     { id: 'S5', name: '深海', ready: true },
     { id: 'S6', name: '宇宙ステーション', ready: true },
     { id: 'S7', name: '鏡の世界', ready: true },
-    { id: 'S8', name: 'コア', ready: false }
+    { id: 'S8', name: 'コア', ready: true }
   ],
 
   show(name) {
@@ -172,6 +200,24 @@ const UI = {
   },
 
   cleared() { return U.lsGet('cleared', []) || []; },
+  /* 全クリア（8ステージすべて制覇 / 契約§6 P5b）。localStorage の印が唯一の出所 */
+  allCleared() { return !!U.lsGet('allclear', false); },
+
+  /* 全クリア演出（S8 クリア直後の短いオーバーレイ）。
+     2体は World がポーズを取り続け、ここは文字と「全ゾーンの色の流れ」を受け持つ。 */
+  allClearShow() {
+    const e = document.getElementById('allclear');
+    if (!e) return false;
+    e.classList.remove('on');
+    void e.offsetWidth;                 // アニメーションを確実に再生させる
+    e.classList.add('on');
+    return true;
+  },
+  allClearHide() {
+    const e = document.getElementById('allclear');
+    if (e) e.classList.remove('on');
+    return true;
+  },
   /* 開発中は実装済み（ready）ステージを全部選べる（契約§4.4 2026-09-22 テスト用）。
      正式リリース時に false へ。機械テストはロック規則の検証中だけ _testLock を立てる。 */
   UNLOCK_ALL: true,
@@ -195,6 +241,13 @@ const UI = {
     if (!grid) return;
     grid.innerHTML = '';
     const cleared = UI.cleared();
+    /* 全クリアの印（契約§6 P5b「ステージ選択に全クリアの印」） */
+    const mark = document.getElementById('stages-allclear');
+    if (mark) {
+      const on = UI.allCleared();
+      mark.style.display = on ? '' : 'none';
+      mark.textContent = on ? '★ ALL CLEAR — 全8ステージ制覇' : '';
+    }
     UI.STAGES.forEach((st, i) => {
       const unlocked = UI.isUnlocked(i) && st.ready;
       const done = cleared.indexOf(st.id) >= 0;
