@@ -1023,6 +1023,11 @@ const Merge = {
 
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
+  /* ジャンプ障害物の「▲」警告アイコン（契約§4.3 / P5c）。
+     W,H = 三角の幅・高さ(m)。FAR〜NEAR(m) の間で縮めて消す（NEAR より手前では出さない）。
+     BAR_FAR〜BAR_NEAR(m) で警告バーを支柱の上端へ畳む（跳んだ体がバーを貫通して見えないように）。
+     BLINK = 明滅の周波数(rad/s)と暗い側の明るさ（暗い側でも背景より十分明るいこと）。 */
+  WARN_ICON: { W: 1.24, H: 1.15, FAR: 15, NEAR: 7, BAR_FAR: 6.5, BAR_NEAR: 2.0, BLINK_W: 9.0, BLINK_LO: 0.74 },
 
   /* 障害物インスタンスを作る（at = 障害物の中心距離 m） */
   make(type, surface, lane, at, spawnDist, params) {
@@ -2092,6 +2097,7 @@ const Obstacles = {
          （霧は 48m で 26〜47% 効き、掛けると背景との輝度差が半分に潰れる。
          実測: 霧つきの版は 6ゾーン中 4ゾーンで輝度差 +15 未満だった）。 */
     const WARN = { H: 1.60, X: 0.55, BAND_L: 4.0, POST: 0.17 };
+    const ICON = Obstacles.WARN_ICON;
     /* 光る標示の材質（霧なし・スキンごとに1つ使い回す）。_emissive と鍵空間を分ける */
     const glowM = (key, color) => {
       const k = Obstacles.skinId() + '|G' + Obstacles._matNS + key;
@@ -2144,7 +2150,26 @@ const Obstacles = {
       ]), barMat);
       barMesh.userData.deco = true;
       g.add(barMesh);
-      g.userData.warnRig = { bar: barMesh, mat: barMat };
+      /* 支柱の上に浮かぶ「▲」の警告アイコン（中に「!」の抜き）。
+         40m 先では支柱＋バーだけだと画面高さの 5〜6% にしかならない（実測）。
+         アイコンで上へ約 1.2m 伸ばして「遠くからでも跳ぶものが来る」と読ませる。
+         近づいたら（15m→7m）バーの中へ縮めて消す＝相方が跳んで降りてくる高さ
+         （y ≥ 1.80）に標示が居座らない。材質はバーと共有（色・明滅も同じ）。 */
+      const tri = new THREE.Shape();
+      tri.moveTo(-ICON.W / 2, 0); tri.lineTo(ICON.W / 2, 0); tri.lineTo(0, ICON.H); tri.closePath();
+      const hole = (x0, y0, x1, y1) => {
+        const p = new THREE.Path();
+        p.moveTo(x0, y0); p.lineTo(x0, y1); p.lineTo(x1, y1); p.lineTo(x1, y0); p.closePath();
+        tri.holes.push(p);
+      };
+      const ih = ICON.H, iw = ih * 0.07;
+      hole(-iw, ih * 0.33, iw, ih * 0.73);               // 「!」の棒
+      hole(-iw, ih * 0.13, iw, ih * 0.25);               // 「!」の点
+      const icon = new THREE.Mesh(new THREE.ShapeGeometry(tri), barMat);
+      icon.position.set(0, WARN.H + 0.14, 0.02);
+      icon.userData.deco = true;
+      g.add(icon);
+      g.userData.warnRig = { bar: barMesh, mat: barMat, icon: icon, pivot: WARN.H + 0.14 };
     };
 
     /* 「横に避ける」障害物（ピラー・縦レーザー・ワイド梁・壁の穴・壁）の警告色の縁取り
@@ -2161,20 +2186,60 @@ const Obstacles = {
     const rimWarn = () => {
       const m = glowM('p5cWallWarn', C.warn);
       const y0 = (type === 'WALLHOLE') ? t.y0 : 0;
-      /* ピラー・縦レーザーは全高（y1 = CFG.H）。天井まで枠で囲うと画面が枠だらけに
-         なるので、**2体が触れる帯**（床から 2.4m ＝ 跳んだ体の上端 2.2 の少し上）までに
-         留める。天井側は place() の 180度回転で反対から同じ帯が出る。 */
-      const y1 = Math.min(t.y1, 2.4);
-      const zc = D / 2 - 0.015, TH = 0.10;
-      box(w, TH, 0.04, m, 0, y1 - TH / 2, zc);
-      box(w, TH, 0.04, m, 0, y0 + TH / 2, zc);
-      [-1, 1].forEach((s) => box(TH, y1 - y0 - TH * 2, 0.04, m, s * (w / 2 - TH / 2), (y0 + y1) / 2, zc));
-      /* 枠の中に斜めの縞を1本入れて、遠くでも「枠」だと分かる面積を作る */
-      const hh = y1 - y0 - TH * 2;
-      if (hh > 0.5) {
-        for (let i = 0; i < 3; i++) {
-          box(w * 0.62, TH * 0.72, 0.04, m, 0, y0 + TH + hh * (i + 0.5) / 3, zc, [0, 0, 0.42]);
+      /* 全高の障害物（ピラー・縦レーザー）も **全高を** 囲う（P5c 補強）。
+         2.4m で切ると、40m 先では柱の上 4割が背景に溶けて「短い枠」に見えた。 */
+      const y1 = t.y1;
+      /* 枠の太さ 0.20m（40m 先で約 2.5px）。0.10m では 1px を割って、明るいゾーン
+         （深海・宇宙）で柱の平均輝度が背景を下回った（実測 −28〜+9）。 */
+      /* 枠はスキンの一番手前の面の **さらに手前** に置く（深海の柱は上下の笠が判定の
+         手前へ 0.05m 張り出していて、面一の枠を隠していた）。張り出しは 0.10m で頭打ち。 */
+      let zf = D / 2;
+      for (let i = parts0; i < parts.length; i++) {
+        const pp = parts[i];
+        if (!pp.g.boundingBox) pp.g.computeBoundingBox();
+        const sz = pp.s ? pp.s[2] : 1;
+        zf = Math.max(zf, pp.p[2] + pp.g.boundingBox.max.z * sz);
+      }
+      zf = Math.min(zf, D / 2 + 0.10);
+      const zc = zf - 0.015, TH = 0.20;
+      /* 縦レーザーは上下の枠を厚く（0.55m）＝光線の「発生装置」が両端で光る */
+      const TC = (type === 'LASER_V') ? 0.55 : TH;
+      box(w, TC, 0.04, m, 0, y1 - TC / 2, zc);
+      box(w, TC, 0.04, m, 0, y0 + TC / 2, zc);
+      [-1, 1].forEach((s) => box(TH, y1 - y0 - TC * 2, 0.04, m, s * (w / 2 - TH / 2), (y0 + y1) / 2, zc));
+      /* 側面の手前の角にも光の縦線（横のレーンから斜めに見ても柱の輪郭が光る） */
+      [-1, 1].forEach((s) => box(0.03, y1 - y0, 0.14, m, s * (w / 2 + 0.005), (y0 + y1) / 2, zf - 0.07));
+      /* 光線そのもの（縦レーザー）には縞を重ねない＝「光の柱」と「壁」を見分けさせる */
+      if (type === 'LASER_V') return;
+      /* 枠の内側に 45度の警告縞（虎縞）。内側の矩形で切り抜いた平行四辺形を平面で重ねる
+         （箱を斜めに置くと枠からはみ出す）。縞の幅 0.26m・間隔 0.40m ＝ 内側の約 65%
+         （0.18〜0.22m では深海・宇宙・コアの柱が背景 +40 に届かなかった）。 */
+      const ix0 = -w / 2 + TH, ix1 = w / 2 - TH, iy0 = y0 + TH, iy1 = y1 - TH;
+      if (ix1 - ix0 < 0.1 || iy1 - iy0 < 0.1) return;
+      const clip = (poly, f) => {                 // f(p) >= 0 を残す（凸多角形の半平面クリップ）
+        const out = [];
+        for (let i = 0; i < poly.length; i++) {
+          const a = poly[i], b = poly[(i + 1) % poly.length];
+          const fa = f(a), fb = f(b);
+          if (fa >= 0) out.push(a);
+          if ((fa >= 0) !== (fb >= 0)) {
+            const k = fa / (fa - fb);
+            out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]);
+          }
         }
+        return out;
+      };
+      const SW = 0.26 * Math.SQRT2, PITCH = 0.40 * Math.SQRT2;    // y − x の値で測った幅・間隔
+      const rect = [[ix0, iy0], [ix1, iy0], [ix1, iy1], [ix0, iy1]];
+      for (let c = (iy0 - ix1) - PITCH; c < (iy1 - ix0); c += PITCH) {
+        let poly = clip(rect, (q) => (q[1] - q[0]) - c);
+        poly = clip(poly, (q) => (c + SW) - (q[1] - q[0]));
+        if (poly.length < 3) continue;
+        const sh = new THREE.Shape();
+        sh.moveTo(poly[0][0], poly[0][1]);
+        for (let k = 1; k < poly.length; k++) sh.lineTo(poly[k][0], poly[k][1]);
+        sh.closePath();
+        solid(new THREE.ShapeGeometry(sh), m, 0, 0, zf + 0.006);
       }
     };
 
@@ -2330,7 +2395,28 @@ const Obstacles = {
 
     /* ジャンプ障害物の警告バー（契約§4.3 / P5c）: 対象キャラの色を出す
        （床＝琥珀＝LUMEN ／ 天井＝藍＝UMBRA）。どちらの持ち場かが色で分かる。 */
-    if (ud.warnRig) ud.warnRig.mat.color.setHex(ceil ? 0xb9c8ff : 0xffcf6a);
+    if (ud.warnRig) {
+      const wr = ud.warnRig, IC = Obstacles.WARN_ICON;
+      /* 明滅（2段）: 暗い側でも BLINK_LO 倍＝背景より十分明るい（遠目の輝度差を割らない） */
+      const on = Math.sin((t || 0) * IC.BLINK_W + o.at * 0.7) > -0.35;
+      wr.mat.color.setHex(ceil ? 0xb9c8ff : 0xffcf6a).multiplyScalar(on ? 1 : IC.BLINK_LO);
+      /* ▲ は遠くでだけ出す。近づいたらバーの中へ縮めて消す（相方の跳躍帯に居座らない） */
+      const rel = o.at - dist;
+      if (wr.icon) {
+        const k = U.smooth(U.clamp((rel - IC.NEAR) / (IC.FAR - IC.NEAR), 0, 1));
+        wr.icon.visible = k > 0.02;
+        wr.icon.scale.set(k, k, 1);
+      }
+      /* 警告バーは跳んだ体の高さ（足 1.3m・頭 2.2m）を横切る。通過の直前に
+         支柱の上端へ畳み込む（シャッターが上がる動き）＝ 自分の体がバーを貫通して見えない。 */
+      if (wr.bar) {
+        const kb = U.smooth(U.clamp((rel - IC.BAR_NEAR) / (IC.BAR_FAR - IC.BAR_NEAR), 0, 1));
+        const sy = Math.max(0.001, kb);
+        wr.bar.scale.set(1, sy, 1);
+        wr.bar.position.y = wr.pivot * (1 - sy);
+        wr.bar.visible = kb > 0.01;
+      }
+    }
 
     if (OBS[o.type].pad && ud.pad) {
       /* スイッチのパッド: 長さは z窓（＝0.36秒ぶん）と同じにする。
