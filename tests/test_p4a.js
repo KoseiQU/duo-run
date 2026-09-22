@@ -114,6 +114,14 @@
            DOOR            … 同色＝通れる扉なので当たり判定を持たない
            LIFTPAD         … 土台の縁が判定の外へ少し出る（天板は判定どおり）
            FISH_TAIL       … 動く部品（bands から毎フレーム置く） */
+      /* 【2026-09-23 P5c】ジャンプ障害物（ローバー／ローレーザー）に足した
+           ・両脇の高い支柱 1.6m（レーン端 x=±0.55）
+           ・支柱上端をつなぐ光る警告バー
+           ・手前の路面の警告帯（幅レーン・長さ 4m・シェブロン）
+         は **当たり判定を一切持たない視認性のための標示**（契約§4.3）。
+         判定 0.6m の柵に対して見た目 1.72m・奥行き 4.25m を比べてしまうと
+         この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
+         装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
                      /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
                      MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
@@ -127,7 +135,7 @@
       Object.keys(OBS).forEach((type) => {
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);
-        const b3 = new THREE.Box3().setFromObject(view);
+        const b3 = In.viewBox(view);            /* 判定外の装飾（P5c の支柱・警告バー・路面帯）は除く */
         const o = In.Obstacles.make(type, 'floor', 0, 0, 0, type === 'BRIDGE' ? { bridge: { leadM: 9 } } : null);
         const hb = In.Obstacles.box(o, 0);
         const xc = ((In.Obstacles.laneLo(o) + In.Obstacles.laneHi(o)) / 2) * CFG.LANE_W;

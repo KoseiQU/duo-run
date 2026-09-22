@@ -65,6 +65,20 @@ const DUO = {
     endlessPool: endlessPool, scaleParams: scaleParams,
     Zones: Zones, ZoneKit: ZoneKit, ZoneNeon: ZoneNeon, ZoneRuins: ZoneRuins, ZoneSea: ZoneSea,
     ZoneSpace: ZoneSpace, ZoneMirror: ZoneMirror, ZoneCore: ZoneCore,
+    /* 障害物の見た目の外接箱（**判定外の装飾を除く**）。
+       契約§4.3（2026-09-23 P5c）でジャンプ障害物に足した
+       「両脇の高い支柱(1.6m)・支柱上端の警告バー・手前の路面の警告帯(4m)」は
+       当たり判定を一切持たない**視認性のための標示**なので、
+       「見た目と判定のズレ ±10%」はこれらを外して測る（除かないと、
+       判定 0.6m の柵に対して見た目 1.72m/奥行き 4.25m を比べることになり、
+       本来の目的＝「当たり判定と実体の食い違いを見つける」が測れなくなる）。
+       装飾のメッシュには生成時に userData.deco が立っている。 */
+    viewBox(view) {
+      const b = new THREE.Box3();
+      b.makeEmpty();
+      view.traverse((o) => { if (o.isMesh && !o.userData.deco) b.expandByObject(o); });
+      return b;
+    },
     /* テストで単体の障害物を置く */
     spawnOne(type, surface, lane, atAheadM) {
       const o = Obstacles.make(type, surface, lane, Game.dist + atAheadM, Game.dist);

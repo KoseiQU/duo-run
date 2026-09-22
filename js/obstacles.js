@@ -1391,6 +1391,9 @@ const Obstacles = {
     /* 点滅レーザーで「消える」部分の材質。マージ後に該当メッシュを userData.beam に拾う */
     const beamMats = [];
     const beamMat = (m) => { if (beamMats.indexOf(m) < 0) beamMats.push(m); return m; };
+    /* 判定の外の装飾に使う材質（P5c の視認性の骨格）。融合後のメッシュに
+       userData.deco を立て、見た目と判定のズレ検査から外せるようにする。 */
+    const decoMats = [];
     const w = (t.span * CFG.LANE_W) - OBS_INSET * 2;     // 判定と同じ幅
     const D = t.depth;                                    // 判定と同じ奥行き
     /* 箱を置く小道具（x,y,z は障害物ローカル。床面 y=0 が基準）。
@@ -2066,6 +2069,115 @@ const Obstacles = {
       g.userData.shardMats = own;
     };
 
+    /* ------------------------------------------------------------------------
+       ジャンプ障害物（ローバー／ローレーザー）の視認性の骨格
+       — 契約§4.3（2026-09-23 実機評「柵が見づらい」）/ P5c
+       全ゾーン共通の骨格を **判定の外の装飾** として必ず建てる:
+         ・両脇に高い支柱 1.6m（レーン端 x = ±0.55。判定には一切含めない）
+         ・支柱の上端をつなぐ光る警告バー（対象キャラの色＝床は琥珀／天井は藍。
+           どちらを見せるかは place() が o.surface で切り替える）
+         ・手前の路面に警告帯（幅レーン・長さ 4m・シェブロン）
+       世界観はゾーンのスキンが受け持つ（色は必ずそのゾーンの配色から引く）。
+       ローレーザーでは支柱が発生装置になる（契約§4.3「発生装置を高い支柱に」）。
+       ここで建てる部品は **すべて userData.deco** が立つメッシュに入る
+       ＝ 見た目と判定のズレ検査（±10%）は deco を外して測る。
+       ------------------------------------------------------------------------ */
+    /* 寸法の根拠（変えるときはここを読むこと）:
+       ・H = 1.60 は契約の値であると同時に **幾何の上限** でもある。天井を走る
+         UMBRA が跳ぶと体の下端が y = 1.80 まで降りてくる（JUMP_APEX 1.3・体高 0.9）。
+         1.60 はその 0.20m 下＝「相方をすり抜けない一番高い支柱」。
+       ・X = 0.55 はレーン端（LANE_W/2 = 0.60）の内側。判定（w = span*LANE_W - 余白）
+         には一切入れない。
+       ・この骨格は **遠くから読めること** が仕事なので、光る部分は fog を掛けない
+         （霧は 48m で 26〜47% 効き、掛けると背景との輝度差が半分に潰れる。
+         実測: 霧つきの版は 6ゾーン中 4ゾーンで輝度差 +15 未満だった）。 */
+    const WARN = { H: 1.60, X: 0.55, BAND_L: 4.0, POST: 0.17 };
+    /* 光る標示の材質（霧なし・スキンごとに1つ使い回す）。_emissive と鍵空間を分ける */
+    const glowM = (key, color) => {
+      const k = Obstacles.skinId() + '|G' + Obstacles._matNS + key;
+      if (!Obstacles._mat[k]) Obstacles._mat[k] = new THREE.MeshBasicMaterial({ color: color, fog: false });
+      return Obstacles._mat[k];
+    };
+    const warnRig = () => {
+      const postM = Obstacles._material('p5cPost', C.steel);
+      const baseM = Obstacles._material('p5cBase', C.dark || C.deep);
+      const chevM = glowM('p5cChev', C.warn);
+      decoMats.push(postM, baseM, chevM);
+      const zf = D / 2;                                   // 判定の手前端
+      const PD = Math.max(D, 0.20);                       // 支柱の奥行き
+      /* 支柱（判定外）。手前・内側・外側の三面に光る帯を通す＝どの角度からも光って見える。
+         ローレーザーは上端が発生装置になる（契約§4.3）。 */
+      [-1, 1].forEach((s) => {
+        box(WARN.POST, WARN.H, PD, postM, s * WARN.X, WARN.H / 2, 0);
+        box(WARN.POST + 0.04, 0.10, PD + 0.06, postM, s * WARN.X, 0.05, 0);
+        /* 手前面の光る帯。遠景では支柱が数画素なので、ここが実質「支柱の見た目」。 */
+        box(WARN.POST, WARN.H - 0.12, 0.05, chevM, s * WARN.X, WARN.H / 2 + 0.06, PD / 2 + 0.035);
+        /* 内側（レーンの中心を向く面）にも通す＝斜めから見ても縦の光の線が残る */
+        box(0.05, WARN.H - 0.12, PD * 0.8, chevM, s * (WARN.X - WARN.POST / 2 - 0.02), WARN.H / 2 + 0.06, 0);
+        if (type === 'LASER_LOW') {
+          box(WARN.POST + 0.08, 0.24, PD + 0.08, postM, s * WARN.X, WARN.H - 0.26, 0);
+          box(WARN.POST + 0.02, 0.10, 0.05, chevM, s * WARN.X, WARN.H - 0.26, PD / 2 + 0.06);
+        }
+      });
+      /* 路面の警告帯（幅レーン・長さ 4m・シェブロン）。手前（+z）へ伸ばす */
+      const BW = CFG.LANE_W - 0.06;
+      box(BW, 0.02, WARN.BAND_L, baseM, 0, 0.012, zf + WARN.BAND_L / 2);
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const z = zf + 0.42 + i * (WARN.BAND_L - 0.7) / (n - 1);
+        [-1, 1].forEach((s) => {
+          box(0.78, 0.03, 0.19, chevM, s * 0.28, 0.030, z, [0, s * 0.62, 0]);
+        });
+      }
+      /* 警告バー（支柱の上端をつなぐ）＋上端の灯を **1メッシュ** にまとめる。
+         色は place() が o.surface で塗り替える（床＝琥珀／天井＝藍）＝
+         プールで使い回しても取り違えず、ドローコールも1つで済む。
+         ここは「遠くから跳べと読ませる」要なので、画面上の面積を稼ぐために
+         バーを厚く（0.34m）取る。判定は一切持たない。 */
+      const BH = 0.34, BX = WARN.X * 2 + WARN.POST;
+      const barMat = new THREE.MeshBasicMaterial({ color: 0xffc24a, fog: false });
+      const barMesh = new THREE.Mesh(ZoneKit.merge([
+        { g: new THREE.BoxGeometry(BX, BH, 0.15), p: [0, WARN.H - BH / 2, 0] },
+        { g: new THREE.BoxGeometry(BX - 0.12, 0.07, 0.19), p: [0, WARN.H - BH - 0.05, 0] },
+        { g: new THREE.SphereGeometry(0.075, 6, 4), p: [-WARN.X, WARN.H + 0.07, 0] },
+        { g: new THREE.SphereGeometry(0.075, 6, 4), p: [WARN.X, WARN.H + 0.07, 0] }
+      ]), barMat);
+      barMesh.userData.deco = true;
+      g.add(barMesh);
+      g.userData.warnRig = { bar: barMesh, mat: barMat };
+    };
+
+    /* 「横に避ける」障害物（ピラー・縦レーザー・ワイド梁・壁の穴・壁）の警告色の縁取り
+       （契約§5「危険物は背景から浮く」/ P5c）。
+       P1 由来の実機評「障害物が背景に比べて地味」の点検で、遺跡・深海・鏡・コアでは
+       これらが **背景より暗い**（同じ画素で測って −25 〜 +12）ことがあった。
+       ゾーンの造形はそのままに、**手前の面に共通の警告枠** を1枚重ねて厚みを揃える。
+       ・枠は判定の手前面に「ほぼ面一」で置く（z 中心 = D/2 − 0.015・厚み 0.04
+         ＝ 判定より 0.005m しか出ない）ので、見た目と判定のズレは生まれない。
+         面一にすると本体と Z ファイトするので、その 0.005m だけ浮かせている。
+       ・縁取りも「遠くから読ませる」ための標示なので霧を掛けない（warnRig と同じ理由）。
+       ・跳び越える障害物（ローバー／ローレーザー）はこの枠ではなく warnRig が受け持つ
+         ＝「跳ぶ」と「よける」を見た目で取り違えさせない。 */
+    const rimWarn = () => {
+      const m = glowM('p5cWallWarn', C.warn);
+      const y0 = (type === 'WALLHOLE') ? t.y0 : 0;
+      /* ピラー・縦レーザーは全高（y1 = CFG.H）。天井まで枠で囲うと画面が枠だらけに
+         なるので、**2体が触れる帯**（床から 2.4m ＝ 跳んだ体の上端 2.2 の少し上）までに
+         留める。天井側は place() の 180度回転で反対から同じ帯が出る。 */
+      const y1 = Math.min(t.y1, 2.4);
+      const zc = D / 2 - 0.015, TH = 0.10;
+      box(w, TH, 0.04, m, 0, y1 - TH / 2, zc);
+      box(w, TH, 0.04, m, 0, y0 + TH / 2, zc);
+      [-1, 1].forEach((s) => box(TH, y1 - y0 - TH * 2, 0.04, m, s * (w / 2 - TH / 2), (y0 + y1) / 2, zc));
+      /* 枠の中に斜めの縞を1本入れて、遠くでも「枠」だと分かる面積を作る */
+      const hh = y1 - y0 - TH * 2;
+      if (hh > 0.5) {
+        for (let i = 0; i < 3; i++) {
+          box(w * 0.62, TH * 0.72, 0.04, m, 0, y0 + TH + hh * (i + 0.5) / 3, zc, [0, 0, 0.42]);
+        }
+      }
+    };
+
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
                 padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit,
@@ -2103,6 +2215,11 @@ const Obstacles = {
       else if (t.fish) fishKit(null);
       else columnKit(null);
     }
+    /* ジャンプ障害物の視認性の骨格（契約§4.3 / P5c）は **全ゾーン共通で必ず建てる**。
+       スキンの造形（バリケード・石柵・サンゴ・コンテナ・鏡片・混在）はそのまま残す。 */
+    if (type === 'ROVER' || type === 'LASER_LOW') warnRig();
+    if (type === 'WIDEBAR' || type === 'WALLHOLE' || type === 'WALLSOLID' ||
+        type === 'PILLAR' || type === 'LASER_V') rimWarn();
     buildLamps();
 
     /* 材質ごとに融合して1メッシュにする（点滅灯だけは個別マテリアルなので別メッシュのまま） */
@@ -2116,6 +2233,7 @@ const Obstacles = {
     for (let k = 0; k < byMat.length; k++) {
       const mesh = new THREE.Mesh(ZoneKit.merge(byMat[k].list), byMat[k].mat);
       g.add(mesh);
+      if (decoMats.indexOf(byMat[k].mat) >= 0) mesh.userData.deco = true;
       if (beamMats.indexOf(byMat[k].mat) >= 0) g.userData.beam.push(mesh);
       byMat[k].list.forEach((p) => p.g.dispose());
     }
@@ -2209,6 +2327,10 @@ const Obstacles = {
     else { g.position.y = lift; g.rotation.set(0, 0, 0); }
     /* ローカル座標への変換（天井側は Z 180度ぶん x が反転する） */
     const lx = (wx) => (ceil ? (xc - wx) : (wx - xc));
+
+    /* ジャンプ障害物の警告バー（契約§4.3 / P5c）: 対象キャラの色を出す
+       （床＝琥珀＝LUMEN ／ 天井＝藍＝UMBRA）。どちらの持ち場かが色で分かる。 */
+    if (ud.warnRig) ud.warnRig.mat.color.setHex(ceil ? 0xb9c8ff : 0xffcf6a);
 
     if (OBS[o.type].pad && ud.pad) {
       /* スイッチのパッド: 長さは z窓（＝0.36秒ぶん）と同じにする。

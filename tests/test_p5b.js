@@ -193,7 +193,9 @@
           if (!o.view || !o.view.visible) continue;
           const T = In.OBS[o.type];
           if (T.ghost || T.pad || T.motion || T.fish || o.type === 'BRIDGE' || o.type === 'WALLSOLID') continue;
-          const box = new THREE.Box3().setFromObject(o.view);
+          /* P5c: 判定外の標示（支柱・警告バー・路面の警告帯）は外して測る
+             ＝ ここで見たいのは「当たり判定と実体の幅が食い違っていないか」だけ */
+          const box = In.viewBox(o.view);
           const bw = box.max.x - box.min.x;
           const want = T.span * CFG.LANE_W;
           checked++;
