@@ -72,6 +72,39 @@ const HUD = {
     return true;
   },
 
+  /* 崩れる橋（契約§4.5【改訂 v2】/ P7b）: 踏んだ瞬間から崩落まで、大きな赤い警告
+     「崩れる！離れろ」。st = { left: 崩落までの秒, surface: 'floor'|'ceil' } / null で消す。
+     床の橋は画面の下寄り・天井の橋は上寄り（踏んだキャラの側）に出し、帯が崩落まで縮む。 */
+  bridgeState: null,
+  bridgeCue(st) {
+    const e = HUD.el['bridge-cue'] || (HUD.el['bridge-cue'] = document.getElementById('bridge-cue'));
+    if (!e) return false;
+    const tz = document.getElementById('touchzones');
+    const on = !!st;
+    if (!on) {
+      if (HUD.bridgeState !== null) {
+        e.classList.remove('on');
+        if (tz) { tz.classList.remove('brg-floor'); tz.classList.remove('brg-ceil'); }
+        HUD.bridgeState = null;
+      }
+      return true;
+    }
+    if (HUD.bridgeState === null) e.classList.add('on');
+    /* 文字はキャラの居る側（面）に、赤く脈打つ枠は **そのキャラを動かす半分**
+       （入れ替えワープ中は逆の半分 / Game.runnerForZone が唯一の出所）に出す */
+    const side = (st.surface === 'ceil') ? 'ceil' : 'floor';
+    const zone = st.zone || (side === 'ceil' ? 'top' : 'bottom');
+    const key = side + '|' + zone;
+    if (HUD.bridgeState !== key) {
+      e.classList.toggle('ceil', side === 'ceil');
+      if (tz) { tz.classList.toggle('brg-floor', zone === 'bottom'); tz.classList.toggle('brg-ceil', zone === 'top'); }
+      HUD.bridgeState = key;
+    }
+    const bar = HUD.el['bridge-bar'] || (HUD.el['bridge-bar'] = document.getElementById('bridge-bar'));
+    if (bar) bar.style.transform = 'scaleX(' + U.clamp(st.left / CFG.BRIDGE.WARN_T, 0, 1).toFixed(3) + ')';
+    return true;
+  },
+
   /* 合体区間（契約§4.5 / S8）: 1体になっている間だけ表示する。
      チップの案内も「両手で1体を動かす」割当に差し替える（§4.5 を上下タッチで読んだ形）。 */
   mergeCue(on) {

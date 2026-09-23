@@ -230,23 +230,30 @@ const CHUNK_DEFS = [
      S3「古代遺跡・外周」（契約§4.4）
      ------------------------------------------------------------------------
      新ギミック:
-       BRIDGE      崩れる橋。踏んで 0.4秒後にそのレーンの床が落ちる。
-                   抜け方は「レーン移動」か「跳び越す」（判定は occ が jump のみ安全と出す）。
+       BRIDGE      崩れる橋（契約§4.5 改訂 v2 / P7b）。at ＝ 崩落点 C。板は C−20〜C+10 基準m
+                   （踏み口〜終わり＝3.0秒）。踏んだら 2.0秒後にそのレーンが崩落＝ C までに隣へ。
+                   抜け方はレーン移動だけ（跳んでも穴に着地する）。多くの札は踏み口の直後に
+                   ワイド梁などで「橋のレーンだけが空く」形にして、橋に乗せてから逃がす。
        LASER_SCAN  遺跡スキンでは **振り子の刃**（大型化）。動きの定義はネオンと同じ。
      密度は S2 より高い（6→10回/100m）ので、両者同時要求のウォールを厚く敷く。
      §4.7 の「両者同時要求の余白」は S3 以降 0.45秒（stage.reactBoth）。
      ========================================================================== */
   /* --- rank2: 新ギミックを1つずつ覚える ---------------------------------- */
-  { id: 'r2_bridge_f', zone: 'ruins', lengthM: 56, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
-    floor: [{ at: 14, lane: 0, type: 'BRIDGE' }, { at: 34, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 24, lane: -1, type: 'ROVER' }, { at: 44, lane: 0, type: 'LASER_LOW' }], events: [] },
-  { id: 'r2_bridge_c', zone: 'ruins', lengthM: 56, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
-    floor: [{ at: 24, lane: 1, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 14, lane: -1, type: 'BRIDGE' }, { at: 34, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 'r2_bridge_x', zone: 'ruins', lengthM: 60, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
-    /* 床と天井で別のレーンの橋が落ちる（2体が別々に抜ける） */
-    floor: [{ at: 14, lane: -1, type: 'BRIDGE' }, { at: 38, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 14, lane: 1, type: 'BRIDGE' }, { at: 50, lane: -1, type: 'ROVER' }], events: [] },
+  /* 橋の札の形: 踏み口（C−20）の直後にワイド梁で「橋のレーンだけ空く」→ 橋に乗る →
+     警告 2.0秒のあいだに隣へ抜ける。その間に相方の面へ1つ要求を挟む（頭の負荷） */
+  { id: 'r2_bridge_f', zone: 'ruins', lengthM: 50, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    floor: [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 26, lane: -1, type: 'BRIDGE' },
+            { at: 42, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 'r2_bridge_c', zone: 'ruins', lengthM: 50, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    floor: [{ at: 17, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 26, lane: 1, type: 'BRIDGE' },
+            { at: 42, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r2_bridge_x', zone: 'ruins', lengthM: 52, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    /* 床と天井で別のレーンの橋に乗せられ、別々の側へ抜ける */
+    floor: [{ at: 6, lane: 0, type: 'WIDEBAR' }, { at: 24, lane: -1, type: 'BRIDGE' },
+            { at: 42, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 6, lane: -1, type: 'WIDEBAR' }, { at: 24, lane: 1, type: 'BRIDGE' }], events: [] },
   { id: 'r2_pend_a', zone: 'ruins', lengthM: 58, difficulty: 2, minSpeed: 0, s3: 1, moving: 1, pend: 1,
     /* 振り子の刃: 到達時は端で溜まっている（＝空いているレーンが読める） */
     floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
@@ -265,10 +272,10 @@ const CHUNK_DEFS = [
 
   /* --- rank3: 密（両者同時要求を厚く。契約§4.7 の 6→10回/100m を作る） ---- */
   { id: 'r3_duo_a', zone: 'ruins', lengthM: 52, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1,
-    floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 21, lane: 1, type: 'LASER_V' },
-            { at: 31, lane: -1, type: 'BRIDGE' }, { at: 45, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: -1, type: 'ROVER' },
-            { at: 45, lane: 1, type: 'LASER_LOW' }], events: [] },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 18, lane: 0, type: 'WIDEBAR' },
+            { at: 36, lane: -1, type: 'BRIDGE' }, { at: 46, lane: 1, type: 'LASER_LOW' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 27, lane: -1, type: 'ROVER' },
+            { at: 46, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'r3_duo_b', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, moving: 1, pend: 1,
     floor: [{ at: 10, lane: 1, type: 'ROVER' },
             { at: 21, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.25 } } },
@@ -282,11 +289,11 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 10, lane: 0, type: 'ROVER' }, { at: 21, lane: -1, type: 'LASER_LOW' },
             { at: 32, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'r3_duo_d', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1, pend: 1, moving: 1,
-    floor: [{ at: 10, lane: 0, type: 'BRIDGE' }, { at: 26, lane: 1, type: 'PILLAR' },
-            { at: 37, lane: -1, type: 'ROVER' },
-            { at: 48, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.5 } } }],
-    ceil:  [{ at: 26, lane: -1, type: 'ROVER' }, { at: 37, lane: 0, type: 'LASER_LOW' },
-            { at: 48, lane: 1, type: 'ROVER' }], events: [] },
+    /* 両脇の光柱で2体とも中央へ寄せる → 床は中央の橋に乗る → 抜けた先へ振り子 */
+    floor: [{ at: 8, lane: -1, type: 'LASER_V' }, { at: 8, lane: 1, type: 'LASER_V' },
+            { at: 26, lane: 0, type: 'BRIDGE' },
+            { at: 44, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.5 } } }],
+    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }, { at: 33, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'r3_duo_e', zone: 'ruins', lengthM: 60, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
     floor: [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: 0, type: 'PILLAR' },
             { at: 32, lane: -1, type: 'ROVER' }, { at: 43, lane: 1, type: 'LASER_V' },
@@ -297,12 +304,11 @@ const CHUNK_DEFS = [
     floor: [{ at: 14, lane: 0, type: 'WALLHOLE' }, { at: 30, lane: -1, type: 'ROVER' },
             { at: 44, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 'r3_bridge_duo', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, bridge: 1,
-    /* 崩れる橋を跳び越した直後に、逆側でレーン移動を要求する（§4.7 の 0.92秒を使い切る） */
-    floor: [{ at: 12, lane: 1, type: 'BRIDGE' }, { at: 34, lane: 0, type: 'LASER_V' },
-            { at: 48, lane: -1, type: 'ROVER' }],
-    ceil:  [{ at: 12, lane: -1, type: 'ROVER' }, { at: 34, lane: 1, type: 'ROVER' },
-            { at: 48, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r3_bridge_duo', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, bridge: 1,
+    /* 右の橋に乗せられ、崩落の続く間に中央の光柱＝ **左まで2レーン** 抜ける（崩れた右は通れない） */
+    floor: [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 26, lane: 1, type: 'BRIDGE' },
+            { at: 34, lane: 0, type: 'LASER_V' }, { at: 46, lane: -1, type: 'ROVER' }],
+    ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 46, lane: 1, type: 'LASER_LOW' }], events: [] },
   /* --- 列柱の縫い（両者にレーン移動を要求するウォールを連ねる） ------------
      PILLAR / LASER_V / LASER_SCAN は both 型＝1本で床と天井の両方に要求が出る。
      ウォール間隔 6〜8 基準m（0.6〜0.8秒）で §4.7（反応窓0.45・同時要求0.45）を満たしつつ、
@@ -342,10 +348,11 @@ const CHUNK_DEFS = [
             { at: 26, lane: -1, type: 'ROVER' }, { at: 34, lane: 1, type: 'ROVER' },
             { at: 42, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 'r3_leap_b', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1,
-    floor: [{ at: 10, lane: 1, type: 'LASER_LOW' }, { at: 18, lane: 0, type: 'ROVER' },
-            { at: 28, lane: -1, type: 'BRIDGE' }, { at: 44, lane: 1, type: 'ROVER' }],
-    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 18, lane: 1, type: 'ROVER' },
-            { at: 28, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'ROVER' }], events: [] },
+    /* 跳んだ先が橋（着地で踏む）→ 崩落までに横へ。天井はその間ずっと跳び継ぐ */
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 30, lane: 0, type: 'BRIDGE' },
+            { at: 44, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 16, lane: 0, type: 'ROVER' },
+            { at: 24, lane: -1, type: 'LASER_LOW' }, { at: 38, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'r3_pend_pair', zone: 'ruins', lengthM: 62, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, moving: 1, pend: 1,
     floor: [{ at: 12, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0 } } },
             { at: 34, lane: 0, type: 'ROVER' },
@@ -374,10 +381,15 @@ const CHUNK_DEFS = [
     floor: [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'LASER_V' },
             { at: 48, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 14, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 'r4_drop_c', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s4: 1, bridge: 1, dense: 1,
-    floor: [{ at: 12, lane: -1, type: 'ROVER' }, { at: 26, lane: 1, type: 'LASER_V' },
-            { at: 44, lane: 0, type: 'BRIDGE' }],
-    ceil:  [{ at: 12, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 'r4_drop_c', zone: 'ruins', lengthM: 52, difficulty: 3, minSpeed: 0, s4: 1, bridge: 1, dense: 1,
+    floor: [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 26, lane: -1, type: 'BRIDGE' },
+            { at: 34, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 44, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r4_bridge_c', zone: 'ruins', lengthM: 52, difficulty: 4, minSpeed: 0, s4: 1, bridge: 1, dense: 1,
+    /* 天井の橋: 乗せられて、崩落の続く間に光柱＝真ん中へ */
+    floor: [{ at: 17, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'LASER_V' },
+            { at: 44, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 26, lane: 1, type: 'BRIDGE' }], events: [] },
   /* 落ちる天井の連鎖（rank4）: 床は縫い、天井は跳び継ぎ＝1本で2体に別の譜面を配る */
   { id: 'r4_drop_chain', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
     floor: [{ at: 9, lane: 0, type: 'LASER_V' }, { at: 17, lane: 1, type: 'LASER_V' },
@@ -2001,6 +2013,39 @@ const Fair = {
       });
       w.both = !!(w.demand.floor && w.demand.ceil);
     });
+    /* 崩れる橋（契約§4.5 改訂 v2）: 崩落が続く間のウォールでは、そのレーンが塞がっている */
+    const longs = sorted.filter((o) => OBS[o.type].long);
+    if (longs.length) Fair.coverWalls(out, longs);
+    return out;
+  },
+
+  /* ------------------------------------------------------------------------
+     long 型（崩れる橋）の「崩落が続く間」＝ (at, at + fwd + 通過] に入るウォールへ
+     cover として積む。laneActs は items と同じ扱いでそのレーンを塞ぐ（要求は増やさない＝
+     そのレーンから出るのは崩落点 C のウォールで済んでいる）。**最悪値**（踏み口で踏んだ）で見る。
+     ------------------------------------------------------------------------ */
+  coverSpan(L) {
+    const ex = Obstacles.extent(L);
+    return { from: L.at, to: L.at + ex.fwd + (OBS[L.type].depth + CFG.BODY_D) / 2 };
+  },
+  coverWalls(walls, longs) {
+    walls.forEach((w) => {
+      longs.forEach((L) => {
+        if (w.items.indexOf(L) >= 0) return;
+        const c = Fair.coverSpan(L);
+        if (w.at > c.from + 1e-6 && w.at <= c.to + 1e-6) (w.cover || (w.cover = [])).push(L);
+      });
+    });
+    return walls;
+  },
+  /* (a, b] の間に崩落が続いていて、横切れないレーン（その面） */
+  coveredBetween(longs, side, a, b) {
+    const out = [];
+    (longs || []).forEach((L) => {
+      if (!Obstacles.affects(L, side)) return;
+      const c = Fair.coverSpan(L);
+      if (b > c.from + 1e-6 && a < c.to - 1e-6 && out.indexOf(L.lane) < 0) out.push(L.lane);
+    });
     return out;
   },
   /* どちらの面にも何も要求しないウォール（点滅OFFで通れるレーザーだけ 等）は
@@ -2012,9 +2057,10 @@ const Fair = {
   /* そのウォール・その面で、各レーンに残る安全な動作（到達時の占有から） */
   laneActs(wall, side) {
     const res = {};
+    const list = wall.cover ? wall.items.concat(wall.cover) : wall.items;
     for (const lane of CFG.LANES) {
       const acts = { run: true, jump: true, slide: true };
-      for (const o of wall.items) {
+      for (const o of list) {
         if (!Obstacles.affects(o, side)) continue;
         const a = Obstacles.laneActs(o, side, lane);
         if (!a.run) acts.run = false;
@@ -2147,6 +2193,7 @@ const Fair = {
     }
 
     /* 生存経路（各ウォールで生存レーンが1つ以上＋前ウォールから到達可能） */
+    const longs = list.filter((o) => OBS[o.type].long);
     Fair.SIDES.forEach((side) => {
       let reach = opt.startLanes === 'any' ? CFG.LANES.slice() : (opt.startLanes || [0]).slice();
       let prevAt = opt.startAt !== undefined ? opt.startAt : (walls.length ? walls[0].at - 100 : 0);
@@ -2168,7 +2215,10 @@ const Fair = {
         const passM = Fair.maxDepth() + Math.max(CFG.BODY_D, CFG.SLIDE_D);
         const usable = Math.max(0, (w.at - prevAt) - passM);
         const steps = Math.floor(usable / (sp * CFG.LANE_T));
-        const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps));
+        /* 崩落の続く橋のレーンは横切れない（通り道に穴がある / 契約§4.5 改訂 v2） */
+        const blk = longs.length ? Fair.coveredBetween(longs, side, prevAt, w.at) : null;
+        const crosses = (r, l) => !!blk && blk.some((b) => b > Math.min(r, l) && b < Math.max(r, l));
+        const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps && !crosses(r, l)));
         const ok = cand.filter((l) => Fair.laneSurvivable(w, side, l));
         const anySafe = CFG.LANES.filter((l) => Fair.laneSurvivable(w, side, l));
         if (!anySafe.length) errs.push('生存経路なし(' + side + ') @' + w.at.toFixed(1));
@@ -2357,13 +2407,14 @@ const Fair = {
    伸縮するのと同じ倍率をかけて、**1往復にかかる秒数を速度によらず一定**にする
    （§4.7 の不変条件が時間基準なのと同じ考え方）。 */
 /* 速度で伸縮するパラメータ（キー → その中で伸縮する項目と既定値）。
-   崩れる橋の leadM（踏んでから落ちるまでの距離）も同じ仕組みに乗せる＝
-   「0.4秒後に落ちる」が速度によらず一定になる（§4.4 S3 / §4.7）。 */
+   崩れる橋の unitM（1秒ぶんの距離）も同じ仕組みに乗せる＝
+   「踏んで 2.0秒後に崩落」が速度によらず一定になる（§4.5 改訂 v2 / §4.7）。 */
 const MOTION_SCALE = {
   scan:   { key: 'periodM', def() { return CFG.LASER.SCAN_PERIOD; } },
   rot:    { key: 'periodM', def() { return CFG.LASER.ROT_PERIOD; } },
   blink:  { key: 'periodM', def() { return CFG.LASER.BLINK_PERIOD; } },
-  bridge: { key: 'leadM',   def() { return CFG.REF_SPEED * CFG.BRIDGE.LEAD_T; } },
+  /* 崩れる橋（契約§4.5 改訂 v2）: 1秒ぶんの距離。踏み口〜崩落 2.0秒・崩落〜終わり 1.0秒が速度によらず一定 */
+  bridge: { key: 'unitM',   def() { return CFG.REF_SPEED; } },
   /* レーザーネット（S6）の横ビーム・斜めビームも同じ（1往復の秒数が一定） */
   hbeam:  { key: 'periodM', def() { return CFG.NET.PERIOD; } },
   diag:   { key: 'periodM', def() { return CFG.NET.PERIOD; } },
@@ -2505,6 +2556,17 @@ function createGenerator(stage, seed) {
     return rb;
   } : stage.reactBoth;
   const out = [];               // 生成済み障害物（at 昇順）
+  /* 直近 n 個（§4.7 の検査に前のチャンクの尻尾として渡す）。崩れる橋（long 型）は
+     崩落が続く間、後ろのウォールのレーンを塞ぐので、n 個より前でもまだ効いていれば足す */
+  function tailOf(n) {
+    const t = out.slice(-n);
+    const from = t.length ? t[0].at : -Infinity;
+    for (let i = out.length - n - 1; i >= 0 && i >= out.length - n - 60; i--) {
+      const o = out[i];
+      if (OBS[o.type].long && o.at + Obstacles.extent(o).fwd + 2 > from) t.unshift(o);
+    }
+    return t;
+  }
   const syncs = [];             // 同時スイッチのグループ（Sync が 0.3秒窓を判定する / P3b）
   const zeros = [];             // 無重力の区間（Zero が滞空倍率を出す / P4b）
   const warps = [];             // 重力反転ワープの組（Warp が面の入れ替えを判定する / P4b）
@@ -2890,7 +2952,7 @@ function createGenerator(stage, seed) {
     if (setpieceDone) return false;             // 二度置かない（置いたら二度と戻らない）
     const inst = Setpieces.build(stage.setpiece, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, sink);
     if (!inst) { setpieceDone = true; return false; }
-    const tail = out.slice(-8);
+    const tail = tailOf(8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
                                { startLanes: 'any', reactBoth: RB,
                                  zeros: zeros, warps: warps, mirrors: mirrors, swaps: swaps,
@@ -2990,7 +3052,7 @@ function createGenerator(stage, seed) {
   }
   function placeMini(nowDist) {
     const id = Endless.MINIS[Math.min(Endless.MINIS.length - 1, (rng() * Endless.MINIS.length) | 0)];
-    const tail = out.slice(-10);
+    const tail = tailOf(10);
     const sp0 = stage.speedAt(cursor);
     let inst = null, errs = null;
     const base = Math.max(cursor, lastItemAt + sp0 * CFG.FAIR.REACT, noDemandUntil + 0.5);
@@ -3039,7 +3101,7 @@ function createGenerator(stage, seed) {
         .filter((d) => d[flag] && sp0 >= (d.minSpeed || 0));
       if (only.length) { cands = only; forced = flag; }
     }
-    const tail = out.slice(-10);
+    const tail = tailOf(10);
     const seam = seamFor(cursor);
     /* 大演出の手前に大きな空白を作らない: 残りに収まるチャンクがあればそれを使う */
     if (!setpieceDone && isFinite(spStart)) {

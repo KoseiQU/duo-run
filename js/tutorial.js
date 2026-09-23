@@ -29,7 +29,8 @@ const Tutorial = {
     wide:   { ph: ['<span class="finger">👉</span>2レーンをふさぐ梁は', '空いたレーンへ'] },
     both:   { ph: ['同時に来る！', '<b class="k">下</b>と<b class="k2">上</b>を', '別々に'] },
     /* S3 の新ギミック（契約§4.4）。初出のときだけ短く出す */
-    bridge: { ph: ['<span class="finger">👆</span>崩れる橋は', '踏んだら<b>すぐ横へ</b>', 'または跳び越す'] },
+    /* 契約§4.5 改訂 v2: 踏んで 2.0秒で崩落・抜け方はレーン移動だけ */
+    bridge: { ph: ['<span class="finger">👉</span>崩れる橋は', '乗ると<b>2秒で落ちる</b>', '<b>横のレーンへ</b>逃げろ'] },
     pendulum: { ph: ['<span class="finger">👈</span>振り子の刃は', '<b>空いたレーン</b>へ'] },
     /* S4 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     sync: { ph: ['<span class="finger">👆</span>光る踏み板を', '<b class="k">下</b>と<b class="k2">上</b>で<b>同時に</b>',

@@ -167,6 +167,7 @@ const Game = {
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
     if (typeof HUD !== 'undefined' && HUD.gravCue) HUD.gravCue(false);
     if (typeof HUD !== 'undefined' && HUD.mergeCue) HUD.mergeCue(false);
+    if (typeof HUD !== 'undefined' && HUD.bridgeCue) HUD.bridgeCue(null);
     if (typeof UI !== 'undefined' && UI.allClearHide) UI.allClearHide();
     UI.show('title');
   },
@@ -199,6 +200,7 @@ const Game = {
     /* 合体区間（§4.5 / S8）も必ず既定（2体）へ戻す */
     Game.merged = false;
     if (typeof HUD !== 'undefined' && HUD.mergeCue) HUD.mergeCue(false);
+    if (typeof HUD !== 'undefined' && HUD.bridgeCue) HUD.bridgeCue(null);
     Game.speed = Game.stage.speedAt(fromM);
     /* 重力反転（§4.5 / S6）: 面は必ず既定（LUMEN=床 / UMBRA=天井）から始める */
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
@@ -293,7 +295,8 @@ const Game = {
       Game.gen.ensure(Game.dist + CFG.SPAWN_AHEAD, Game.dist);
       while (Game.genPtr < Game.gen.obstacles.length) Game.active.push(Game.gen.obstacles[Game.genPtr++]);
       for (let i = Game.active.length - 1; i >= 0; i--) {
-        if (Game.active[i].at < Game.dist - CFG.DESPAWN_BEHIND) {
+        /* 奥行きの長い型（崩れる橋）は、その終わりを過ぎてから消す（Obstacles.extent） */
+        if (Game.active[i].at + Obstacles.extent(Game.active[i]).fwd < Game.dist - CFG.DESPAWN_BEHIND) {
           World.dropView(Game.active[i]);
           Game.active.splice(i, 1);
         }
@@ -303,6 +306,8 @@ const Game = {
       /* 同時スイッチ（契約§4.5 / P3b）: パッドを踏んだかを見て 0.3秒窓の成否を決める。
          判定（bands）より先に置く＝その場で橋が架かる／崩れる。 */
       Sync.update(Game);
+      /* 崩れる橋（契約§4.5 改訂 v2）: 踏んだ距離を記録し、崩落までの警告を出す（判定より先） */
+      Bridge.update(Game);
       /* 重力反転ワープ（契約§4.5 / S6）: prevDist → dist の間に跨いだゲートを実行する。
          判定（collide）より先に置く＝入れ替わった面で当たり判定される。 */
       if (Warp.update(Game)) U.sfx('gate_grav');
@@ -423,7 +428,7 @@ const Game = {
     const lead = Game.merged ? Game.mergeLead() : null;
     for (let i = 0; i < Game.active.length; i++) {
       const o = Game.active[i];
-      if (Math.abs(o.at - Game.dist) > 4) continue;
+      if (!Obstacles.near(o, Game.dist, 4)) continue;
       for (let k = 0; k < Game.runners.length; k++) {
         const r = Game.runners[k];
         if (lead && r !== lead) continue;
@@ -461,6 +466,7 @@ const Game = {
   },
   onDead() {
     Game.status = 'dead';
+    if (typeof HUD !== 'undefined' && HUD.bridgeCue) HUD.bridgeCue(null);
     Game.bestUpdated = Game.saveBest();
     Setpieces.reset();
     Tutorial.hide();

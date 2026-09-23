@@ -60,17 +60,23 @@ const OBS = {
   /* ------------------------------------------------------------------------
      S3「古代遺跡・外周」の新ギミック（契約§4.4）
      ------------------------------------------------------------------------ */
-  /* 崩れる橋: 踏むと 0.4秒後にそのレーンの床が落ちる。
-     ■ 判定（契約の「踏んだ時刻+0.4秒以降は GAP 扱い」の実装）
-       板の手前端 entry = at - depth/2 - leadM を踏んだ瞬間が「踏んだ時刻」。
-       leadM = そこの速度 × 0.4秒（生成時に決まる実寸）なので、
-       「踏んだ時刻+0.4秒」＝ 距離 entry + leadM ＝ **at - depth/2**。
-       bands() はそこから先でだけ穴の帯を返す（それまでは板があるので無害）。
-       ＝ 時刻の規則がそのまま bands/occ に入っていて、判定・ボット・不変条件が
-         同じ1か所を読む。落ちた先は GAP と同じ寸法（跳べば越えられる）。
-     ■ 抜け方: 板に乗ってから 0.4秒以内にレーン移動するか、跳び越す。 */
-  BRIDGE:   { span: 1, depth: 1.60, y0: -1.60, y1: 0.04, both: false, safe: ['jump'],
-              motion: 'bridge', lead: true, label: '崩れる橋' },
+  /* 崩れる橋（契約§4.5【改訂 v2】/ P7b）: 長い1レーンの区間（speed × 3.0秒）。
+     踏んだ瞬間に警告 → **2.0秒後にそのレーンが崩落**（以後そのレーンに留まると死）。
+     ■ 形（距離で書く。unit = その地点の 1秒ぶんの距離 = params.bridge.unitM）
+         踏み口 E = at − 2.0·unit  …  崩落点 C = at  …  終わり X = at + 1.0·unit
+       o.at は **崩落点 C**（＝踏み口で踏んだとき、そこまでに隣レーンへ出ている必要がある位置）。
+     ■ 判定（MOT.bridgeFallAt / bands が唯一の出所）
+       ・踏んだ距離 S（Bridge.update が記録。その面を走る体が足を着けて板の上に来た最初の距離）
+       ・崩落 F = S + 2.0·unit。dist ≥ F の間、そのレーンは「崩落した橋」の帯（落ちた板の穴）。
+       ・踏まれていなければ崩れない。**planning（occ＝生成器・ボット・不変条件）は最悪値**
+         ＝ 踏み口で踏んだ（S = E → F = C）として測る。
+       ・帯は穴（y −1.6〜0.04）。跳んでも滞空 0.55秒 < 残り 1.0秒 なので**必ず穴に着地する**
+         ＝ pit: 跳躍は逃げ道にならない（occ が jump を落とす）。抜け方はレーン移動だけ。
+     ■ long: 判定の奥行きが at の前後へ長く伸びる（lead=2.0·unit 手前・tail=1.0·unit 奥）。
+       Obstacles.extent が唯一の出所。Fair・ボットは崩落の続く間（C〜X）のウォールで
+       そのレーンを塞ぐ（cover）。 */
+  BRIDGE:   { span: 1, depth: 0.60, y0: -1.60, y1: 0.04, both: false, safe: [],
+              motion: 'bridge', long: true, pit: true, label: '崩れる橋' },
   /* ------------------------------------------------------------------------
      S4「古代遺跡・内部」の新ギミック（契約§4.4 / §4.5 / P3b）
      ------------------------------------------------------------------------ */
@@ -206,14 +212,30 @@ const MOT = {
     const onAt = (p.onAtArrival !== false);
     return even ? onAt : !onAt;
   },
-  /* 崩れる橋: 板の手前端（＝踏む位置）と、落ちる位置（踏んだ時刻+0.4秒） */
-  bridgeLead(o) { return (o.params && o.params.bridge && o.params.bridge.leadM) || 0; },
-  bridgeEntry(o) { return o.at - OBS[o.type].depth / 2 - MOT.bridgeLead(o); },
-  bridgeFallAt(o) { return o.at - OBS[o.type].depth / 2; },
-  /* 落ちたか（＝踏んでから 0.4秒 経ったか）。0..1 の落下の進み具合 */
+  /* 崩れる橋（契約§4.5【改訂 v2】）: 距離＝時刻の規則。**ここが唯一の出所**。
+       bridgeUnit  … 1秒ぶんの距離（生成時の速度で決まる）
+       bridgeEntry … 踏み口 E ／ bridgeEnd … 終わり X ／ at … 崩落点 C（最悪値）
+       bridgeStep  … 踏んだ距離。planning 中（Obstacles._plan）は最悪値＝踏み口。
+                     実走では Bridge.update が記録した o.stepM（未踏なら null）。
+       bridgeFallAt… 崩落する距離 F = S + WARN_T·unit（未踏なら Infinity） */
+  bridgeUnit(o) { return (o.params && o.params.bridge && o.params.bridge.unitM) || CFG.REF_SPEED; },
+  bridgeLead(o) { return MOT.bridgeUnit(o) * CFG.BRIDGE.WARN_T; },
+  bridgeTail(o) { return MOT.bridgeUnit(o) * (CFG.BRIDGE.LEN_T - CFG.BRIDGE.WARN_T); },
+  bridgeEntry(o) { return o.at - MOT.bridgeLead(o); },
+  bridgeEnd(o) { return o.at + MOT.bridgeTail(o); },
+  bridgeStep(o) {
+    if (Obstacles._plan) return MOT.bridgeEntry(o);
+    return (typeof o.stepM === 'number') ? o.stepM : null;
+  },
+  bridgeFallAt(o) {
+    const s = MOT.bridgeStep(o);
+    return (s === null) ? Infinity : s + MOT.bridgeLead(o);
+  },
+  /* 見た目: 0..1 の落下の進み具合（崩落から 0.5秒で落ちきる） */
   bridgeFall(o, dist) {
     const f = MOT.bridgeFallAt(o);
-    return (dist <= f) ? 0 : Math.min(1, (dist - f) / 3.2);
+    if (!isFinite(f) || dist <= f) return 0;
+    return Math.min(1, (dist - f) / (MOT.bridgeUnit(o) * 0.5));
   },
 
   /* ------------------------------------------------------------------------
@@ -816,6 +838,67 @@ const Merge = {
   }
 };
 
+/* ============================================================================
+   Bridge — 崩れる橋（契約§4.5【改訂 v2】/ P7b）の「踏んだ」の記録と警告。
+   崩落の時刻規則は MOT.bridge* と bands() が唯一の出所で、ここは
+     ・踏んだ距離 o.stepM を記録する（その面を走る体が**足を着けて**橋の板に乗った最初の距離）
+     ・HUD の大きな警告「崩れる！離れろ」を出す（踏んでから崩落まで、橋のレーンに居る間）
+   だけを受け持つ（同時スイッチの Sync と同じ流儀）。
+   ============================================================================ */
+const Bridge = {
+  /* その体がこの橋の板の上に（足を着けて）いるか */
+  onPlanks(o, r, dist) {
+    if (r.surface !== o.surface || r.act === 'jump') return false;
+    const half = CFG.BODY_D / 2;
+    if (dist < MOT.bridgeEntry(o) - half || dist > MOT.bridgeEnd(o) + half) return false;
+    const rb = Runners.box(r);
+    const x0 = (o.lane - 0.5) * CFG.LANE_W + OBS_INSET, x1 = (o.lane + 0.5) * CFG.LANE_W - OBS_INSET;
+    return U.overlap1(rb.x0, rb.x1, x0, x1);
+  },
+  /* 毎フレーム1回（Game.step から・判定より先）。返り値: いま警告を出すべき橋（無ければ null） */
+  update(game) {
+    const dist = game.dist;
+    let cue = null, cueR = null;
+    for (let i = 0; i < game.active.length; i++) {
+      const o = game.active[i];
+      if (o.type !== 'BRIDGE') continue;
+      for (let k = 0; k < game.runners.length; k++) {
+        const r = game.runners[k];
+        if (game.merged && game.mergeLead && r !== game.mergeLead()) continue;
+        if (!Bridge.onPlanks(o, r, dist)) continue;
+        if (typeof o.stepM !== 'number') {
+          o.stepM = dist;
+          o.stepBy = r.id;
+          U.sfx('warn', { who: r.id });          // 警告音（大演出の予告と同じ）
+        }
+        /* 崩落の前で、まだ橋のレーンに居る＝警告 */
+        if (dist < MOT.bridgeFallAt(o)) { cue = o; cueR = r; }
+      }
+    }
+    let zone = null;
+    if (cueR && game.runnerForZone) {
+      zone = (game.runnerForZone('bottom') === cueR) ? 'bottom' : (game.runnerForZone('top') === cueR) ? 'top' : null;
+    }
+    Bridge.hud(cue, dist, zone);
+    return cue;
+  },
+  hud(o, dist, zone) {
+    if (typeof HUD === 'undefined' || !HUD.bridgeCue) return;
+    if (!o) { HUD.bridgeCue(null); return; }
+    const left = Math.max(0, (MOT.bridgeFallAt(o) - dist) / MOT.bridgeUnit(o));
+    HUD.bridgeCue({ left: left, surface: o.surface, zone: zone });
+  },
+  /* テスト・監査の窓口 */
+  snapshot(game) {
+    return game.active.filter((o) => o.type === 'BRIDGE').map((o) => ({
+      at: +o.at.toFixed(1), lane: o.lane, surface: o.surface,
+      entry: +MOT.bridgeEntry(o).toFixed(1), end: +MOT.bridgeEnd(o).toFixed(1),
+      stepM: (typeof o.stepM === 'number') ? +o.stepM.toFixed(2) : null,
+      fallAt: isFinite(MOT.bridgeFallAt(o)) ? +MOT.bridgeFallAt(o).toFixed(2) : null
+    }));
+  }
+};
+
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
   /* 障害物インスタンスを作る（at = 障害物の中心距離 m） */
@@ -869,8 +952,9 @@ const Obstacles = {
     }
 
     if (t.motion === 'bridge') {
-      /* 崩れる橋（契約§4.4 S3）: 「踏んだ時刻+0.4秒」より手前では板があるので無害。
-         そこから先は GAP と同じ穴になる。時刻の規則はこの2行がすべて。 */
+      /* 崩れる橋（契約§4.5 改訂 v2）: 崩落（踏んだ距離 + 2.0秒ぶん）より手前では板があるので
+         無害。そこから先は「崩落した橋」の帯（落ちた板の穴）。時刻の規則はこの2行がすべて。
+         帯の奥行きは zWin（踏み口〜終わり）が受け持つ＝崩落後に橋の上に居れば死ぬ。 */
       if (dist < MOT.bridgeFallAt(o) - 1e-9) return out;
       put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET, t.y0, t.y1);
       return out;
@@ -956,8 +1040,21 @@ const Obstacles = {
       const d = Sync.unitOf(o) * CFG.SYNC.PAD_T;
       return { z0: zc - d / 2, z1: zc + d / 2 };
     }
-    const lead = t.lead ? MOT.bridgeLead(o) : 0;
-    return { z0: zc - t.depth / 2, z1: zc + t.depth / 2 + lead };
+    const ex = Obstacles.extent(o);
+    return { z0: zc - t.depth / 2 - ex.fwd, z1: zc + t.depth / 2 + ex.back };
+  },
+  /* 判定の奥行きが at の前後へ伸びる距離（long 型＝崩れる橋）。**ここが唯一の出所**。
+     back … at より手前（踏み口まで）／ fwd … at より奥（橋の終わりまで）。
+     判定の近傍の絞り込み（Game.collide・ボット）・寿命・見た目の出し入れがここを読む。 */
+  _ex0: { back: 0, fwd: 0 },
+  extent(o) {
+    if (!OBS[o.type].long) return Obstacles._ex0;
+    return { back: MOT.bridgeLead(o), fwd: MOT.bridgeTail(o) };
+  },
+  /* dist が「この障害物の判定に触れうる距離」か（pad = 体の奥行きなどの余裕） */
+  near(o, dist, pad) {
+    const ex = Obstacles.extent(o);
+    return (o.at - dist <= pad + ex.back) && (dist - o.at <= pad + ex.fwd);
   },
 
   /* 当たり判定ボックス（bands の外接。見た目監査・デバッグ用の互換窓口） */
@@ -994,7 +1091,8 @@ const Obstacles = {
      null なら路面はそのまま。区間は **距離 m** で返す。 */
   holeSpan(o, dist) {
     if (o.type === 'BRIDGE') {
-      return { from: MOT.bridgeEntry(o) - 0.7, to: o.at + OBS.BRIDGE.depth / 2 + 0.7 };
+      /* 橋の区間（踏み口〜終わり）は路面の代わりに橋の板を渡す */
+      return { from: MOT.bridgeEntry(o) - 0.5, to: MOT.bridgeEnd(o) + 0.5 };
     }
     /* 同時スイッチ: 成功していれば橋が架かるので路面はそのまま。失敗なら谷 */
     if (o.type === 'SYNCGAP') {
@@ -1030,10 +1128,15 @@ const Obstacles = {
     if (hit) return hit;
     /* 同時スイッチの橋は **必ず「踏み損ねた側」** で測る（planning は最悪値で見る）。
        ＝ 生成器・ボット・不変条件は「橋が架からなかったとき」でも通れる道を要求する。 */
+    /* 崩れる橋も **最悪値**（踏み口で踏んだ）で測る（Obstacles._plan → MOT.bridgeStep）。 */
     const grp = o.grp;
     o.grp = null;
-    try { return Obstacles._occCalc(o, key); } finally { o.grp = grp; }
+    const plan0 = Obstacles._plan;
+    Obstacles._plan = true;
+    try { return Obstacles._occCalc(o, key); } finally { o.grp = grp; Obstacles._plan = plan0; }
   },
+  /* planning（最悪値で測る）中か。occ の間だけ true */
+  _plan: false,
   _occCalc(o, key) {
     const t = OBS[o.type];
     const moving = !!(t.motion || (o.params && o.params.blink));
@@ -1071,6 +1174,16 @@ const Obstacles = {
           }
         }
       }
+    }
+    /* pit 型（崩れる橋）: 帯は穴で、跳んでも穴の中へ着地する（崩落は 1.0秒続く）。
+       ＝ 跳躍・スライドは逃げ道にならない（通過の瞬間だけ見ると跳べば当たらないが、それは錯覚） */
+    if (t.pit) {
+      Obstacles.SIDES.forEach((side) => {
+        CFG.LANES.forEach((l) => {
+          const a = res[side].lanes[l];
+          if (!a.run) { a.jump = false; a.slide = false; }
+        });
+      });
     }
     Obstacles.SIDES.forEach((side) => {
       const r = res[side];
@@ -1211,12 +1324,13 @@ const Obstacles = {
         box(gw / n * 0.55, gh, 0.03, Obstacles._emissive('warn', C.warn), x, y, z, [0, 0, 0.5]);
       }
     };
-    /* 崩れる橋の骨組み（ゾーン共通。色だけスキンが決める）。
-       板の実寸（leadM = そこの速度×0.4秒）と落下は place() が動かすので、
-       ここでは **z方向の長さ1の部品** を並べておく（プールで使い回すため）。 */
+    /* 崩れる橋の骨組み（契約§4.5【改訂 v2】・§4.3 の色＝赤/橙/白）。
+       板・谷・縁は **z方向の長さ1の部品** で作り、place() が実寸（踏み口〜終わり＝3.0秒ぶん）へ
+       伸ばす（プールで使い回すため）。板は N 枚が別々に震えて落ちる＝材質ごとの InstancedMesh。
+       縁（手すり）はビュー専用の材質: 未踏＝橙 → 踏んだ＝赤の点滅 → 崩落＝赤。 */
     const bridge = (mats) => {
-      const n = 10;
-      /* 谷（板の下）。材質ごとに1メッシュへ融合する（ドローコール削減 / 契約§3 の300以下） */
+      const n = 12;
+      const own = [];
       const pit = new THREE.Group();
       pit.add(new THREE.Mesh(ZoneKit.merge([
         { g: new THREE.BoxGeometry(w + 0.5, 0.06, 1), p: [0, -1.62, 0] },
@@ -1228,43 +1342,48 @@ const Obstacles = {
         gl.position.y = -1.56;
         pit.add(gl);
       }
+      /* 崩落した後の「赤い縁」（穴の両脇の縁が赤く光る＝ここは落ちる） */
+      const rimMat = new THREE.MeshBasicMaterial({ color: C.red, fog: false });
+      own.push(rimMat);
+      const rim = new THREE.Mesh(ZoneKit.merge([
+        { g: new THREE.BoxGeometry(0.10, 0.05, 1), p: [-(w / 2 + 0.12), 0.03, 0] },
+        { g: new THREE.BoxGeometry(0.10, 0.05, 1), p: [w / 2 + 0.12, 0.03, 0] }
+      ]), rimMat);
+      rim.visible = false;
+      pit.add(rim);
       g.add(pit);
-      /* 板は10枚が別々に傾いて落ちる＝**材質ごとの InstancedMesh** にして、
-         1枚あたり4メッシュ（＝40ドローコール）だったものを3ドローコールにする。
-         板ごとの姿勢は place() が1つの行列を作り、3つのインスタンスへ同じ行列を書く。 */
       const plankIMs = [];
       const addIM = (geo, mat) => {
-        if (!mat) return;
+        if (!mat) return null;
         const im = new THREE.InstancedMesh(geo, mat, n);
         im.frustumCulled = false;
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         g.add(im);
         plankIMs.push(im);
+        return im;
       };
-      addIM(ZoneKit.merge([{ g: new THREE.BoxGeometry(w, 0.15, 1), p: [0, -0.075, 0] }]), mats.slab);
-      addIM(ZoneKit.merge([{ g: new THREE.BoxGeometry(w * 0.24, 0.10, 1), p: [0, -0.18, 0] }]), mats.beam);
-      if (mats.edge) {
-        addIM(ZoneKit.merge([
-          { g: new THREE.BoxGeometry(0.07, 0.26, 1), p: [-(w / 2 - 0.03), 0.10, 0] },
-          { g: new THREE.BoxGeometry(0.07, 0.26, 1), p: [w / 2 - 0.03, 0.10, 0] }
-        ]), mats.edge);
-      }
-      /* 板の「踏み口」を示す標示（ここを踏んだら 0.4秒で落ちる、と一目で分かる）。
-         判定の外なので体には当たらない（見た目と判定のズレ検査でも BRIDGE は x/y/z 例外）。 */
+      /* 板（白い石板）＋板の下の梁（暗色）＋板の両端の縁（ビュー専用の橙→赤） */
+      addIM(ZoneKit.merge([{ g: new THREE.BoxGeometry(w, 0.14, 1), p: [0, -0.07, 0] }]), mats.slab);
+      addIM(ZoneKit.merge([{ g: new THREE.BoxGeometry(w * 0.30, 0.12, 1), p: [0, -0.20, 0] }]), mats.beam);
+      const edgeMat = new THREE.MeshBasicMaterial({ color: C.orange, fog: false });
+      own.push(edgeMat);
+      addIM(ZoneKit.merge([
+        { g: new THREE.BoxGeometry(0.08, 0.10, 1), p: [-(w / 2 - 0.04), 0.03, 0] },
+        { g: new THREE.BoxGeometry(0.08, 0.10, 1), p: [w / 2 - 0.04, 0.03, 0] }
+      ]), edgeMat);
+      /* 踏み口の標示（判定の外＝体には当たらない / 見た目と判定のズレ検査でも BRIDGE は例外） */
       const mark = new THREE.Group();
-      const markMat = mats.mark || mats.edge || mats.beam;
       mark.add(new THREE.Mesh(ZoneKit.merge([
-        { g: new THREE.BoxGeometry(w + 0.18, 0.09, 0.34), p: [0, 0.05, 0] },
-        { g: new THREE.BoxGeometry(0.18, 0.12, 0.18), p: [-(w / 2 + 0.06), 0.64, 0] },
-        { g: new THREE.BoxGeometry(0.18, 0.12, 0.18), p: [w / 2 + 0.06, 0.64, 0] }
-      ]), markMat));
+        { g: new THREE.BoxGeometry(w + 0.18, 0.08, 0.30), p: [0, 0.04, 0] }
+      ]), edgeMat));
       mark.add(new THREE.Mesh(ZoneKit.merge([
-        { g: new THREE.BoxGeometry(0.13, 0.62, 0.13), p: [-(w / 2 + 0.06), 0.31, 0] },
-        { g: new THREE.BoxGeometry(0.13, 0.62, 0.13), p: [w / 2 + 0.06, 0.31, 0] }
+        { g: new THREE.BoxGeometry(0.12, 0.50, 0.12), p: [-(w / 2 + 0.08), 0.25, 0] },
+        { g: new THREE.BoxGeometry(0.12, 0.50, 0.12), p: [w / 2 + 0.08, 0.25, 0] }
       ]), mats.post || mats.beam));
       g.add(mark);
-      g.userData.bridge = { pit: pit, ims: plankIMs, mark: mark, n: n,
-                            dummy: new THREE.Object3D() };
+      g.userData.bridge = { pit: pit, rim: rim, ims: plankIMs, mark: mark, n: n,
+                            edge: edgeMat, mats: own, dummy: new THREE.Object3D() };
+      g.userData.bridgeMats = own;
     };
     /* ------------------------------------------------------------------------
        S4 の新ギミックの骨組み（ゾーン共通・2026-09-22 P3b）
@@ -1809,33 +1928,43 @@ const Obstacles = {
       }
 
     } else if (mot === 'bridge' && ud.bridge) {
-      /* 崩れる橋（契約§4.4 S3）: 板は判定の外（乗っている間は無害）。
-         「踏んだ時刻+0.4秒」＝ MOT.bridgeFallAt(o) を越えた瞬間から、
-         板が1枚ずつ傾いて落ちていく＝ bands() が穴を返し始めるのと同じ距離。 */
-      const b = ud.bridge, lead = MOT.bridgeLead(o), D = OBS[o.type].depth;
-      const L = lead + D;                       // 板全体の長さ（実寸）
-      const zFar = -D / 2, zNear = D / 2 + lead;
-      b.pit.scale.z = L + 2.2;
+      /* 崩れる橋（契約§4.5 改訂 v2）: 板は判定の外（乗っている間は無害）。
+         未踏＝静か／踏んだ＝縁が赤く点滅し、崩落の SHAKE_T 秒前から板が震える／
+         崩落（MOT.bridgeFallAt ＝ bands() が穴を返し始める距離）＝板が1枚ずつ谷へ落ち、縁が赤く残る。 */
+      const b = ud.bridge, D = OBS[o.type].depth;
+      const lead = MOT.bridgeLead(o), tail = MOT.bridgeTail(o), unit = MOT.bridgeUnit(o);
+      const zNear = D / 2 + lead, zFar = -(D / 2 + tail);
+      const L = zNear - zFar;
+      b.pit.scale.z = L + 1.0;
       b.pit.position.z = (zFar + zNear) / 2;
-      if (b.mark) {
-        b.mark.position.z = zNear;                 // 板の手前端＝踏み口
-        b.mark.visible = (dist < MOT.bridgeFallAt(o) + 2);
-      }
-      const fallAt = MOT.bridgeFallAt(o);
+      b.mark.position.z = zNear;
+      const fallAt = MOT.bridgeFallAt(o), stepped = isFinite(fallAt);
+      const fallen = stepped && dist >= fallAt;
+      b.rim.visible = fallen;
+      b.edge.color.setHex(!stepped ? ObstacleSkin.COL.orange
+        : (fallen ? ObstacleSkin.COL.red
+           : ((Math.sin(dist * 1.3 + (t || 0) * 16) > 0) ? ObstacleSkin.COL.red : 0xffffff)));
       const slabLen = L / b.n;
       const dm = b.dummy;
       for (let i = 0; i < b.n; i++) {
         const hz = ZoneKit.hash(i, 17);
-        const f = U.clamp((dist - fallAt - hz * 1.1) / 2.6, 0, 1);
         const sgn = (i % 2) ? 1 : -1;
-        if (f >= 1) {                                   // 落ちきった板は畳んで消す
-          dm.position.set(0, -9999, 0);
-          dm.rotation.set(0, 0, 0);
-          dm.scale.set(0.0001, 0.0001, 0.0001);
+        const zc2 = zFar + (i + 0.5) * slabLen;
+        dm.scale.set(1, 1, slabLen * 0.94);
+        if (fallen) {
+          /* 板が谷へ落ちて、傾いたまま底に残る（落ちた板） */
+          const f = U.clamp((dist - fallAt - hz * unit * 0.2) / (unit * 0.45), 0, 1);
+          const e = f * f;
+          dm.position.set(sgn * e * 0.22, -e * 1.42, zc2);
+          dm.rotation.set(sgn * e * 0.25, 0, sgn * e * 0.95);
+        } else if (stepped && dist > fallAt - unit * CFG.BRIDGE.SHAKE_T) {
+          const k = 1 - (fallAt - dist) / (unit * CFG.BRIDGE.SHAKE_T);
+          const j = Math.sin((t || 0) * 55 + i * 2.1) * 0.035 * k;
+          dm.position.set(j, j * 0.6 - k * 0.04, zc2);
+          dm.rotation.set(0, 0, j * 1.6);
         } else {
-          dm.scale.set(1, 1, slabLen * 0.92);
-          dm.position.set(sgn * f * 0.5, -f * f * 5.5, zFar + (i + 0.5) * slabLen + f * 1.1);
-          dm.rotation.set(sgn * f * 0.9, f * 0.35, sgn * f * 1.1);
+          dm.position.set(0, 0, zc2);
+          dm.rotation.set(0, 0, 0);
         }
         dm.updateMatrix();
         for (let k = 0; k < b.ims.length; k++) b.ims[k].setMatrixAt(i, dm.matrix);

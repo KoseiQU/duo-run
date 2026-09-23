@@ -190,14 +190,13 @@ const ObstacleSkin = {
       x.box(w * 0.5, 0.10, D * 1.15, G('red', C.red), 0, 0.30, 0);
 
     } else if (type === 'BRIDGE') {
+      /* 崩れる橋（契約§4.5 改訂 v2）: 白い石板・暗い梁・橙の縁（踏むと赤）・谷の底は赤く光る */
       x.bridge({
         pit: G('pit', C.pit),
         deep: G('red', C.red),
-        slab: Obstacles._material('brgSlab', 0x9aa0a8),
+        slab: G('brgSlab', 0xaeb4be),          // 暗い道から浮く明るい石板（霧を掛けない）
         beam: G('dev', C.dev),
-        edge: G('orange', C.orange),
-        post: G('dev', C.dev),
-        mark: G('orange', C.orange)
+        post: G('dev', C.dev)
       });
 
     } else if (OBS[type].gate) {

@@ -149,7 +149,7 @@
         const view = In.Obstacles.acquire(type);
         view.position.set(0, 0, 0); view.rotation.set(0, 0, 0); view.updateMatrixWorld(true);
         const b3 = In.viewBox(view);            /* 判定外の装飾（P5c の支柱・警告バー・路面帯）は除く */
-        const o = In.Obstacles.make(type, 'floor', 0, 0, 0, type === 'BRIDGE' ? { bridge: { leadM: 9 } } : null);
+        const o = In.Obstacles.make(type, 'floor', 0, 0, 0, type === 'BRIDGE' ? { bridge: { unitM: 20 } } : null);
         const hb = In.Obstacles.box(o, 0);
         const xc = ((In.Obstacles.laneLo(o) + In.Obstacles.laneHi(o)) / 2) * CFG.LANE_W;
         const ex = skip[type] || [];
@@ -168,13 +168,7 @@
         cmp('z', 1, b3.max.z, hb.z1, hb.z1 - hb.z0);
         In.Obstacles.release(type, view);
       });
-      /* 崩れる橋の見た目は「落ちる距離」と一致する（板が消えるのは判定が穴になる所から） */
-      const o = In.Obstacles.make('BRIDGE', 'floor', 0, 500, 0, { bridge: { leadM: 9.6 } });
-      t.near(In.MOT.bridgeFallAt(o), 500 - OBS.BRIDGE.depth / 2, 1e-9, '落ちる位置＝穴の手前端');
-      t.near(In.MOT.bridgeEntry(o), 500 - OBS.BRIDGE.depth / 2 - 9.6, 1e-9, '踏む位置＝そこから leadM 手前');
-      t.eq(In.MOT.bridgeFall(o, In.MOT.bridgeEntry(o) + 1), 0, '踏んだ直後は板が落ちていない');
-      t.ok(In.MOT.bridgeFall(o, In.MOT.bridgeFallAt(o) + 1) > 0, '落ちる位置を過ぎたら板が落ち始める');
-
+      /* 崩れる橋の時刻規則（契約§4.5 改訂 v2）は tests/test_p7b.js が検査する */
       /* 装飾が 2体の通り道（|x| ≤ レーン端 + 体半幅）へ食い込まない */
       const bad = In.ZoneKit.intrudes(Zs.get('ruins'));
       t.eq(bad.length, 0, '遺跡の装飾は走行空間に入らない: ' +
@@ -183,67 +177,8 @@
     }
   });
 
-  /* ==========================================================================
-     3. 崩れる橋の時刻判定（契約§4.4 S3）
-     ========================================================================== */
-  DUO.__suites.push({
-    name: 'S3: 崩れる橋（踏んで0.3秒後は生存・0.5秒後は死／抜け方はレーン移動かジャンプ）',
-    quick: true,
-    run(t) {
-      const In = I(), MOT = In.MOT;
-      /* 板に乗ってから waitSec だけ「何もせず」走り続ける */
-      const stay = (waitSec) => {
-        DUO.reset(); DUO.start('S3', 5); DUO.skipTo(300);
-        In.clearObstacles();
-        const lead = Game.speed * In.CFG.BRIDGE.LEAD_T;
-        const o = In.Obstacles.make('BRIDGE', 'floor', 0, Game.dist + 60, Game.dist, { bridge: { leadM: lead } });
-        Game.active.push(o);
-        Game.runners.forEach((r) => { r.laneFrom = r.laneTo = r.laneVal = 0; r.laneT = In.CFG.LANE_T; });
-        const entry = MOT.bridgeEntry(o);
-        let g = 0;
-        while (Game.dist < entry && g++ < 3000 && Game.status === 'playing') DUO.__step(1 / 60);
-        const from = Game.dist;
-        let sec = 0;
-        while (sec < waitSec && g++ < 3000 && Game.status === 'playing') { DUO.__step(1 / 60); sec += 1 / 60; }
-        return { alive: Game.status === 'playing', moved: Game.dist - from, killer: Game.killer };
-      };
-      const a = stay(0.30);
-      t.eq(a.alive, true, '踏んで 0.3秒後（' + a.moved.toFixed(1) + 'm）はまだ板の上＝生存');
-      const b = stay(0.50);
-      t.eq(b.alive, false, '踏んで 0.5秒後はそのレーンの床が落ちている＝死');
-      t.eq(b.killer && b.killer.obstacle, 'BRIDGE', '死因は崩れる橋');
-
-      /* レーン移動で抜けられる（踏んだ直後に横へ） */
-      DUO.reset(); DUO.start('S3', 5); DUO.skipTo(300);
-      In.clearObstacles();
-      const lead = Game.speed * In.CFG.BRIDGE.LEAD_T;
-      const o = In.Obstacles.make('BRIDGE', 'floor', 0, Game.dist + 60, Game.dist, { bridge: { leadM: lead } });
-      Game.active.push(o);
-      Game.runners.forEach((r) => { r.laneFrom = r.laneTo = r.laneVal = 0; r.laneT = In.CFG.LANE_T; });
-      let g = 0;
-      while (Game.dist < MOT.bridgeEntry(o) && g++ < 3000) DUO.__step(1 / 60);
-      DUO.touch('bottom', 'right');
-      while (Game.dist < o.at + 4 && g++ < 3000 && Game.status === 'playing') DUO.__step(1 / 60);
-      t.eq(Game.status, 'playing', '踏んだ直後に横フリックすれば抜けられる');
-
-      /* 判定の中身（GAP と同じ＝跳べば安全・立っていると死・潜っても死） */
-      const oo = In.Obstacles.make('BRIDGE', 'floor', 0, 500, 0, { bridge: { leadM: 9.6 } });
-      const acts = In.Obstacles.occ(oo).floor.lanes[0];
-      t.eq(acts.run, false, '立ったままは落ちる');
-      t.eq(acts.jump, true, '跳べば越えられる');
-      t.eq(acts.slide, false, '潜っても落ちる');
-      t.eq(In.Obstacles.demand(oo, 'floor'), 'jump', '要求はジャンプ（またはレーン移動）');
-      t.eq(In.Obstacles.occ(oo).ceil.lanes[0].run, true, '反対の面には効かない');
-      t.eq(In.Obstacles.occ(oo).floor.lanes[1].run, true, '隣のレーンは素通りできる');
-      /* 速度が変わっても「0.4秒後に落ちる」は一定（生成時に実寸へ伸縮する） */
-      const st = In.makeStage('S3');
-      const sc = st.speedAt(600) / In.CFG.REF_SPEED;
-      const p = In.scaleParams({ bridge: {} }, sc);
-      t.near(p.bridge.leadM / st.speedAt(600), In.CFG.BRIDGE.LEAD_T, 1e-3,
-             '落ちるまでの距離 ÷ 速度 = ' + In.CFG.BRIDGE.LEAD_T + '秒（速度によらず一定）');
-      DUO.reset();
-    }
-  });
+  /* 3. 崩れる橋の時刻判定: 契約§4.5【改訂 v2】（踏んで 2.0秒で崩落）で旧規則（0.4秒・跳び越し）は失効。
+     新しい規則の検査は tests/test_p7b.js（P7b-1）へ移した。 */
 
   /* ==========================================================================
      4. S3 の定義・不変条件・密度・動作比率

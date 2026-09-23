@@ -339,13 +339,17 @@ const World = {
       const rel = o.at - dist;
       /* 見た目の変種（コアの「全ゾーン混在」/ P5b）はスキンが障害物ごとに決める。
          変種はプールの鍵にも入るので、使い回しで別ゾーンの姿に化けない。 */
-      if (rel < far && !o.view) {
+      /* 奥行きの長い型（崩れる橋）は、手前端（踏み口）が霧から出た時に建て、
+         奥の端を通り過ぎるまで描く（Obstacles.extent が唯一の出所） */
+      const ex = Obstacles.extent(o);
+      const relNear = rel - ex.back, relFar = rel + ex.fwd;
+      if (relNear < far && !o.view) {
         o.view = Obstacles.acquire(o.type, Obstacles.variantOf(o));
         World.obsRoot.add(o.view);
       }
       if (o.view) {
         Obstacles.place(o, dist, World._t);
-        o.view.visible = (rel < far) && (back || (-rel < camZ));
+        o.view.visible = (relNear < far) && (back || (-relFar < camZ));
       }
     }
   },

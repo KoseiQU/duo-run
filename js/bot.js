@@ -31,6 +31,11 @@ const Bot = {
       if (w && (o.at - w.at) <= sp * CFG.FAIR.SIMUL) { w.items.push(o); }
       else walls.push({ at: o.at, atEnd: o.at, items: [o] });
     });
+    /* 崩れる橋（契約§4.5 改訂 v2）: 崩落が続く間（C〜X）のウォールでは、そのレーンを塞ぐ。
+       崩落点 C を通り過ぎた橋もここで拾う（Fair.coverWalls と同じ規則・同じ最悪値）。 */
+    const longs = game.active.filter((o) => OBS[o.type].long && Obstacles.affects(o, surface) &&
+                                          o.at + Obstacles.extent(o).fwd + 2 > game.dist);
+    if (longs.length) Fair.coverWalls(walls, longs);
     return walls;
   },
 
@@ -68,7 +73,7 @@ const Bot = {
       for (let k = 0; k < game.active.length; k++) {
         const o = game.active[k];
         if (!Obstacles.affects(o, r.surface)) continue;
-        if (Math.abs(o.at - cur.d) > 5) continue;
+        if (!Obstacles.near(o, cur.d, 5)) continue;
         if (Obstacles.hits(o, hull, cur.d)) return false;
       }
       prev = cur;
