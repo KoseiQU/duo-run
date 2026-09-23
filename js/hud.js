@@ -94,9 +94,12 @@ const HUD = {
        （入れ替えワープ中は逆の半分 / Game.runnerForZone が唯一の出所）に出す */
     const side = (st.surface === 'ceil') ? 'ceil' : 'floor';
     const zone = st.zone || (side === 'ceil' ? 'top' : 'bottom');
-    const key = side + '|' + zone;
+    /* キャラが左寄り（レーン -1）なら右の脇へ、それ以外は左の脇へ */
+    const sx = (st.lane !== undefined && st.lane < 0) ? 'r' : 'l';
+    const key = side + '|' + zone + '|' + sx;
     if (HUD.bridgeState !== key) {
       e.classList.toggle('ceil', side === 'ceil');
+      e.classList.toggle('side-r', sx === 'r');
       if (tz) { tz.classList.toggle('brg-floor', zone === 'bottom'); tz.classList.toggle('brg-ceil', zone === 'top'); }
       HUD.bridgeState = key;
     }

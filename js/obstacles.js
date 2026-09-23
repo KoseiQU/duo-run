@@ -914,7 +914,7 @@ const Bridge = {
     if (typeof HUD === 'undefined' || !HUD.bridgeCue) return;
     if (!o) { HUD.bridgeCue(null); return; }
     const left = Math.max(0, (MOT.bridgeFallAt(o) - dist) / MOT.bridgeUnit(o));
-    HUD.bridgeCue({ left: left, surface: o.surface, zone: zone });
+    HUD.bridgeCue({ left: left, surface: o.surface, zone: zone, lane: o.lane });
   },
   /* テスト・監査の窓口 */
   snapshot(game) {
