@@ -194,8 +194,10 @@
       }
       t.eq(bad, 0, '50シードとも空中の不変条件を満たす（' + firstErr + '）');
       const avg = walls / 50;
-      t.ok(minWalls >= 5, '1回の滑空に空中の壁が ' + minWalls + '本以上');
-      t.ok(avg >= 6.8 && avg <= 8.2, '壁の本数は平均 ' + avg.toFixed(1) + '本（速度10に合わせて7〜8本）');
+      /* 契約§4.5 緩和 v2（2026-09-24）: 1回の飛行で 3〜4個・発射後2.0秒なし・間隔 ≥ 1.5秒
+         （発射直後と間隔は Fair.validateAir が見る＝上の bad に入る） */
+      t.ok(minWalls >= FF.N_MIN, '1回の滑空に空中の壁が ' + minWalls + '本以上（3〜4個）');
+      t.ok(avg >= FF.N_MIN && avg <= FF.N_MAX, '壁の本数は平均 ' + avg.toFixed(1) + '本（3〜4個）');
       t.eq(Object.keys(kinds).length, 4,
            '障害物は4種類（' + Object.keys(kinds).map((k) => k + ':' + kinds[k]).join(' ') + '）');
       t.eq(FF.KINDS.indexOf('ring'), -1, '光の輪は障害物の種類から外れている（契約§4.5 2026-09-22）');
@@ -255,9 +257,9 @@
       t.eq(FF.passable(0, 2 + edge + 0.05, it), false, '上の縁に掛かっても死ぬ');
       t.eq(FF.passable(0, 2 - edge - 0.05, it), false, '下の縁に掛かっても死ぬ');
       /* 点ではなく円で見ている証明: 中心は穴の中なのに、体の半径ぶん縁に掛かれば死ぬ */
-      const inX = 0.60, inY = 2.60;
-      t.ok(Math.abs(inX) < FF.HOLE && Math.abs(inY - 2) < FF.HOLE, '(0.60, 2.60) は穴の矩形の中にある点');
-      t.eq(FF.passable(inX, inY, it), false, '穴の中の点でも体（半径0.45）が縁に掛かれば死ぬ＝円で見ている');
+      const inX = FF.HOLE - FF.R * 0.5, inY = 2 + FF.HOLE - FF.R * 0.5;
+      t.ok(Math.abs(inX) < FF.HOLE && Math.abs(inY - 2) < FF.HOLE, '(' + inX.toFixed(2) + ', ' + inY.toFixed(2) + ') は穴の矩形の中にある点');
+      t.eq(FF.passable(inX, inY, it), false, '穴の中の点でも体（半径' + FF.R + '）が縁に掛かれば死ぬ＝円で見ている');
       /* 帯（電線）は開いている軸には無限に動ける */
       const slotGap = { x: 0, y: 2, hw: FF.SLOT, hh: FF.SLOT, openX: true, openY: false };
       const slot = { at: 100, kind: 'wires', gap: slotGap, rects: FF.rects(slotGap) };

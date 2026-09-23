@@ -33,22 +33,26 @@
 const FF = {
   /* ---- 断面と体（契約§4.5） --------------------------------------------- */
   X0: -1.8, X1: 1.8, Y0: 0.6, Y1: 3.4,
-  R: 0.45,              // DUO体の半径
+  /* 【契約§4.5 緩和 v2（2026-09-24）】判定半径 0.45 → 0.30・隙間 +30%（HOLE/SLOT）・
+     発射後 2.0秒は障害物なし・障害物の間隔 ≥ 1.5秒・1回の飛行で 3〜4個・高さの手がかり（影・照準リング・誘導線） */
+  R: 0.30,              // DUO体の判定半径（見た目の繭より小さい＝かすっても死なない側）
   V: 10.0,              // 最大速度（x,y 各軸 m/s）慣性なし（2026-09-22 実機評で 4.0→10）
   DEPTH: 0.6,           // 空中の障害物の奥行き（m）
-  HOLE: 0.85,           // 輪・看板の「穴」の半径（R + 0.40 の余裕）
-  SLOT: 0.95,           // 帯状スリットの半幅（R + 0.50 の余裕）
+  HOLE: 1.105,          // 輪・看板の「穴」の半径（旧 0.85 の +30%）
+  SLOT: 1.235,          // 帯状スリットの半幅（旧 0.95 の +30%）
   REACT: 0.35,          // 生成時に見込む反応の余裕（秒）
   MARGIN: 6,            // 塞ぐ板を断面の外へ伸ばす長さ（体は断面内にしか居ない）
   VIEW_FAR: 90,         // 空中の壁を描き始める距離（m）＝ 速度24で3.7秒ぶん先まで見える
   EDGE: 0.35,           // 隙間の中心を断面の縁からこれだけ内側に置く
 
   /* ---- 譜面の間合い（秒。速度で伸縮する＝§4.7 と同じ考え方） ------------- */
-  FIRST_T: 0.90,        // 発射から最初の壁まで
+  FIRST_T: 2.00,        // 発射から最初の壁まで（契約§4.5 緩和: 発射後 2.0秒は障害物なし）
   LAST_T: 0.70,         // 最後の壁から着地まで
-  /* 壁と壁の間（秒）。速度が 4→10 になったぶん詰めて、同じ密度感（1回の滑空で
-     平均5.6本 → 7本）にする。これ以上詰めると REACT(0.35秒) が効いて予算が枯れる。 */
-  GAP_T0: 0.58, GAP_T1: 0.75,
+  GAP_MIN_T: 1.50,      // 壁と壁の間の下限（秒 / 契約§4.5 緩和）
+  N_MIN: 3, N_MAX: 4,   // 1回の飛行の壁の数（契約§4.5 緩和「3〜4個」）
+  /* 3個置ける最短の飛行 ＝ FIRST_T + 2 × GAP_MIN_T + LAST_T ＝ 5.7秒。
+     大演出の滑空区間（setpieces.js の LIP〜LAND）はこれ以上の秒数に作る。 */
+  minFlightT() { return FF.FIRST_T + (FF.N_MIN - 1) * FF.GAP_MIN_T + FF.LAST_T; },
 
   /* ---- 演出の長さ（契約§4.5） ------------------------------------------- */
   MERGE_T: 0.40,        // 合体演出（秒）
@@ -134,10 +138,26 @@ const FF = {
     const ry0 = FF.Y0 + FF.EDGE, ry1 = FF.Y1 - FF.EDGE;
     let prev = { x: entry.x, y: entry.y };
     let prevAt = launchM;
-    let at = launchM + sp(launchM) * FF.FIRST_T;
+    /* 壁の位置（契約§4.5 緩和）: 発射後 FIRST_T 秒〜着地の LAST_T 秒前の窓に、3〜4個を
+       間隔 ≥ GAP_MIN_T 秒で置く。秒で決めてから距離へ直す（速度が変わっても間合いは同じ）。 */
+    /* 速度は区間の中で少し上がるので、距離⇄秒の換算は **速い側** で見る（秒を短く見積もる＝安全側） */
+    const vMax = Math.max(sp(launchM), sp(landM)) * 1.005;
+    const first = launchM + vMax * FF.FIRST_T;
     const last = landM - sp(landM) * FF.LAST_T;
-    let guard = 0;
-    while (at <= last && guard++ < 40) {
+    const tWin = (last - first) / Math.max(1, vMax);                     // 窓の秒数
+    let n = Math.floor(tWin / FF.GAP_MIN_T + 1e-9) + 1;
+    n = (last < first) ? 0 : U.clamp(n, 0, FF.N_MAX);
+    const ats = [];
+    if (n === 1) ats.push(first);
+    for (let i = 0; i < n && n > 1; i++) {
+      /* 等間隔を基準に、間隔の下限を割らない範囲で少し揺らす（毎回同じ拍にしない） */
+      const u = i / (n - 1);
+      const slack = Math.max(0, tWin - (n - 1) * FF.GAP_MIN_T) / (n - 1);
+      const jit = (i === 0 || i === n - 1) ? 0 : (rng() - 0.5) * Math.min(slack, 0.4);
+      ats.push(first + (last - first) * u + jit * vMax);
+    }
+    for (let i = 0; i < ats.length; i++) {
+      const at = ats[i];
       const s = sp(at);
       /* ブースト（+20%）を取っていても間に合う秒数で予算を組む（安全側 / P2d） */
       const dt = (at - prevAt) / (s * (1 + FF.BOOST_K));
@@ -156,7 +176,6 @@ const FF = {
       items.push(it);
       prev = { x: openX ? prev.x : gap.x, y: openY ? prev.y : gap.y };
       prevAt = at;
-      at += s * (FF.GAP_T0 + rng() * (FF.GAP_T1 - FF.GAP_T0));
     }
     const rings = FF._rings(rng, items, entry);
     return { items: items, rings: rings, launchM: launchM, landM: landM, entry: entry, seed: seed };
@@ -423,7 +442,7 @@ const FF = {
      光の輪は障害物ではない（加速アイテム）ので金色のまま。 */
   SKIN: {
     id: 'common',
-    COL: { field: 0xff3a26, ring: 0xffd479, ring2: 0xffe9b0, board: 0x2b1010,
+    COL: { field: 0xff3a26, ring: 0xffd479, ring2: 0xffe9b0, board: 0x8c1d12,
            edge: 0xff8a1e, cable: 0x2b2e35, spark: 0xff3a26, drone: 0xe8ecf2, ad: 0xff3a26,
            rock: 0x8a2a1c }
   },
@@ -477,8 +496,53 @@ const FF = {
     duo.add(trail);
     duo.renderOrder = 6;
     scene.add(duo);
+    /* ---- 高さの手がかり（契約§4.5 緩和 v2）: 床と天井に落ちる DUO体の影・体の周りの照準リング・
+       次の隙間への薄い誘導線（＋隙間の中心の小さな的）。当たり判定は持たない ---- */
+    const cue = new THREE.Group();
+    cue.visible = false;
+    cue.renderOrder = 7;
+    const addM = (col, op) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op,
+                                                            depthWrite: false, blending: THREE.AdditiveBlending,
+                                                            side: THREE.DoubleSide, fog: false });
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45,
+                                                    depthWrite: false, side: THREE.DoubleSide, fog: false });
+    const shadows = [];
+    [0, CFG.H].forEach((y) => {
+      const g = new THREE.Group();
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.55, 28), shadowMat);
+      disc.rotation.x = -Math.PI / 2;
+      g.add(disc);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(0.52, 0.60, 32), addM(0xffffff, 0.55));
+      rim.rotation.x = -Math.PI / 2;
+      g.add(rim);
+      g.userData = { y: y, disc: disc, rim: rim };
+      cue.add(g);
+      shadows.push(g);
+    });
+    const ringMat = addM(0xffffff, 0.75);
+    const ring = new THREE.Group();
+    ring.add(new THREE.Mesh(new THREE.RingGeometry(0.66, 0.72, 44), ringMat));
+    [0, 1, 2, 3].forEach((i) => {                      // 照準の目盛り（上下左右）
+      const tk = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.20), ringMat);
+      const a = i * Math.PI / 2;
+      tk.position.set(Math.cos(a) * 0.82, Math.sin(a) * 0.82, 0);
+      tk.rotation.z = a + Math.PI / 2;
+      ring.add(tk);
+    });
+    cue.add(ring);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.38,
+                                                  depthWrite: false, fog: false });
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const guide = new THREE.Line(lineGeo, lineMat);
+    guide.frustumCulled = false;
+    cue.add(guide);
+    const mark = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 24), addM(0xffffff, 0.6));
+    cue.add(mark);
+    scene.add(cue);
     FF.view = { root: root, mat: mat, pool: {}, duo: duo, cocoon: cocoon, hands: hands, trail: trail,
-                skinId: FF.skin().id };
+                skinId: FF.skin().id,
+                cue: { root: cue, shadows: shadows, ring: ring, guide: guide, mark: mark } };
     return FF.view;
   },
 
@@ -602,6 +666,7 @@ const FF = {
     }
     root.visible = false;
     FF.view.duo.visible = false;
+    if (FF.view.cue) FF.view.cue.root.visible = false;
   },
   /* 空中の壁と光の輪を入れ替える（見た目を必ず回収する）。機械テストが使う窓口。
      rings を省くと輪は空になる（＝譜面まるごとの差し替え）。 */
@@ -822,6 +887,42 @@ const FF = {
       v.trail.position.set(0, 0.05, 0.85 + 1.6 * bk);
     } else if (v.duo.visible) {
       v.duo.visible = false;
+    }
+    FF._syncCue(dist, t, lift, k);
+  },
+
+  /* 高さの手がかり（契約§4.5 緩和 v2）。自由飛行の間だけ出す */
+  _syncCue(dist, t, lift, k) {
+    const c = FF.view && FF.view.cue;
+    if (!c) return;
+    const on = FF.on && k > 0.5;
+    c.root.visible = on;
+    if (!on) return;
+    const bx = FF.body.x, by = FF.body.y + lift;
+    /* 影: 近い面ほど濃く小さく（高さが読める）。床は y=0、天井は y=H（持ち上がり分を足す） */
+    c.shadows.forEach((g) => {
+      const ud = g.userData;
+      const d = Math.abs(FF.body.y - ud.y);               // 面までの距離（0.6〜3.4）
+      const near = U.clamp(1 - (d - 0.6) / 2.8, 0, 1);
+      g.position.set(bx, ud.y + lift + (ud.y > 0 ? -0.02 : 0.02), 0);
+      g.scale.setScalar(0.75 + 0.6 * (1 - near));
+      ud.disc.material.opacity = 0.18 + 0.42 * near;
+      ud.rim.material.opacity = 0.20 + 0.50 * near;
+    });
+    c.ring.position.set(bx, by, 0.05);
+    c.ring.rotation.z = t * 0.8;
+    /* 次の隙間への誘導線 */
+    const it = FF.course ? FF.course.items.filter((q) => q.at + FF.DEPTH / 2 > dist)[0] : null;
+    c.guide.visible = !!it;
+    c.mark.visible = !!it;
+    if (it) {
+      const tg = FF.target(it, FF.body.x, FF.body.y);
+      const z = -(it.at - dist);
+      const pa = c.guide.geometry.attributes.position;
+      pa.setXYZ(0, bx, by, 0);
+      pa.setXYZ(1, tg.x, tg.y + lift, z);
+      pa.needsUpdate = true;
+      c.mark.position.set(tg.x, tg.y + lift, z + FF.DEPTH / 2 + 0.02);
     }
   }
 };

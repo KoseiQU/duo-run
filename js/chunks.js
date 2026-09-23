@@ -1820,7 +1820,10 @@ const STAGE_DEFS = {
        「網羅札」（cov_*）を4本で12種ちょうどを覆う**形にし、coverFlags の重みで
        互いを選び合わせる。 */
   S8: {
-    id: 'S8', name: 'S8 コア', zone: 'core', lengthM: 1500,
+    /* P7a（契約§4.5 緩和 v2）: 全崩壊の自由飛行が 5.9秒 要るので大演出は 540m に伸びた。
+       ランダム区間（網羅札3組＋合体2回）を従来どおり確保するため、契約 v2 §4.4 の
+       「コア 1800m」をここだけ先に適用する（7本統合そのものは P7c）。 */
+    id: 'S8', name: 'S8 コア', zone: 'core', lengthM: 1800,
     /* S8 の新チャンクはすべて rank5。minRank 4 にすると前半に S8 の札が
        1枚も候補に入らない（maxRankAt が前半で 4 に留まる）ので 5 で固定する。 */
     speedFrom: 32, speedTo: 44, minRank: 5, maxRank: 5, setpiece: 'collapseall',
@@ -2178,8 +2181,8 @@ const Fair = {
     return errs;
   },
 
-  /* tip の猶予規則（契約§4.8 2026-09-23）の検査。違反メッセージの配列を返す。
-     ・tip は対象の speed × LEAD_T 秒以上手前に出る
+  /* tip の猶予規則（契約§4.8 2026-09-24 改訂）の検査。違反メッセージの配列を返す。
+     ・tip は対象の speed × LEAD_T 秒以上手前に出て、SHOW_T 秒で消える（消えてから対象まで ≥ 2.0秒）
      ・表示開始〜対象の通過後 speed × AFTER_T 秒の窓の中の必須動作は **対象のものだけ**
      stats を渡すと、窓の中の「対象の必須動作（ウォール数）」を stats.nTarget に積む。 */
   tipCheck(list, events, speedAt, opt, stats) {
@@ -2191,6 +2194,15 @@ const Fair = {
       const want = speedAt(p.targetAt) * CFG.TIP.LEAD_T;
       if (p.targetAt - ev.at < want - 0.01) {
         errs.push('tip ' + p.id + ' の先行 ' + (p.targetAt - ev.at).toFixed(1) + 'm < ' + want.toFixed(1) + 'm');
+      }
+      /* 2.0秒で消え、消えてから対象まで ≥ (LEAD_T − SHOW_T) 秒（契約§4.8 2026-09-24） */
+      if (p.hideM === undefined) errs.push('tip ' + p.id + ' に消える位置（hideM）がない');
+      else {
+        if (p.hideM > ev.at + speedAt(ev.at) * CFG.TIP.SHOW_T + 0.01) errs.push('tip ' + p.id + ' の表示が ' + CFG.TIP.SHOW_T + '秒より長い');
+        const gapT = (p.targetAt - p.hideM) / speedAt(p.targetAt);
+        if (gapT < CFG.TIP.LEAD_T - CFG.TIP.SHOW_T - 0.02) {
+          errs.push('tip ' + p.id + ' が消えてから対象まで ' + gapT.toFixed(2) + '秒 < ' + (CFG.TIP.LEAD_T - CFG.TIP.SHOW_T) + '秒');
+        }
       }
       const endWant = p.untilM + speedAt(p.untilM) * CFG.TIP.AFTER_T;
       if (p.winEnd < endWant - 0.01) errs.push('tip ' + p.id + ' の窓が短い');
@@ -2284,6 +2296,21 @@ const Fair = {
       prev = { x: g.openX ? prev.x : g.x, y: g.openY ? prev.y : g.y };
       prevAt = it.at;
     });
+    /* 契約§4.5 緩和 v2: 発射後 FIRST_T 秒は障害物なし・間隔 ≥ GAP_MIN_T 秒・1回の飛行で 3〜4個 */
+    course.items.forEach((it, i) => {
+      const sp = speedAt(it.at);
+      if (i === 0 && (it.at - course.launchM) / sp < FF.FIRST_T - 1e-6) {
+        errs.push('発射直後に障害物: ' + ((it.at - course.launchM) / sp).toFixed(2) + '秒 < ' + FF.FIRST_T + '秒');
+      }
+      if (i > 0 && (it.at - course.items[i - 1].at) / sp < FF.GAP_MIN_T - 1e-6) {
+        errs.push('空中の障害物の間隔: ' + ((it.at - course.items[i - 1].at) / sp).toFixed(2) + '秒 < ' + FF.GAP_MIN_T + '秒 @' + it.at.toFixed(1));
+      }
+    });
+    const flightT = (course.landM - course.launchM) / speedAt((course.landM + course.launchM) / 2);
+    if (flightT >= FF.minFlightT() - 1e-6 &&
+        (course.items.length < FF.N_MIN || course.items.length > FF.N_MAX)) {
+      errs.push('1回の飛行の障害物は ' + FF.N_MIN + '〜' + FF.N_MAX + '個: ' + course.items.length + '個');
+    }
     /* 着地までの猶予（最後の壁を抜けてから着地するまで） */
     if (course.items.length) {
       const lastIt = course.items[course.items.length - 1];
@@ -2709,6 +2736,7 @@ function createGenerator(stage, seed) {
     /* 対象の位置 T を「leadAt(T) ≥ base」になる最小へ（速度は位置で変わるので2回回す） */
     let T = base + stage.speedAt(base) * CFG.TIP.LEAD_T;
     T = Math.max(base + stage.speedAt(T) * CFG.TIP.LEAD_T, noDemandUntil + 0.5);
+    T = Math.max(T, 2 + stage.speedAt(2 + stage.speedAt(0) * CFG.TIP.LEAD_T) * CFG.TIP.LEAD_T + 0.5);
     /* ワイド梁の通常出現（契約§4.3 v2）: tip つきの初出チャンクも柱をゲートへ置き換えて試す */
     const variants = wideVariants(def);
     for (let vi = 0; vi < variants.length; vi++) {
@@ -2831,6 +2859,8 @@ function createGenerator(stage, seed) {
     if (it.tip) {
       let T = base + stage.speedAt(base) * CFG.TIP.LEAD_T;
       T = Math.max(base + stage.speedAt(T) * CFG.TIP.LEAD_T, noDemandUntil + 0.5);
+      /* 走り出しの最初の tip も対象の speed×LEAD_T 秒手前に出せる位置へ（tip は 2m より前に出せない） */
+      T = Math.max(T, 2 + stage.speedAt(2 + stage.speedAt(0) * CFG.TIP.LEAD_T) * CFG.TIP.LEAD_T + 0.5);
       at = Math.max(at, Math.ceil(T * 2) / 2);
     }
     const items = [];
@@ -2841,8 +2871,10 @@ function createGenerator(stage, seed) {
     noteItems(items);
     if (it.tip) {
       const winEnd = at + stage.speedAt(at) * CFG.TIP.AFTER_T;
-      events.push({ at: Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T), type: 'tip',
+      const tipAt = Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T);
+      events.push({ at: tipAt, type: 'tip',
                     params: { id: it.tip, untilM: at, targetAt: at, winEnd: winEnd,
+                              hideM: tipAt + stage.speedAt(tipAt) * CFG.TIP.SHOW_T,
                               target: items.map((o) => o.uid) }, done: false });
       noDemandUntil = Math.max(noDemandUntil, winEnd);
       noteTipWindow(Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T), winEnd);
@@ -3061,9 +3093,11 @@ function createGenerator(stage, seed) {
         noteDemands(inst.items);
         inst.events.forEach((e) => events.push(e));
         tipDone[pend[0]] = true;
-        events.push({ at: Math.max(2, r.win.tipAt), type: 'tip',
+        const tipAt = Math.max(2, r.win.tipAt);
+        events.push({ at: tipAt, type: 'tip',
                       params: { id: stage.tipOnce[pend[0]], untilM: r.win.tLast, targetAt: r.win.tFirst,
-                                winEnd: r.win.end, target: r.win.uids }, done: false });
+                                winEnd: r.win.end, hideM: tipAt + stage.speedAt(tipAt) * CFG.TIP.SHOW_T,
+                                target: r.win.uids }, done: false });
         noDemandUntil = Math.max(noDemandUntil, r.win.end);
         noteTipWindow(Math.max(2, r.win.tipAt), r.win.end);
         if (forced && def[forced]) forcePtr++;

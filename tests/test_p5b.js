@@ -141,7 +141,7 @@
      ========================================================================== */
   DUO.__suites.push({
     name: 'P5b→P7a: コアの障害物も共通デザイン（寄り親の混在は失効・判定は不変）',
-    quick: true,
+    quick: false,          // P7a: 共通デザインの検査は test_p7a（quick）。走行での幅照合は runAll で
     run(t) {
       const In = I(), Ob = In.Obstacles, Zs = In.Zones;
       DUO.reset(); DUO.start('S8', 5);

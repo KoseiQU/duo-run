@@ -520,6 +520,8 @@
       let bad = 0, spFound = 0, blanks = 0, warpSeen = 0, zeroSeen = 0, diagSeen = 0, hbeamSeen = 0, tips = 0;
       const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
       const half = { a: 0, b: 0 }, rnd = { a: 0, b: 0 };
+      /* 区画爆発は契約§4.5 緩和 v2 で 324m（ランダム区間は 1500 − 324 = 1176m まで） */
+      const SP0 = 1500 - In.Setpieces.DEFS.blastout.lengthM;
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S6');
         const g = In.createGenerator(st, seed);
@@ -544,11 +546,11 @@
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
         rnd.xa = (rnd.xa || 0) + In.Fair.tipOverlap(tw, 0, 750);
-        rnd.xb = (rnd.xb || 0) + In.Fair.tipOverlap(tw, 750, 1300);
+        rnd.xb = (rnd.xb || 0) + In.Fair.tipOverlap(tw, 750, SP0);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
           if (In.Fair.inTipWindow(tw, w.at)) return;
-          if (w.at < 750) { half.a += n; rnd.a += n; } else { half.b += n; if (w.at < 1300) rnd.b += n; }
+          if (w.at < 750) { half.a += n; rnd.a += n; } else { half.b += n; if (w.at < SP0) rnd.b += n; }
         });
       }
       t.eq(bad, 0, 'S6 50シードで §4.7 違反なし（大演出区間・ワープの猶予・無重力の滞空を含む）');
@@ -567,15 +569,18 @@
          演出込みの実測値も info で残す（既知の妥協点）。 */
       const dens = In.STAGE_DEFS.S6.density;
       t.eq(dens[0] + '-' + dens[1], '8-12', '密度の目安は 8→12回/100m');
-      const A = rnd.a / (50 * 750 - rnd.xa) * 100, B = rnd.b / (50 * 550 - rnd.xb) * 100;
-      /* 目安はその区間の**真ん中**の進行率で測る（前半 375m／後半のランダム区間 1025m） */
+      const A = rnd.a / (50 * 750 - rnd.xa) * 100, B = rnd.b / (50 * (SP0 - 750) - rnd.xb) * 100;
+      /* 目安はその区間の**真ん中**の進行率で測る（前半 375m／後半のランダム区間の真ん中） */
       const wantA = In.U.lerp(dens[0], dens[1], 375 / 1500);
-      const wantB = In.U.lerp(dens[0], dens[1], 1025 / 1500);
+      const wantB = In.U.lerp(dens[0], dens[1], ((750 + SP0) / 2) / 1500);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
            'S6 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
       t.ok(B >= wantB * 0.75 && B <= wantB * 1.25,
            'S6 後半（演出を除く）の密度 ' + B.toFixed(2) + ' 回/100m（目安 ' + wantB.toFixed(2) + ' ±25%）');
-      t.ok(B > A, 'S6 密度は後半のほうが高い（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '）');
+      /* P7a（契約§4.8 2026-09-24 改訂）: tip の窓が 4.0秒前＋対象後1.0秒に伸び、前半の初出（ゲートで
+         譜面が薄い所）がまとめて測定から外れるので、前半の「窓の外」が相対的に濃く出る（S7 と同じ）。
+         後半が前半を −10% より大きく割らないことで見る（目安 ±25% は上で厳密に見る） */
+      t.ok(B >= A * 0.90, 'S6 密度は後半が前半を大きく割らない（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '）');
       t.info('演出込みの後半密度 ' + (half.b / 50 / 7.5).toFixed(2) + ' 回/100m（区画爆発の200mを含む）');
       /* 動作比率（契約§4.3）。スライドは「壁の穴」だけ＝1チャンクに最大1・連続禁止なので
          実測 1% 未満になり、その余りがレーン移動へ流れる。50/35/15 を
@@ -656,10 +661,11 @@
 
       DUO.reset(); DUO.start('S6', 7); DUO.bot('perfect');
       /* 演出の少し手前から実ステップで跨ぐ（直行するとイベントを飛ばす） */
-      DUO.skipTo(1240);
+      const SPS = 1500 - In.Setpieces.DEFS.blastout.lengthM;    // 1176m（契約§4.5 緩和 v2 で 324m）
+      DUO.skipTo(SPS - 60);
       let g = 0;
-      while (Game.dist < 1302 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
-      t.eq(DUO.state().setpiece, 'blastout', '1300m で区画爆発が始まる');
+      while (Game.dist < SPS + 2 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
+      t.eq(DUO.state().setpiece, 'blastout', SPS + 'm で区画爆発が始まる');
       t.eq(document.getElementById('cue').classList.contains('on'), true, 'HUD に予告が出る');
       t.ok(document.getElementById('cue-main').textContent.indexOf('BLAST') >= 0, '予告の文字は「BLAST!」');
       const start = Sp.state.startM;
@@ -695,30 +701,30 @@
       t.eq(def.air, true, '自由飛行の区間を持つ演出');
       t.eq(def.landRel, B.LAND, '着地の位置がキーフレームと一致');
       const st = In.makeStage('S6');
-      const inst = In.Setpieces.build('blastout', 1300, 0, st.speedAt(1300) / In.CFG.REF_SPEED, null);
+      const inst = In.Setpieces.build('blastout', SPS, 0, st.speedAt(SPS) / In.CFG.REF_SPEED, null);
       const errs = In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any', reactBoth: st.reactBoth });
       t.eq(errs.length, 0, '区画爆発の譜面が §4.7 を満たす: ' + errs.slice(0, 2).join(' | '));
       const all = (def.floor || []).concat(def.ceil || []);
       const lastAt = Math.max.apply(null, all.map((e) => e.at));
       t.ok(lastAt < B.SIDE0 - 4, 'カットの窓（' + B.SIDE0 + '〜' + B.SIDE1 + 'm）には障害物を置かない（§4.7）');
-      const grace = In.Fair.landingGrace(inst.items, 1300 + B.LAND, st.speedAt);
+      const grace = In.Fair.landingGrace(inst.items, SPS + B.LAND, st.speedAt);
       t.eq(grace.length, 0, '着地後 2.0秒に障害物がない（契約§4.5）: ' + grace.slice(0, 2).join(' | '));
       /* 自由飛行の譜面（流用した仕組みそのもの） */
-      const course = In.Setpieces.buildAir(12345, 1300, st.speedAt);
+      const course = In.Setpieces.buildAir(12345, SPS, st.speedAt);
       t.ok(course.items.length >= 1, '空中の壁が ' + course.items.length + '本ある');
       t.eq(In.Fair.validateAir(course, st.speedAt, { margin: true }).length, 0, '空中の隙間へ必ず到達できる（§4.5）');
 
       /* --- delay250 でも演出を跨いで完走する --- */
-      DUO.reset(); DUO.start('S6', 12); DUO.bot('delay250'); DUO.skipTo(1240);
+      DUO.reset(); DUO.start('S6', 12); DUO.bot('delay250'); DUO.skipTo(SPS - 60);
       g = 0;
-      while (Game.dist < 1302 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
+      while (Game.dist < SPS + 2 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'blastout', '0.25秒遅延のボットでも演出に入る');
       t.eq(runToEndPump(), 'clear', '0.25秒遅延のボットも区画爆発を抜けてゴールする');
 
       /* --- 中断（リトライ）で完全復元 --- */
-      DUO.reset(); DUO.start('S6', 7); DUO.bot('perfect'); DUO.skipTo(1240);
+      DUO.reset(); DUO.start('S6', 7); DUO.bot('perfect'); DUO.skipTo(SPS - 60);
       g = 0;
-      while (Game.dist < 1330 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
+      while (Game.dist < SPS + 30 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'blastout', 'もう一度 区画爆発に入る');
       Game.retry();
       t.eq(DUO.state().setpiece, null, 'リトライで演出状態が消える');

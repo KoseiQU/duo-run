@@ -65,9 +65,12 @@
       ];
       const gen = In.createGenerator(stage, 1);
       for (let d = 0; d < 900; d += 20) gen.ensure(d + In.CFG.SPAWN_AHEAD, d);
-      /* 導入区間の長さ: 契約§4.8 の tip の猶予規則（tip は対象の speed×2.5秒手前・吹き出しは重ねない）
-         で、7つの紹介は最短でも 約 7×2.5秒×16m/s ≒ 280m＋助走 を要する（P5c で 300→約325m）。 */
-      const INTRO_END = 330;
+      /* 導入区間の長さ: 契約§4.8【2026-09-24 改訂】の tip の猶予規則（tip は対象の speed×4.0秒手前・
+         対象の通過後 speed×1.0秒 まで空ける）で、6つの紹介は 約 6×5秒×16m/s ≒ 480m＋助走 を要する
+         （P7a で 約325m → 約520m。長くなってよい / 指示）。最後の紹介の対象までを導入区間とする。 */
+      const introTips = gen.events.filter((e) => e.type === 'tip' && In.Tutorial.isIntro(e.params.id));
+      const INTRO_END = Math.max.apply(null, introTips.map((e) => e.params.untilM)) + 1;
+      t.eq(introTips.length, 6, '導入区間の tip は 6つ（穴は契約 v2 で失効）');
       const intro = gen.obstacles.filter((o) => o.at <= INTRO_END).sort((a, b) => a.at - b.at);
       want.forEach((w, i) => {
         const o = intro[i];
@@ -78,7 +81,7 @@
       const both = intro.slice(want.length, want.length + 2);
       t.ok(both.length === 2 && Math.abs(both[0].at - both[1].at) < 1e-6 && both[0].surface !== both[1].surface,
            '最後は床と天井が同時に来る');
-      t.ok(intro.length >= 8, '導入区間（〜' + INTRO_END + 'm）に 8個の紹介障害物（' + intro.length + '個）');
+      t.eq(intro.length, want.length + 2, '導入区間（〜' + INTRO_END.toFixed(0) + 'm）に ' + (want.length + 2) + '個の紹介障害物（' + intro.length + '個）');
 
       /* 導入区間はスライディングを要求しない（S1 はスライド0%） */
       const list = gen.obstacles.filter((o) => o.at <= 900);

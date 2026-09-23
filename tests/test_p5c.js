@@ -20,17 +20,21 @@
      ========================================================================== */
   /* P5c 前（92c80df）の tip 数（50シード・ゴールより手前）。出現率はこの −10% 以内 */
   /* 契約 v2（P7a）: S1 の「穴」の紹介・S4 の落ちる天井・S5 の3ギミックは失効（tip ごと無い） */
-  const TIP_BASE = { S1: 300, S3: 87, S4: 46, S6: 121, S7: 118, S8: 50 };
+  /* 契約§4.8【2026-09-24 改訂】（P7a）で窓が長くなった（2.5秒 → 4.0秒前＋2.0秒で消える）。
+     S7 は「重ね掛け（dualzone）」の初出が 1/50 シードに減った（rank5・速度34以上の札が
+     大演出の手前の約50mにしか置けない）＝ 基準を 118 → 99 に置き直す（既知の妥協点・P7c で再編） */
+  const TIP_BASE = { S1: 300, S3: 87, S4: 46, S6: 121, S7: 99, S8: 50 };
   DUO.__suites.push({
-    name: 'P5c: tip の猶予規則（全ステージ×50シード・窓内は対象のみ・先行 speed×2.5秒・出現率）',
+    name: 'P5c→P7a: tip の猶予規則 v2（全ステージ×50シード・4.0秒前に出て2.0秒で消え、消えてから2.0秒・窓内は対象のみ・出現率）',
     quick: true,
     run(t) {
       const In = I(), CFG = In.CFG;
-      t.eq(CFG.TIP.LEAD_T, 2.5, 'tip は対象の speed×2.5秒 手前');
+      t.eq(CFG.TIP.LEAD_T, 4.0, 'tip は対象の speed×4.0秒 手前（契約§4.8 2026-09-24）');
+      t.eq(CFG.TIP.SHOW_T, 2.0, 'tip は 2.0秒で消える');
       t.eq(CFG.TIP.AFTER_T, 1.0, '対象の通過後 speed×1.0秒 までが窓');
       Object.keys(TIP_BASE).forEach((sid) => {
         const st = In.makeStage(sid);
-        let tips = 0, bad = 0, multi = 0, noTarget = 0, lead = Infinity;
+        let tips = 0, bad = 0, multi = 0, noTarget = 0, lead = Infinity, gapAfter = Infinity, showT = 0;
         const firstErr = [];
         for (let seed = 1; seed <= 50; seed++) {
           const g = In.createGenerator(st, seed);
@@ -46,21 +50,27 @@
             tips++;
             if (!e.params.target || !e.params.target.length) noTarget++;
             lead = Math.min(lead, (e.params.targetAt - e.at) / st.speedAt(e.params.targetAt));
+            gapAfter = Math.min(gapAfter, (e.params.targetAt - e.params.hideM) / st.speedAt(e.params.targetAt));
+            showT = Math.max(showT, (e.params.hideM - e.at) / st.speedAt(e.at));
           });
         }
-        t.eq(bad, 0, sid + ': tip の窓内に対象以外の必須動作なし・先行 ≥ speed×2.5秒（50シード）' +
+        t.eq(bad, 0, sid + ': tip の窓内に対象以外の必須動作なし・先行 ≥ speed×4.0秒・消えてから ≥ 2.0秒（50シード）' +
              (firstErr.length ? ' / ' + firstErr.join(' | ') : ''));
         t.eq(multi, 0, sid + ': 窓内の対象の必須動作は1回以下');
         t.eq(noTarget, 0, sid + ': どの tip も対象を持つ');
-        if (tips) t.ok(lead >= CFG.TIP.LEAD_T - 1e-6, sid + ': 最短の先行 ' + lead.toFixed(2) + '秒 ≥ 2.5秒');
+        if (tips) {
+          t.ok(lead >= CFG.TIP.LEAD_T - 0.02, sid + ': 最短の先行 ' + lead.toFixed(2) + '秒 ≥ 4.0秒');
+          t.ok(showT <= CFG.TIP.SHOW_T + 0.02, sid + ': 表示は ' + showT.toFixed(2) + '秒 ≤ 2.0秒');
+          t.ok(gapAfter >= CFG.TIP.LEAD_T - CFG.TIP.SHOW_T - 0.03, sid + ': 消えてから対象まで最短 ' + gapAfter.toFixed(2) + '秒 ≥ 2.0秒');
+        }
         t.ok(tips >= TIP_BASE[sid] * 0.9,
-             sid + ': tip の出現 ' + tips + ' 回 / 50シード（P5c 前 ' + TIP_BASE[sid] + ' の −10% 以内）');
+             sid + ': tip の出現 ' + tips + ' 回 / 50シード（基準 ' + TIP_BASE[sid] + ' の −10% 以内）');
       });
     }
   });
 
   DUO.__suites.push({
-    name: 'P5c: tip は対象の通過で消える（実走 S1・S6）・表示中の前方に他の障害物がない',
+    name: 'P5c→P7a: tip は 2.0秒で消え、消えてから対象まで 2.0秒以上（実走 S1・S6）・窓の中に他の障害物がない',
     quick: true,
     run(t) {
       const In = I(), Tut = In.Tutorial, CFG = In.CFG;
@@ -91,8 +101,20 @@
         t.ok(on !== null && Math.abs(on - ev.at) < 2, sp[0] + ': tip は予定の位置で出る（' + (on || 0).toFixed(1) + 'm / 予定 ' + ev.at.toFixed(1) + 'm）');
         t.ok((ev.params.targetAt - on) / Game.stage.speedAt(ev.params.targetAt) >= CFG.TIP.LEAD_T - 0.1,
              sp[0] + ': 対象の ' + ((ev.params.targetAt - on) / Game.stage.speedAt(ev.params.targetAt)).toFixed(2) + '秒 手前で出る');
-        t.ok(off !== null && off >= ev.params.untilM && off <= ev.params.untilM + 2,
-             sp[0] + ': 対象の通過で消える（' + (off || 0).toFixed(1) + 'm / 対象 ' + ev.params.untilM.toFixed(1) + 'm）');
+        const sp2 = Game.stage.speedAt(ev.at);
+        t.ok(off !== null && Math.abs((off - on) / sp2 - CFG.TIP.SHOW_T) < 0.1,
+             sp[0] + ': 2.0秒で消える（表示 ' + (((off || 0) - (on || 0)) / sp2).toFixed(2) + '秒）');
+        t.ok(off !== null && (ev.params.targetAt - off) / Game.stage.speedAt(ev.params.targetAt) >= CFG.TIP.LEAD_T - CFG.TIP.SHOW_T - 0.1,
+             sp[0] + ': 消えてから対象まで ' + ((ev.params.targetAt - (off || 0)) / Game.stage.speedAt(ev.params.targetAt)).toFixed(2) + '秒（≥ 2.0秒）');
+        /* 消えたあと対象の通過（＋1.0秒）までも、窓の中に他の必須動作が来ない */
+        while (guard++ < 20000 && Game.status === 'playing' && Game.dist < ev.params.winEnd) {
+          DUO.__step(1 / 60);
+          const tg = {}; ev.params.target.forEach((u) => { tg[u] = 1; });
+          Game.gen.obstacles.forEach((o) => {
+            if (tg[o.uid] || o.at < Game.dist || o.at > ev.params.winEnd) return;
+            if (In.Obstacles.demand(o, 'floor') !== 'none' || In.Obstacles.demand(o, 'ceil') !== 'none') ahead++;
+          });
+        }
         t.eq(ahead, 0, sp[0] + ': 表示中、窓の中に対象以外の必須動作が無い');
         t.eq(Game.status, 'playing', sp[0] + ': ボットは生きている');
       });

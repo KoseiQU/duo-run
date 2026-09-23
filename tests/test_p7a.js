@@ -12,6 +12,10 @@
      【P7a-3】失効ギミックの削除・ワイド梁の通常出現
        ・ギャップ・落ちる天井・海流・浮上足場・色の扉が 判定・譜面・大演出・tip のどこにも無い
        ・全ステージ（30シード）でピラー:ワイド梁 ≈ 6:4（ワイド梁の割合 0.40 ±0.10）・§4.7 違反0
+     【P7a-4】tip 猶予改訂（tests/test_p5c.js の v2 版）＋自由飛行の緩和
+       ・自由飛行: 判定半径 0.30・隙間 +30%・発射後2.0秒なし・間隔 ≥ 1.5秒・1回の飛行で 3〜4個
+         （S2 大ジャンプ・S6 区画爆発・S8 全崩壊・エンドレスのミニ版 × 50シード）
+       ・高さの手がかり（床と天井の影・照準リング・次の隙間への誘導線）が飛行中だけ出る
    ============================================================================ */
 'use strict';
 
@@ -242,6 +246,114 @@
         t.eq(bad, 0, sid + ': 30シードで §4.7 違反なし');
       });
       t.info(rows.join(' / '));
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P7a-4: 自由飛行の緩和（半径0.30・隙間+30%・発射後2秒なし・間隔1.5秒以上・3〜4個 × 4種の大演出 × 50シード）',
+    quick: true,
+    run(t) {
+      const In = I(), FF = In.FF, Sp = In.Setpieces;
+      t.eq(FF.R, 0.30, '判定半径 0.45 → 0.30');
+      t.near(FF.HOLE, 0.85 * 1.3, 1e-9, '穴の半径 +30%（0.85 → ' + FF.HOLE + '）');
+      t.near(FF.SLOT, 0.95 * 1.3, 1e-9, '帯の半幅 +30%（0.95 → ' + FF.SLOT + '）');
+      t.eq(FF.FIRST_T, 2.0, '発射後 2.0秒は障害物なし');
+      t.eq(FF.GAP_MIN_T, 1.5, '障害物の間隔 ≥ 1.5秒');
+      const cases = [
+        ['S2 大ジャンプ', 'S2', Sp.BJ, null],
+        ['S6 区画爆発', 'S6', Sp.BL, null],
+        ['S8 全崩壊', 'S8', Sp.CA, null],
+        ['エンドレスのミニ版', 'endless', Sp.BJM, 3000]
+      ];
+      cases.forEach((c) => {
+        const st = In.makeStage(c[1]);
+        const def = Sp.DEFS[st.setpiece] || null;
+        const startM = (c[3] !== null) ? c[3] : (st.lengthM - def.lengthM);
+        const k = (c[3] !== null) ? Math.max(1, st.speedAt(startM) / 24) : 1;
+        const launch = startM + c[2].LIP * k, land = startM + c[2].LAND * k;
+        const flightT = (land - launch) / st.speedAt(land);
+        t.ok(flightT >= FF.minFlightT(), c[0] + ': 滑空 ' + flightT.toFixed(2) + '秒 ≥ ' + FF.minFlightT().toFixed(1) + '秒（3個置ける長さ）');
+        let bad = 0, nMin = 99, nMax = 0, firstT = 99, gapT = 99, first = '';
+        for (let seed = 1; seed <= 50; seed++) {
+          const course = FF.build(seed, launch, land, st.speedAt);
+          const e = In.Fair.validateAir(course, st.speedAt, { margin: true });
+          if (e.length) { bad++; if (!first) first = 'seed' + seed + ': ' + e[0]; }
+          nMin = Math.min(nMin, course.items.length); nMax = Math.max(nMax, course.items.length);
+          course.items.forEach((it, i) => {
+            const sp = st.speedAt(it.at);
+            if (i === 0) firstT = Math.min(firstT, (it.at - launch) / sp);
+            else gapT = Math.min(gapT, (it.at - course.items[i - 1].at) / sp);
+          });
+        }
+        t.eq(bad, 0, c[0] + ': 50シードで空中の不変条件（Fair.validateAir・0.25秒遅れの余裕込み）' + (first ? ' / ' + first : ''));
+        t.ok(nMin >= FF.N_MIN && nMax <= FF.N_MAX, c[0] + ': 1回の飛行で ' + nMin + '〜' + nMax + '個（3〜4個）');
+        t.ok(firstT >= FF.FIRST_T - 1e-6, c[0] + ': 発射から最初の障害物まで ' + firstT.toFixed(2) + '秒（≥ 2.0秒）');
+        t.ok(gapT >= FF.GAP_MIN_T - 1e-6, c[0] + ': 障害物の間隔 最短 ' + gapT.toFixed(2) + '秒（≥ 1.5秒）');
+      });
+
+      /* 高さの手がかり（S2 の大ジャンプを実ステップで跨ぐ） */
+      DUO.reset(); DUO.start('S2', 5); DUO.bot('perfect');
+      const st2 = In.Game.stage;
+      const sp0 = st2.lengthM - Sp.DEFS.bigjump.lengthM;
+      DUO.skipTo(sp0 - 30);
+      let g = 0, seenOn = false, shadowOk = false, ringOk = false, guideOk = false, offBefore = null;
+      while (g++ < 4000 && In.Game.status === 'playing' && In.Game.dist < sp0 + Sp.BJ.LAND + 20) {
+        DUO.pump(1 / 60);
+        const cue = FF.view && FF.view.cue;
+        if (!cue) continue;
+        if (!FF.on && offBefore === null && In.Game.dist < sp0 + Sp.BJ.LIP - 2) offBefore = cue.root.visible;
+        if (FF.on && In.Game.dist > sp0 + Sp.BJ.LIP + 6) {
+          seenOn = seenOn || cue.root.visible;
+          const b = FF.body;
+          const by = cue.ring.position.y;               // 体の高さ（持ち上がり込み）
+          shadowOk = shadowOk || (Math.abs(cue.shadows[0].position.x - b.x) < 1e-6 && cue.shadows[0].position.y < by &&
+                                  cue.shadows[1].position.y > by);
+          ringOk = ringOk || (Math.abs(cue.ring.position.x - b.x) < 1e-6 && cue.ring.visible);
+          guideOk = guideOk || (cue.guide.visible && cue.guide.geometry.attributes.position.getZ(1) < -1);
+        }
+      }
+      t.eq(offBefore, false, '手がかりは発射前には出ていない');
+      t.ok(seenOn, '自由飛行の間は手がかりが出る');
+      t.ok(shadowOk, 'DUO体の影が床（体の下）と天井（体の上）に落ちる');
+      t.ok(ringOk, '体の周りに照準リング');
+      t.ok(guideOk, '次の隙間への誘導線（前方へ伸びる）');
+      t.eq(In.Game.status === 'playing' || In.Game.status === 'goal', true, 'ボットは大ジャンプを抜ける');
+      DUO.reset();
+    }
+  });
+
+  /* P7a 最終確認: 全8ステージ＋エンドレス × perfect / delay250 × seed 1〜30 */
+  DUO.__suites.push({
+    name: 'P7a: ボット完走（S1〜S8 × perfect/delay250 × seed 1〜30、エンドレス perfect 5000m / delay250 2500m）',
+    quick: false,
+    run(t) {
+      const In = I(), G = In.Game, U = In.U;
+      const run = (sid, mode, maxM) => {
+        const fails = [];
+        for (let seed = 1; seed <= 30; seed++) {
+          DUO.reset(); DUO.start(sid, seed); DUO.bot(mode);
+          let g = 0;
+          const lim = maxM || Infinity;
+          while (G.status === 'playing' && G.dist < lim && g++ < 400000) DUO.__step(1 / 60);
+          const ok = maxM ? (G.status === 'playing' && G.dist >= lim)
+                          : (G.status === 'goal' || G.status === 'result' || G.status === 'allclear');
+          if (!ok) fails.push(seed + '@' + G.dist.toFixed(0));
+        }
+        return fails;
+      };
+      ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'].forEach((sid) => {
+        ['perfect', 'delay250'].forEach((mode) => {
+          const f = run(sid, mode);
+          t.eq(f.length, 0, sid + ' ' + mode + ' が 30/30 完走' + (f.length ? '（落ちた種: ' + f.slice(0, 5).join(',') + '）' : ''));
+        });
+      });
+      const snap = U.lsSnapshot();
+      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8']);
+      const fp = run('endless', 'perfect', 5000), fd = run('endless', 'delay250', 2500);
+      U.lsRestore(snap);
+      t.eq(fp.length, 0, 'エンドレス（全ゾーン）perfect が 5000m を 30/30' + (fp.length ? '（' + fp.join(',') + '）' : ''));
+      t.eq(fd.length, 0, 'エンドレス（全ゾーン）delay250 が 2500m を 30/30' + (fd.length ? '（' + fd.join(',') + '）' : ''));
+      DUO.reset();
     }
   });
 })();

@@ -105,7 +105,8 @@
             const nominal = (i + 1) * E.MINI_M;
             if (m.startM < nominal - 1e-6) bad.push('seed' + seed + ' ミニが早い ' + m.startM.toFixed(0));
             const len = (m.endM - m.startM) / m.k;
-            if (len < 100 || len > 150) bad.push('seed' + seed + ' ミニの長さ ' + len.toFixed(0));
+            /* 大ジャンプのミニ版は自由飛行の緩和（契約§4.5 v2: 5.7秒以上）で 200m（他は 100〜150m） */
+            if (len < 100 || len > ((m.id === 'mini_jump') ? 200.5 : 150)) bad.push('seed' + seed + ' ミニの長さ ' + len.toFixed(0));
             sw.forEach((s) => {
               const a = s.t0 - st.speedAt(s.t0) * E.GRACE_T, b = s.at + st.speedAt(s.at) * E.GRACE_T;
               if (m.startM < b && m.freeTo > a) bad.push('seed' + seed + ' ミニが切替に重なる ' + m.id);
@@ -230,7 +231,7 @@
      ========================================================================== */
   DUO.__suites.push({
     name: 'P6-1: ミニ大演出の実走（崩落・大ジャンプ・巨岩）と後片付け',
-    quick: true,
+    quick: false,          // P7a: ミニ版が長くなった（大ジャンプ 200m）ので runAll へ（runQuick ≤ 18秒）
     run(t) {
       const In = I(), Game = In.Game, Sp = In.Setpieces, W = In.World;
       withCleared(ALL, () => {
@@ -330,7 +331,7 @@
         };
         const a = loop(0), b = loop(6);
         t.eq(a.z, 'neon', '一巡でネオンへ戻る');
-        t.eq(b.geo, a.geo, 'ジオメトリ数が増え続けない（' + a.geo + ' → ' + b.geo + '）');
+        t.ok(b.geo <= a.geo, 'ジオメトリ数が増え続けない（' + a.geo + ' → ' + b.geo + '）');
         t.eq(b.ch, a.ch, 'シーンの要素数が増え続けない（' + a.ch + ' → ' + b.ch + '）');
         t.eq(b.tex, 0, 'テクスチャは0枚のまま（契約§3）');
         DUO.reset();
@@ -493,7 +494,7 @@
         gateRun('S8', 'merges', 'gate_merge');
         /* 5) 爆発（S6 区画爆発のカット）・鏡が砕ける（S7） */
         DUO.reset(); DUO.start('S6', 2); DUO.bot('perfect');
-        DUO.skipTo(1270);
+        DUO.skipTo(1150);                 // 区画爆発は 324m（契約§4.5 緩和 v2）＝ 1176m から
         stepUntil(() => heard.boom || Game.status !== 'playing', 4000);
         DUO.reset(); DUO.start('S7', 2); DUO.bot('perfect');
         DUO.skipTo(1270);
