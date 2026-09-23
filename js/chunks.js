@@ -243,17 +243,22 @@ const CHUNK_DEFS = [
      警告 2.0秒のあいだに隣へ抜ける。その間に相方の面へ1つ要求を挟む（頭の負荷） */
   { id: 'r2_bridge_f', zone: 'ruins', lengthM: 50, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
     floor: [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 26, lane: -1, type: 'BRIDGE' },
-            { at: 42, lane: 1, type: 'ROVER' }],
-    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }], events: [] },
+            { at: 34, lane: 1, type: 'ROVER' }, { at: 42, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }, { at: 34, lane: -1, type: 'LASER_LOW' },
+            { at: 42, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'r2_bridge_c', zone: 'ruins', lengthM: 50, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
-    floor: [{ at: 17, lane: 1, type: 'ROVER' }],
+    floor: [{ at: 17, lane: 1, type: 'ROVER' }, { at: 34, lane: 0, type: 'ROVER' },
+            { at: 42, lane: -1, type: 'LASER_LOW' }],
     ceil:  [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 26, lane: 1, type: 'BRIDGE' },
-            { at: 42, lane: 0, type: 'LASER_LOW' }], events: [] },
-  { id: 'r2_bridge_x', zone: 'ruins', lengthM: 52, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
-    /* 床と天井で別のレーンの橋に乗せられ、別々の側へ抜ける */
-    floor: [{ at: 6, lane: 0, type: 'WIDEBAR' }, { at: 24, lane: -1, type: 'BRIDGE' },
-            { at: 42, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 6, lane: -1, type: 'WIDEBAR' }, { at: 24, lane: 1, type: 'BRIDGE' }], events: [] },
+            { at: 34, lane: -1, type: 'ROVER' }, { at: 42, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r2_bridge_x', zone: 'ruins', lengthM: 48, difficulty: 2, minSpeed: 0, s3: 1, bridge: 1,
+    /* 床と天井で別のレーンの橋に乗せられ（橋の上でハードルを1つ跳ぶ）、崩落の続く間に
+       中央の柱＝ **2人が互いの側へ入れ替わるように** 抜ける */
+    floor: [{ at: 6, lane: 0, type: 'WIDEBAR' }, { at: 14, lane: -1, type: 'ROVER' },
+            { at: 24, lane: -1, type: 'BRIDGE' }, { at: 32, lane: 0, type: 'PILLAR' },
+            { at: 40, lane: 1, type: 'ROVER' }],
+    ceil:  [{ at: 6, lane: -1, type: 'WIDEBAR' }, { at: 14, lane: 1, type: 'ROVER' },
+            { at: 24, lane: 1, type: 'BRIDGE' }, { at: 40, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'r2_pend_a', zone: 'ruins', lengthM: 58, difficulty: 2, minSpeed: 0, s3: 1, moving: 1, pend: 1,
     /* 振り子の刃: 到達時は端で溜まっている（＝空いているレーンが読める） */
     floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
@@ -358,6 +363,34 @@ const CHUNK_DEFS = [
             { at: 34, lane: 0, type: 'ROVER' },
             { at: 52, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0 } } }],
     ceil:  [{ at: 23, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'ROVER' }], events: [] },
+
+  /* --- 転がる丸岩（契約§4.5【新・遺跡】/ P7b）-----------------------------
+     ROCK: 横から転がってくる球。params.roll = { lane: 到達した瞬間の位置（±0.5 なら2レーン）,
+     dir: 転がる向き }。跳べば越えられる／到達の瞬間に居ないレーン（通り過ぎた・まだ来ない）なら素通り。
+     rank3。要求はジャンプ（occ）。 */
+  { id: 'r3_rock_a', zone: 'ruins', lengthM: 42, difficulty: 3, minSpeed: 0, s3: 1, rock: 1, dense: 1,
+    floor: [{ at: 10, lane: 0, type: 'ROCK', params: { roll: { lane: 0, dir: 1 } } }, { at: 20, lane: -1, type: 'PILLAR' },
+            { at: 30, lane: 0, type: 'ROCK', params: { roll: { lane: 0.5, dir: -1 } } }],
+    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r3_rock_b', zone: 'ruins', lengthM: 46, difficulty: 3, minSpeed: 0, s3: 1, rock: 1, dense: 1,
+    floor: [{ at: 8, lane: -1, type: 'ROCK', params: { roll: { lane: -1, dir: 1 } } }, { at: 16, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } },
+            { at: 32, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 22, lane: 0, type: 'ROCK', params: { roll: { lane: 0, dir: -1 } } }], events: [] },
+  { id: 'r3_rock_c', zone: 'ruins', lengthM: 48, difficulty: 3, minSpeed: 0, s3: 1, rock: 1, dense: 1,
+    /* 2レーンに掛かる岩（到達位置が ±0.5）: 空いた1レーンへ寄るか跳ぶ */
+    floor: [{ at: 10, lane: 0, type: 'ROCK', params: { roll: { lane: -0.5, dir: 1 } } }, { at: 28, lane: 0, type: 'LASER_V' },
+            { at: 37, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } }],
+    ceil:  [{ at: 18, lane: 0, type: 'ROCK', params: { roll: { lane: 0.5, dir: -1 } } }, { at: 37, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r3_rock_d', zone: 'ruins', lengthM: 48, difficulty: 3, minSpeed: 0, s3: 1, rock: 1, dense: 2,
+    floor: [{ at: 8, lane: 1, type: 'PILLAR' }, { at: 18, lane: -1, type: 'ROCK', params: { roll: { lane: -1, dir: 1 } } },
+            { at: 26, lane: 0, type: 'ROVER' }, { at: 35.5, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 18, lane: 0, type: 'ROCK', params: { roll: { lane: 0, dir: -1 } } }], events: [] },
+  { id: 'r3_rock_e', zone: 'ruins', lengthM: 46, difficulty: 3, minSpeed: 0, s3: 1, rock: 1, dense: 2, leap: 1,
+    /* 両者が岩とハードルを 0.8秒おきに跳び継ぐ */
+    floor: [{ at: 8, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } }, { at: 16, lane: 0, type: 'ROVER' },
+            { at: 24, lane: 0, type: 'ROCK', params: { roll: { lane: -0.5, dir: 1 } } }, { at: 36, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 16, lane: 0, type: 'ROCK', params: { roll: { lane: 0.5, dir: -1 } } },
+            { at: 24, lane: 1, type: 'ROVER' }], events: [] },
 
   /* ==========================================================================
      S4「古代遺跡・内部」（契約§4.4 / §4.5 / P3b）
@@ -474,6 +507,32 @@ const CHUNK_DEFS = [
     floor: [{ at: 5, lane: 0, type: 'LASER_V' }, { at: 15, lane: 1, type: 'PILLAR' },
             { at: 23, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 23, lane: 1, type: 'ROVER' }], events: [] },
+  /* --- 転がる丸岩（S4・rank3〜4 / P7b） ------------------------------------ */
+  { id: 'r4_rock_a', zone: 'ruins', lengthM: 50, difficulty: 3, minSpeed: 0, s4: 1, rock: 1, dense: 1,
+    floor: [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 18, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } },
+            { at: 30, lane: 0, type: 'LASER_V' }, { at: 40, lane: 0, type: 'ROCK', params: { roll: { lane: 0.5, dir: -1 } } }],
+    ceil:  [{ at: 13, lane: 0, type: 'ROVER' }, { at: 40, lane: -1, type: 'ROCK', params: { roll: { lane: -1, dir: 1 } } }], events: [] },
+  { id: 'r4_rock_b', zone: 'ruins', lengthM: 50, difficulty: 3, minSpeed: 0, s4: 1, rock: 1, dense: 1,
+    floor: [{ at: 8, lane: 0, type: 'ROCK', params: { roll: { lane: 0, dir: -1 } } }, { at: 18, lane: -1, type: 'PILLAR' },
+            { at: 28, lane: 0, type: 'ROCK', params: { roll: { lane: -0.5, dir: 1 } } }, { at: 40, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 8, lane: 0, type: 'ROCK', params: { roll: { lane: 0, dir: 1 } } }, { at: 28, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r4_rock_c', zone: 'ruins', lengthM: 46, difficulty: 4, minSpeed: 0, s4: 1, rock: 1, dense: 2, leap: 1,
+    /* 岩の連続（0.72秒おき）→ 列柱 */
+    floor: [{ at: 6, lane: -1, type: 'ROCK', params: { roll: { lane: -1, dir: 1 } } }, { at: 13.2, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } },
+            { at: 20.4, lane: 0, type: 'ROCK', params: { roll: { lane: 0, dir: 1 } } }, { at: 30, lane: -1, type: 'PILLAR' },
+            { at: 37, lane: 1, type: 'LASER_V' }],
+    ceil:  [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.2, lane: 0, type: 'ROCK', params: { roll: { lane: -0.5, dir: 1 } } },
+            { at: 20.4, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 'r4_rock_d', zone: 'ruins', lengthM: 52, difficulty: 4, minSpeed: 0, s4: 1, rock: 1, dense: 2,
+    floor: [{ at: 6, lane: 0, type: 'LASER_V' }, { at: 16, lane: -1, type: 'ROCK', params: { roll: { lane: -1, dir: 1 } } },
+            { at: 26, lane: 1, type: 'PILLAR' }, { at: 34, lane: 0, type: 'ROCK', params: { roll: { lane: -0.5, dir: 1 } } },
+            { at: 44, lane: -1, type: 'LASER_V' }],
+    ceil:  [{ at: 16, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } }, { at: 34, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 'r4_rock_e', zone: 'ruins', lengthM: 48, difficulty: 4, minSpeed: 0, s4: 1, rock: 1, bridge: 1, dense: 1,
+    /* 橋に乗せられ、崩落の続く間に2レーンの岩が来る（崩れた橋のレーンには逃げられない＝跳ぶ） */
+    floor: [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 26, lane: -1, type: 'BRIDGE' },
+            { at: 34, lane: 0, type: 'ROCK', params: { roll: { lane: 0.5, dir: -1 } } }],
+    ceil:  [{ at: 17, lane: 1, type: 'ROCK', params: { roll: { lane: 1, dir: -1 } } }], events: [] },
   { id: 'r4_drop_duo', zone: 'ruins', lengthM: 66, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
     floor: [{ at: 8, lane: 0, type: 'LASER_V' },
             { at: 20, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
@@ -1605,7 +1664,7 @@ const INTRO_S1 = [
      「対象の通過」（区間の全長を窓にすると区間の中身が全部消えてしまうため）。
    ・レーザー網は枠（NETGATE）ではなく最初のビームを対象にする（跳ぶ／よけるのが本題）。 */
 const TIP_TARGET = {
-  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'],
+  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'], rock: ['ROCK'],
   warp: ['GRAVWARP'], zero: ['ZEROG'], net: ['LASER_H', 'LASER_DIAG', 'NETGATE'],
   mir: ['MIRRORZ'], swap: ['HANDSWAP'], dual: ['HANDSWAP'], merge: ['MERGE']
 };
@@ -1683,13 +1742,19 @@ const STAGE_DEFS = {
     density: [6, 10],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     /* 新ギミックの初出で短い指示を出す（契約§4.8 チュートリアル） */
-    tipOnce: { bridge: 'bridge', pend: 'pendulum' },
+    tipOnce: { bridge: 'bridge', pend: 'pendulum', rock: 'rock' },
+    /* P7b: 転がる丸岩（rank3＝後半だけ候補）を1回の走行で顔出しさせる（初出は tip つき） */
+    tipBoost: true,
+    tipMul: 6,
     /* 顔ぶれ: 遺跡の新チャンクを主役に、ネオンで覚えた基本形（密集・動くレーザー）を混ぜる。
        遺跡スキンでは動くレーザー＝振り子の刃・火の輪・噴き出す炎に見える（判定は共通）。 */
     chunkPool: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id)
       .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s3 && c.bridge).map((c) => c.id))
+      /* 転がる丸岩（P7b・rank3＝後半だけ候補）は厚めに積んで、1回の走行で顔を出させる */
+      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.rock).map((c) => c.id))
+      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.rock).map((c) => c.id))
       .concat(['c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
                'd3_duo_a', 'd3_duo_c', 'd3_duo_e', 'd3_duo_f',
                'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
@@ -1710,6 +1775,8 @@ const STAGE_DEFS = {
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
+      /* 転がる丸岩（P7b）を厚めに（S3 で覚えた形を S4 で本格的に） */
+      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.rock).map((c) => c.id))
       .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
                'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole'])
   },
@@ -2418,6 +2485,8 @@ const MOTION_SCALE = {
   /* レーザーネット（S6）の横ビーム・斜めビームも同じ（1往復の秒数が一定） */
   hbeam:  { key: 'periodM', def() { return CFG.NET.PERIOD; } },
   diag:   { key: 'periodM', def() { return CFG.NET.PERIOD; } },
+  /* 転がる丸岩（P7b）も同じ（1レーンを転がる秒数が速度によらず一定） */
+  roll:   { key: 'periodM', def() { return CFG.ROCK.PERIOD; } },
   /* 割れた鏡の床（S7）の足場の揺れも同じ（1往復の秒数が速度によらず一定） */
   shard:  { key: 'periodM', def() { return CFG.SHARD.PERIOD; } }
 };

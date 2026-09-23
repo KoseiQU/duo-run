@@ -308,6 +308,8 @@ const Game = {
       Sync.update(Game);
       /* 崩れる橋（契約§4.5 改訂 v2）: 踏んだ距離を記録し、崩落までの警告を出す（判定より先） */
       Bridge.update(Game);
+      /* 転がる丸岩（契約§4.5 新・遺跡）: 到達の少し前に転がる音（予告・判定には無関係） */
+      Rock.update(Game);
       /* 重力反転ワープ（契約§4.5 / S6）: prevDist → dist の間に跨いだゲートを実行する。
          判定（collide）より先に置く＝入れ替わった面で当たり判定される。 */
       if (Warp.update(Game)) U.sfx('gate_grav');

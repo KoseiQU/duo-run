@@ -58,7 +58,7 @@ const DUO = {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
     Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF, Sync: Sync,
-    Warp: Warp, Zero: Zero, Bridge: Bridge, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless, Audio: Audio, Platform: Platform,
+    Warp: Warp, Zero: Zero, Bridge: Bridge, Rock: Rock, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless, Audio: Audio, Platform: Platform,
     expandEntry: expandEntry,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,

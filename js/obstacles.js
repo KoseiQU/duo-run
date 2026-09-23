@@ -77,6 +77,12 @@ const OBS = {
        そのレーンを塞ぐ（cover）。 */
   BRIDGE:   { span: 1, depth: 0.60, y0: -1.60, y1: 0.04, both: false, safe: [],
               motion: 'bridge', long: true, pit: true, label: '崩れる橋' },
+  /* 転がる丸岩（契約§4.5【新・遺跡】/ P7b）: 横から転がってレーンを横切る球。
+     判定は「路面から出ている部分」＝幅 2R・高さ TOP（0.6＝跳べば越えられる）・奥行き 2R。
+     位置は MOT.rollLane（到達した瞬間の位置が譜面の params.roll.lane）。
+     y0 は球の埋まった下端（路面の下＝判定には効かない。見た目の外接と揃えるため） */
+  ROCK:     { span: 1, depth: 2 * CFG.ROCK.R, y0: CFG.ROCK.TOP - 2 * CFG.ROCK.R, y1: CFG.ROCK.TOP,
+              both: false, safe: ['jump'], motion: 'roll', hw: CFG.ROCK.R, label: '転がる丸岩' },
   /* ------------------------------------------------------------------------
      S4「古代遺跡・内部」の新ギミック（契約§4.4 / §4.5 / P3b）
      ------------------------------------------------------------------------ */
@@ -275,6 +281,16 @@ const MOT = {
     const from = (p.from === undefined) ? o.lane : p.from;
     const to = (p.to === undefined) ? -from : p.to;
     return from + (to - from) * MOT._tri(MOT._u(p, o, dist, CFG.SHARD.PERIOD));
+  },
+
+  /* 転がる丸岩（契約§4.5 新・遺跡）: 連続レーン座標（-1..1 を越えて転がり出ていく）。
+     到達した瞬間（dist = at）は params.roll.lane。dir の向きへ 1レーン / periodM で転がる。
+     ＝ 手前では -dir 側の壁の外から転がってきて、通り過ぎたあとは +dir 側へ抜けていく。 */
+  rollLane(o, dist) {
+    const p = o.params && o.params.roll;
+    if (!p) return o.lane;
+    const lane = (p.lane === undefined) ? o.lane : p.lane;
+    return lane + (p.dir || 1) * (dist - o.at) / (p.periodM || CFG.ROCK.PERIOD);
   },
 
   /* 次に ON になるまでの距離（予告灯用。ON 中は 0） */
@@ -899,6 +915,23 @@ const Bridge = {
   }
 };
 
+/* ============================================================================
+   Rock — 転がる丸岩（契約§4.5【新・遺跡】/ P7b）の予告の音。
+   位置と判定は MOT.rollLane / bands が唯一の出所。ここは「転がってくる音」を
+   到達の CFG.ROCK.CUE_T 秒前に1回だけ鳴らす（音は演出・判定には無関係）。
+   ============================================================================ */
+const Rock = {
+  update(game) {
+    const sp = Math.max(4, game.speed || CFG.SPEED_MIN);
+    for (let i = 0; i < game.active.length; i++) {
+      const o = game.active[i];
+      if (o.type !== 'ROCK' || o._cued) continue;
+      const rel = o.at - game.dist;
+      if (rel > 0 && rel <= sp * CFG.ROCK.CUE_T) { o._cued = true; U.sfx('rock'); }
+    }
+  }
+};
+
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
   /* 障害物インスタンスを作る（at = 障害物の中心距離 m） */
@@ -968,6 +1001,16 @@ const Obstacles = {
       const lim = CFG.HALF_W;
       put(-lim, Math.min(lim, sx - hw), t.y0, t.y1);
       put(Math.max(-lim, sx + hw), lim, t.y0, t.y1);
+      return out;
+    }
+
+    if (t.motion === 'roll') {
+      /* 転がる丸岩（契約§4.5 新・遺跡）: 今この距離の球の位置に、幅 2R の帯を1枚。
+         コリドーの外（壁の向こう）に居る間は当たらない。 */
+      const x = MOT.rollLane(o, dist) * CFG.LANE_W, hw = t.hw;
+      const lim = CFG.HALF_W;
+      const x0 = Math.max(-lim, x - hw), x1 = Math.min(lim, x + hw);
+      if (x1 > x0) put(x0, x1, t.y0, t.y1);
       return out;
     }
 
@@ -1677,7 +1720,57 @@ const Obstacles = {
       g.userData.shardMats = own;
     };
 
-    const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
+    /* 転がる丸岩（契約§4.5 新・遺跡 / P7b）: 赤茶の球＋白いひび（球ごと転がる）。
+       予告＝ **転がる影**（コリドーを横切る暗い筋＝通り道と、球の下の影）と **土煙**。
+       球の位置・回転は place() が MOT.rollLane から置く（判定と同じ数値）。
+       影・筋・土煙は判定の外（deco）。 */
+    const rockKit = (mats) => {
+      const R = CFG.ROCK.R, yc = CFG.ROCK.TOP - R;
+      const ball = new THREE.Group();
+      ball.position.y = yc;
+      ball.add(new THREE.Mesh(new THREE.IcosahedronGeometry(R, 1), mats.body));
+      /* 白いひび: 球面に沿った細い筋（球と一緒に回る） */
+      const cr = [];
+      const up = new THREE.Vector3(0, 0, 1), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+      const segs = [[0.3, 0.4, 0.2], [0.9, 1.7, -0.6], [2.1, 0.8, 0.9], [2.8, 2.3, 0.3], [4.0, 1.3, -1.0],
+                    [4.9, 2.0, 0.5], [5.6, 0.6, -0.2], [1.5, 2.6, 1.2]];
+      segs.forEach((sg, i) => {
+        const th = sg[0], ph = sg[1];
+        const n = new THREE.Vector3(Math.sin(ph) * Math.cos(th), Math.cos(ph), Math.sin(ph) * Math.sin(th));
+        /* 接線（法線に直交する向き）へ筋を寝かせる */
+        const tg = new THREE.Vector3(-n.z, 0, n.x).normalize().applyAxisAngle(n, sg[2]);
+        q.setFromUnitVectors(up, tg);
+        const geo = new THREE.BoxGeometry(0.035, 0.035, 0.20 + (i % 3) * 0.07);
+        m4.compose(n.clone().multiplyScalar(R * 1.005), q, new THREE.Vector3(1, 1, 1));
+        geo.applyMatrix4(m4);
+        cr.push({ g: geo, p: [0, 0, 0] });
+      });
+      ball.add(new THREE.Mesh(ZoneKit.merge(cr), mats.crack));
+      cr.forEach((c) => c.g.dispose());
+      g.add(ball);
+      /* 転がる影: 通り道の暗い筋（コリドーの全幅）と、球の下の影 */
+      const path = new THREE.Mesh(new THREE.BoxGeometry(CFG.HALF_W * 2, 0.012, D * 0.9), mats.shade);
+      path.position.y = 0.008;
+      path.userData.deco = true;
+      path.renderOrder = 2;
+      g.add(path);
+      const shadow = new THREE.Mesh(new THREE.CylinderGeometry(R * 1.05, R * 1.05, 0.01, 18), mats.shadow);
+      shadow.position.y = 0.014;
+      shadow.userData.deco = true;
+      shadow.renderOrder = 3;
+      g.add(shadow);
+      /* 土煙（転がってきた側に巻き上がる。白っぽい粒） */
+      const N = 12;
+      const dust = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), mats.dust, N);
+      dust.frustumCulled = false;
+      dust.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      dust.userData.deco = true;
+      dust.renderOrder = 4;
+      g.add(dust);
+      g.userData.rock = { ball: ball, shadow: shadow, path: path, dust: dust, n: N, dummy: new THREE.Object3D() };
+    };
+
+    const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge, rockKit: rockKit,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
                 padKit: padKit, syncKit: syncKit,
                 deco: (m) => { if (decoMats.indexOf(m) < 0) decoMats.push(m); return m; },
@@ -1778,8 +1871,10 @@ const Obstacles = {
     }
 
     /* 横スキャンは光柱ごと横へ滑る（帯の中心＝ここ） */
-    const xc = (mot === 'scan') ? (MOT.scanLane(o, dist) * CFG.LANE_W)
-                                : (((Obstacles.laneLo(o) + Obstacles.laneHi(o)) / 2) * CFG.LANE_W);
+    /* 横スキャン（2レーン幅のサメも）は帯の中心、転がる丸岩はコリドーの中心（球は内側で動かす） */
+    const xc = (mot === 'scan') ? ((MOT.scanLane(o, dist) + (OBS[o.type].span - 1) / 2) * CFG.LANE_W)
+             : (mot === 'roll') ? 0
+             : (((Obstacles.laneLo(o) + Obstacles.laneHi(o)) / 2) * CFG.LANE_W);
     g.position.set(xc, 0, -(o.at - dist));
     // 天井側は Z軸まわりに180度回す（X軸まわりだと前後が裏返り、
     // 手前に向けた警告色の面が奥を向いてしまう。負のスケールは表裏が反転するので使わない）
@@ -1970,6 +2065,36 @@ const Obstacles = {
         for (let k = 0; k < b.ims.length; k++) b.ims[k].setMatrixAt(i, dm.matrix);
       }
       for (let k = 0; k < b.ims.length; k++) b.ims[k].instanceMatrix.needsUpdate = true;
+
+    } else if (mot === 'roll' && ud.rock) {
+      /* 転がる丸岩: 球は判定と同じ MOT.rollLane の位置へ。転がった距離ぶん回す（滑らない転がり）。
+         壁の外（|x| > 半幅＋2.6）に居る間は球を伏せ、影の筋（通り道）だけを見せる＝予告。 */
+      const rk = ud.rock, R = CFG.ROCK.R;
+      const wx = MOT.rollLane(o, dist) * CFG.LANE_W;
+      const x0 = lx(wx);
+      const inside = Math.abs(wx) < CFG.HALF_W + 2.6;
+      rk.ball.visible = inside;
+      rk.ball.position.x = x0;
+      rk.ball.rotation.set(0, 0, -x0 / R);
+      rk.shadow.visible = inside;
+      rk.shadow.position.x = x0;
+      const p = (o.params && o.params.roll) || {};
+      const dirL = (ceil ? -1 : 1) * (p.dir || 1);         // ローカルでの転がる向き
+      const dm = rk.dummy;
+      for (let i = 0; i < rk.n; i++) {
+        const h = ZoneKit.hash(i, 71);
+        const ph = ((t || 0) * 1.6 + h) % 1;
+        if (!inside) { dm.position.set(0, -9999, 0); dm.scale.setScalar(0.0001); }
+        else {
+          dm.position.set(x0 - dirL * (0.35 + ph * 1.5), 0.06 + ph * (0.35 + h * 0.3),
+                          (ZoneKit.hash(i, 73) - 0.5) * 0.9);
+          dm.scale.setScalar(0.5 + ph * 1.6);
+        }
+        dm.rotation.set(ph * 3, h * 5, 0);
+        dm.updateMatrix();
+        rk.dust.setMatrixAt(i, dm.matrix);
+      }
+      rk.dust.instanceMatrix.needsUpdate = true;
 
     } else if (mot === 'scan' && ud.mark) {
       /* 予告: 到達した瞬間の位置に床/天井のマーカーを出す */

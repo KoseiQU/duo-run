@@ -31,6 +31,8 @@ const Tutorial = {
     /* S3 の新ギミック（契約§4.4）。初出のときだけ短く出す */
     /* 契約§4.5 改訂 v2: 踏んで 2.0秒で崩落・抜け方はレーン移動だけ */
     bridge: { ph: ['<span class="finger">👉</span>崩れる橋は', '乗ると<b>2秒で落ちる</b>', '<b>横のレーンへ</b>逃げろ'] },
+    /* 転がる丸岩（契約§4.5 新・遺跡 / P7b） */
+    rock: { ph: ['<span class="finger">👆</span>転がる岩は', '<b>跳び越す</b>か', '<b>通り過ぎたレーン</b>へ'] },
     pendulum: { ph: ['<span class="finger">👈</span>振り子の刃は', '<b>空いたレーン</b>へ'] },
     /* S4 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     sync: { ph: ['<span class="finger">👆</span>光る踏み板を', '<b class="k">下</b>と<b class="k2">上</b>で<b>同時に</b>',

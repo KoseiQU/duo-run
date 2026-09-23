@@ -199,6 +199,19 @@ const ObstacleSkin = {
         post: G('dev', C.dev)
       });
 
+    } else if (type === 'ROCK') {
+      /* 転がる丸岩（契約§4.5 新・遺跡）: 赤茶の球＋白いひび（§4.3 の赤/橙/白の系統）。
+         球は陰影で転がりが読めるよう Lambert（霧は掛けない＋自発光で暗い道から浮かせる） */
+      const body = Obstacles._mat['common|rockBody'] || (Obstacles._mat['common|rockBody'] =
+        new THREE.MeshLambertMaterial({ color: 0xd2603a, emissive: 0x6e2412, fog: false }));
+      x.rockKit({
+        body: body,
+        crack: G('white', C.white),
+        shade: G('rockPath', 0x000000, 0.45),
+        shadow: G('rockShadow', 0x000000, 0.55),
+        dust: G('rockDust', 0xecebe9, 0.55)
+      });
+
     } else if (OBS[type].gate) {
       x.gateKit({ col: S.GATE_COL[type] || 0xd8e4f2, frame: G('dev', C.dev) });
     } else if (type === 'ZEROFIELD') {

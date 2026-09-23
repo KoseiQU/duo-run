@@ -331,7 +331,10 @@
         };
         const a = loop(0), b = loop(6);
         t.eq(a.z, 'neon', '一巡でネオンへ戻る');
-        t.ok(b.geo <= a.geo, 'ジオメトリ数が増え続けない（' + a.geo + ' → ' + b.geo + '）');
+        /* renderer.info のジオメトリ数は「これまでに一度でも描いたもの」の数なので、
+           2周目に初めて画面に入った障害物の型（P7b: 崩れる橋・丸岩などのプールの初回構築）でも
+           数個ふえる。リークなら切替のたびに数十ずつ積み上がるので、3%＋2 の揺れは許す */
+        t.ok(b.geo <= a.geo * 1.03 + 2, 'ジオメトリ数が増え続けない（' + a.geo + ' → ' + b.geo + '）');
         t.eq(b.ch, a.ch, 'シーンの要素数が増え続けない（' + a.ch + ' → ' + b.ch + '）');
         t.eq(b.tex, 0, 'テクスチャは0枚のまま（契約§3）');
         DUO.reset();
@@ -499,6 +502,11 @@
         DUO.reset(); DUO.start('S7', 2); DUO.bot('perfect');
         DUO.skipTo(1270);
         stepUntil(() => heard.glass || Game.status !== 'playing', 4000);
+        /* 5b) 転がる丸岩の予告音（P7b）: 岩が近づくと1回鳴る */
+        DUO.reset(); DUO.start('S3', 2); DUO.skipTo(300);
+        In.clearObstacles();
+        In.spawnOne('ROCK', 'floor', 0, 70);
+        stepUntil(() => heard.rock || Game.status !== 'playing', 400);
         /* 6) 光の輪（ブースト）: 取ったときの入口 */
         In.FF.boost(); In.FF.reset();
         /* 7) エンドレスの光のゲート */

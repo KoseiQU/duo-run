@@ -340,6 +340,12 @@ const Audio = {
       Audio.noise(c, out, t, { dur: 1.6, vol: 0.7, f: 3200, f2: 110, a: 0.005 });
       Audio.tone(c, out, t, { type: 'sine', f: 70, f2: 28, glide: 1.0, dur: 1.4, vol: 0.45 });
     },
+    rock(c, out, t, o) {           // 転がる丸岩（契約§4.5 新・遺跡 / P7b）: 石が転がる低いごろごろ
+      for (let i = 0; i < 7; i++) {
+        Audio.noise(c, out, t + i * 0.13, { dur: 0.16, vol: 0.28 - i * 0.02, f: 320, f2: 140, a: 0.01, off: 0.1 + i * 0.07 });
+      }
+      Audio.tone(c, out, t, { type: 'sine', f: 64, f2: 44, dur: 1.0, vol: 0.22, a: 0.08, hold: 0.5 });
+    },
     glass(c, out, t, o) {          // 鏡が砕ける
       Audio.noise(c, out, t, { dur: 0.8, vol: 0.28, f: 4500, ft: 'highpass', off: 0.5 });
       [2100, 2830, 3520].forEach((f, i) => Audio.bell(c, out, t + i * 0.05, f, 0.6, 0.04));
