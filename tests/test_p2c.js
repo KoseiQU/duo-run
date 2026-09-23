@@ -227,17 +227,9 @@
       bad2.rings = [];
       t.ok(In.Fair.validateAir(bad2, st.speedAt).length > 0, '届かない隙間は検査で弾ける');
 
-      /* ゾーン非依存（S8・エンドレスのミニ版でもそのまま使える）。
-         見た目だけ Zones の obstacleSkin.aerial で差し替えられる形になっている。 */
-      t.eq(FF.skin().id, 'default', 'ゾーンが空中のスキンを持たなければ既定の見た目');
-      const sk = In.Zones.skin();
-      sk.aerial = { id: 'test-aerial', COL: { ring: 0x00ff00 } };
-      t.eq(FF.skin().id, 'test-aerial', 'ゾーンの obstacleSkin.aerial で差し替えられる');
-      FF._applySkin();
-      t.eq(FF.view.mat.ring.color.getHex(), 0x00ff00, '差し替えた配色が実際のマテリアルに載る');
-      delete sk.aerial;
-      FF._applySkin();
-      t.eq(FF.view.mat.ring.color.getHex(), FF.SKIN.COL.ring, '外すと既定の配色へ戻る');
+      /* 空中の障害物も全ステージ共通の配色（契約§4.3 v2: ゾーン別スキンは失効） */
+      t.eq(FF.skin().id, 'common', '空中の障害物は全ステージ共通の見た目');
+      t.eq(FF.view.mat.edge.color.getHex(), FF.SKIN.COL.edge, '配色は共通の警告色');
       DUO.reset();
     }
   });

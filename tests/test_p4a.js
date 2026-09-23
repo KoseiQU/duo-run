@@ -25,7 +25,7 @@
       t.eq(typeof z.build, 'function', 'sea: build がある');
       t.eq(typeof z.sync, 'function', 'sea: sync がある');
       t.eq(typeof z.propsAhead, 'function', 'sea: propsAhead がある');
-      t.ok(!!z.obstacleSkin && typeof z.obstacleSkin.build === 'function', 'sea: 障害物スキンがある');
+      t.ok(!z.obstacleSkin, 'sea: ゾーン別の障害物スキンは持たない（契約§4.3 v2）');
       ['road', 'roadRough', 'roadMetal', 'skirt', 'metal', 'amber', 'indigo', 'fog'].forEach((k) => {
         t.ok(z.PAL[k] !== undefined, 'sea: PAL.' + k + ' がある');
       });
@@ -45,7 +45,7 @@
       t.ok(W.scene.fog.far <= 82, '霧は濃い目（far ' + W.scene.fog.far + ' ≤ 82 / 契約§5 深海の距離感）');
       t.eq(W._roadMat.color.getHex(), z.PAL.road, '路面の色が海底の岩に替わる');
       t.eq(W._fogBase.color, z.PAL.fog, '演出から戻すときの霧の基準値も更新される');
-      t.eq(In.Obstacles.skinId(), 'sea', '障害物のスキンも深海になる');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, '深海のドローコール ' + W.drawCalls() + ' ≤ 300');
       t.ok(Zs.propsAhead() >= 40, '前方60mの小物 ' + Zs.propsAhead() + '個（40個以上 / 契約§3）');
       const kinds = {};
@@ -107,7 +107,7 @@
       DUO.reset(); DUO.start('S2', 2);
       Zs.switchTo('sea');
       DUO.pump(1 / 60);
-      t.eq(In.Obstacles.skinId(), 'sea', '深海のスキンで測る');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       /* 例外（意図的に判定の外へ出る装飾。理由は tests/test_p2a.js の同じ表と同じ）
          ＋ P4a の新ギミック:
            CURRENT/CURGATE … 当たり判定を持たない（流れの矢印だけ）
@@ -749,8 +749,8 @@
       U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5']);
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
-      t.eq(In.Obstacles.skinId(), 'neon', 'エンドレスはネオン都市のスキン');
-      ['CURRENT', 'CURGATE', 'DOOR', 'DOORX', 'LIFTPAD', 'FISH_TOOTH', 'FISH_FIN', 'FISH_TAIL'].forEach((type) => {
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
+      ['CURRENT', 'CURGATE', 'DOOR', 'DOORX', 'LIFTPAD'].forEach((type) => {
         const v = In.Obstacles.acquire(type);
         const ud = v.userData;
         const okView = (type === 'CURRENT' || type === 'CURGATE') ? !!ud.belt

@@ -13,7 +13,6 @@
        dispose()                            … 任意。Zones が自動で後始末するので普通は不要
        propsAhead()                         … 監査用: 前方60mに見えている小物の数
        setGlide(k)                          … 任意（滑空の大演出を持つゾーンだけ）
-       obstacleSkin                         … 障害物の見た目（判定 OBS は共通・不変）
      }
 
    ■ 後始末（リークを作らない）
@@ -244,7 +243,7 @@ const Zones = {
     const z = Zones.active();
     const scene = Zones.scene;
     /* 走行中に切り替えても取りこぼさないよう、出ている障害物の見た目をプールへ返す
-       （プールごと disposeSkin で捨てる。返さないと旧スキンの材質を参照したまま残る） */
+       （ビューはゾーンと無関係＝プールへ返して使い回す） */
     if (typeof Game !== 'undefined' && Game.active && typeof World !== 'undefined' && World.ready) {
       for (let i = 0; i < Game.active.length; i++) World.dropView(Game.active[i]);
     }
@@ -256,8 +255,7 @@ const Zones = {
     }
     Zones._owned = [];
     if (z) { z.fields = []; z.propFields = []; }
-    /* 障害物の見た目もゾーンごと（スキン）なので一緒に捨てる */
-    if (typeof Obstacles !== 'undefined' && Zones._cur) Obstacles.disposeSkin(Zones._cur);
+    /* 障害物の見た目は全ゾーン共通（契約§4.3 v2）＝プールはゾーンを跨いで使い回す */
     Zones._cur = null;
   },
 
@@ -282,8 +280,6 @@ const Zones = {
   sync(dist, t, speed) { const z = Zones.active(); if (z && z.sync) z.sync(dist, t, speed); },
   setGlide(k) { const z = Zones.active(); if (z && z.setGlide) z.setGlide(k); },
   propsAhead() { const z = Zones.active(); return (z && z.propsAhead) ? z.propsAhead() : 0; },
-  skin() {
-    const z = Zones.active();
-    return (z && z.obstacleSkin) ? z.obstacleSkin : null;
-  }
+  /* 障害物の見た目は全ゾーン共通の1セット（契約§4.3 v2 / js/obstacle_skin.js） */
+  skin() { return (typeof ObstacleSkin !== 'undefined') ? ObstacleSkin : null; }
 };

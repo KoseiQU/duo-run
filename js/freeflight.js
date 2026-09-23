@@ -7,7 +7,7 @@
      コリドー断面（x −1.8〜+1.8 / y 0.6〜3.4）の中での自由飛行を受け持つ。
    - 空中の障害物は「断面内の矩形」。当たり判定は **円 vs 矩形**。
    - **ゾーン非依存**（S8・エンドレスのミニ版でもそのまま使う）。見た目だけ
-     `Zones.skin().aerial` があればそれで差し替えられる（無ければ既定のネオン調）。
+     配色は全ステージ共通の警告色（契約§4.3 v2・ゾーン別スキンは失効）。
 
    ■ 唯一の出所
    - 断面・速度・半径・隙間の寸法はこのファイルの定数だけ。
@@ -416,18 +416,16 @@ const FF = {
   },
 
   /* ==========================================================================
-     見た目（ゾーン非依存。Zones.skin().aerial があればそれを使う）
+     見た目（全ステージ共通 / 契約§4.3 v2）
      ========================================================================== */
-  skin() {
-    const s = (typeof Zones !== 'undefined' && Zones.skin) ? Zones.skin() : null;
-    return (s && s.aerial) ? s.aerial : FF.SKIN;
-  },
-  /* 既定のスキン（ネオン都市の見た目を流用: 広告ドローン・電線の束・看板の破片・光の輪） */
+  skin() { return FF.SKIN; },
+  /* 空中の障害物の配色（契約§4.3 v2: 全ステージ共通・赤／橙／白の警告色。ゾーン別は失効）。
+     光の輪は障害物ではない（加速アイテム）ので金色のまま。 */
   SKIN: {
-    id: 'default',
-    COL: { field: 0x6f8cff, ring: 0xffd479, ring2: 0x38e2ff, board: 0x2a3060,
-           edge: 0xff8a1e, cable: 0x4a5490, spark: 0x38e2ff, drone: 0xb9c2e4, ad: 0xff3ad0,
-           rock: 0x6e74a0 }
+    id: 'common',
+    COL: { field: 0xff3a26, ring: 0xffd479, ring2: 0xffe9b0, board: 0x2b1010,
+           edge: 0xff8a1e, cable: 0x2b2e35, spark: 0xff3a26, drone: 0xe8ecf2, ad: 0xff3a26,
+           rock: 0x8a2a1c }
   },
 
   initView(scene) {
@@ -759,7 +757,7 @@ const FF = {
     ud.core.scale.set(s * 0.96, s * 0.96, 1);
   },
 
-  /* ゾーンのスキン（Zones.skin().aerial）が変わったら配色を差し替える。
+  /* 配色を差し替える（テストが FF.SKIN を差し替えた時のため）。
      形は共通（ゾーン非依存）で、色だけゾーンに従う＝ S8・エンドレスでもそのまま使える。 */
   _applySkin() {
     const v = FF.view;

@@ -123,7 +123,7 @@ const OBS = {
   LIFTPAD:  { span: 1, depth: 0.55, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],
               motion: 'lift', label: '浮上足場' },
   /* 巨大魚の部位（契約§4.4 S5 の大演出）。判定は既存の型と同じ寸法で、
-     見た目だけ魚の牙・ヒレ・尾になる（fishKit がゾーン共通で建てる）。 */
+     見た目は全ゾーン共通の障害物（牙＝ハードル／ヒレ・尾＝ピラー / 契約§4.3 v2）。 */
   FISH_TOOTH: { span: 1, depth: 0.50, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],
                 fish: true, label: '巨大魚の牙' },
   FISH_FIN:   { span: 1, depth: 0.50, y0: 0.00, y1: CFG.H, both: true, safe: [],
@@ -1023,12 +1023,6 @@ const Merge = {
 
 const Obstacles = {
   SIDES: ['floor', 'ceil'],
-  /* ジャンプ障害物の「▲」警告アイコン（契約§4.3 / P5c）。
-     W,H = 三角の幅・高さ(m)。FAR〜NEAR(m) の間で縮めて消す（NEAR より手前では出さない）。
-     BAR_FAR〜BAR_NEAR(m) で警告バーを支柱の上端へ畳む（跳んだ体がバーを貫通して見えないように）。
-     BLINK = 明滅の周波数(rad/s)と暗い側の明るさ（暗い側でも背景より十分明るいこと）。 */
-  WARN_ICON: { W: 1.24, H: 1.15, FAR: 15, NEAR: 7, BAR_FAR: 6.5, BAR_NEAR: 2.0, BLINK_W: 9.0, BLINK_LO: 0.74 },
-
   /* 障害物インスタンスを作る（at = 障害物の中心距離 m） */
   make(type, surface, lane, at, spawnDist, params) {
     const t = OBS[type];
@@ -1341,29 +1335,21 @@ const Obstacles = {
   safeActs(o) { return OBS[o.type].safe; },
 
   /* ==========================================================================
-     見た目（ゾーンごとの「スキン」/ 契約 §5・§6 P3a）
-     ・**当たり判定（OBS）は全ゾーン共通・不変**。ここが受け持つのは見え方だけ。
+     見た目（契約§4.3 v2「同じ仕組みは全ステージで同じ見た目」）
+     ・**当たり判定（OBS）は不変**。見た目は js/obstacle_skin.js の共通1セットだけ
+       （ゾーン別スキンは 2026-09-24 に失効）。
      ・寸法は必ず OBS テーブルの y0/y1/depth/span から引く（ズレ ±10% 以内）。
      ・箱を積む → 同じ材質どうしを1つのジオメトリへ融合する、という足場はここに置き、
-       ゾーンのスキンは build(type, x) / buildMoving(type, g, w, t, x) を書くだけでよい。
-     ・マテリアルとプールは**スキンごと**に分ける（ゾーンを切り替えたら一緒に捨てる）。
+       スキンは build(type, x) / buildMoving(type, g, w, t, x) を書くだけでよい。
      ・点滅灯は「そのビュー専用のマテリアル」を持ち、障害物の at を位相にして
        個体ごとにばらばらに明滅する（プールで使い回しても位相が飛ばない）。
      ========================================================================== */
   _mat: {},
   _pool: {},
-  /* 材質キーの名前空間（コアのスキンが「他ゾーンのビルダー」を呼ぶ間だけ立てる / P5b）。
-     キーは `skinId + '|' + ns + key` になるので、disposeSkin の前方一致はそのまま効く。
-     ＝ 同じ key 名（'rvBody' など）を別ゾーンの色で作っても取り違えない。 */
   _matNS: '',
-  /* 今のゾーンのスキン（ゾーン未構築でも落ちないようネオンを既定にする） */
-  skin() {
-    const s = (typeof Zones !== 'undefined') ? Zones.skin() : null;
-    return s || (typeof ZoneNeon !== 'undefined' ? ZoneNeon.obstacleSkin : null);
-  },
-  skinId() { const s = Obstacles.skin(); return s ? s.id : 'neon'; },
-  /* 旧 Obstacles.COL の窓口（今のスキンの配色） */
-  get COL() { const s = Obstacles.skin(); return s ? s.COL : {}; },
+  skin() { return ObstacleSkin; },
+  skinId() { return ObstacleSkin.id; },
+  get COL() { return ObstacleSkin.COL; },
 
   _material(key, color, opacity) {
     const k = Obstacles.skinId() + '|' + Obstacles._matNS + key;
@@ -1374,18 +1360,26 @@ const Obstacles = {
     }
     return Obstacles._mat[k];
   },
+  /* 光る警告色（霧を掛けない＝遠くからでも背景より明るく浮く / 契約§5「輝度差 +40」）。
+     P5c の実測: 霧を掛けると 48m で輝度差が半分に潰れた。 */
+  _glow(key, color, opacity) {
+    const k = Obstacles.skinId() + '|G' + key;
+    if (!Obstacles._mat[k]) {
+      Obstacles._mat[k] = (opacity === undefined)
+        ? new THREE.MeshBasicMaterial({ color: color, fog: false })
+        : new THREE.MeshBasicMaterial({ color: color, fog: false, transparent: true, opacity: opacity,
+                                        depthWrite: false });
+    }
+    return Obstacles._mat[k];
+  },
   _emissive(key, color) {
     const k = Obstacles.skinId() + '|E' + Obstacles._matNS + key;
     if (!Obstacles._mat[k]) Obstacles._mat[k] = new THREE.MeshBasicMaterial({ color: color, fog: true });
     return Obstacles._mat[k];
   },
 
-  /* この障害物をどの「見た目の変種」で建てるか（スキンが決める。既定は変種なし）。
-     コアのスキン（P5b）だけが、障害物ごとに寄り親のゾーンを返す。 */
-  variantOf(o) {
-    const s = Obstacles.skin();
-    return (s && s.variant) ? (s.variant(o) || '') : '';
-  },
+  /* 見た目の変種（旧コアの寄り親）は失効。プールの鍵の互換のために残す */
+  variantOf(o) { return ''; },
 
   _build(type, variant) {
     const skin = Obstacles.skin();
@@ -1655,25 +1649,6 @@ const Obstacles = {
       g.userData.dropMats = own;
     };
 
-    /* 倒れた柱（神殿崩壊）: 3レーンを横断する低い梁。判定どおりの寸法で置く */
-    const columnKit = (mats) => {
-      mats = mats || {};
-      const stone = mats.stone || Obstacles._material('coStone', C.body);
-      const r = t.y1 / 2;                            // 0.31（高さ・奥行きとも判定どおり）
-      solid(new THREE.CylinderGeometry(r, r, w * 0.86, 12), stone, 0, r, 0, [0, 0, Math.PI / 2]);
-      for (let i = 0; i < 5; i++) {                  // 柱の溝（節）
-        box(0.05, r * 1.9, r * 1.9, mats.rib || Obstacles._material('coRib', C.dark),
-            -w * 0.34 + w * 0.68 * i / 4, r, 0);
-      }
-      [-1, 1].forEach((s) => {                       // 折れた柱頭
-        box(0.26, 0.58, 0.58, stone, s * (w * 0.45), r, 0);
-        box(0.14, 0.50, 0.50, mats.rib || Obstacles._material('coRib', C.dark), s * (w * 0.49), r, 0);
-      });
-      box(w, 0.10, D + 0.04, mats.warn || Obstacles._emissive('coWarn', C.warn), 0, t.y1 - 0.05, 0);
-      box(w * 0.98, 0.07, D * 0.5, mats.hot || Obstacles._emissive('coHot', C.red), 0, 0.05, 0);
-      g.userData.column = true;
-    };
-
     /* ------------------------------------------------------------------------
        S5 の新ギミックの骨組み（ゾーン共通・2026-09-22 P4a）
        同時スイッチ・落ちる天井と同じ考え方。スキンは色（mats）を渡すだけでよく、
@@ -1825,47 +1800,6 @@ const Obstacles = {
       g.userData.lift = { top: top, mats: own };
       g.userData.liftMats = own;
     };
-    /* 巨大魚の部位（契約§4.4 S5）: 牙・ヒレ・尾。判定どおりの寸法で彫る */
-    const fishKit = (mats) => {
-      mats = mats || {};
-      const flesh = mats.flesh || Obstacles._material('fsFlesh', C.body);
-      const bone = mats.bone || Obstacles._material('fsBone', C.steel);
-      const own = [];
-      const hot = new THREE.MeshBasicMaterial({ color: mats.hotCol || C.warn, fog: true });
-      own.push(hot);
-      if (type === 'FISH_TOOTH') {
-        const TOP = t.y1;
-        box(w, 0.16, D * 0.9, flesh, 0, 0.08, 0);                       // 歯肉
-        for (let i = 0; i < 4; i++) {
-          const px = -w / 2 + w * (i + 0.5) / 4;
-          solid(new THREE.ConeGeometry(0.11, TOP - 0.14, 5), bone, px, 0.16 + (TOP - 0.14) / 2, 0);
-        }
-        box(w, 0.10, D * 1.02, hot, 0, TOP - 0.05, 0);
-      } else if (type === 'FISH_FIN') {
-        /* ヒレ: 床から天井まで貫く膜と骨（1レーン全高＝レーン移動で避ける） */
-        const H = CFG.H;
-        box(w * 0.80, H, D * 0.5, flesh, 0, H / 2, 0);
-        for (let i = 0; i < 4; i++) {
-          box(0.10, H - 0.2, D * 0.62, bone, -w * 0.32 + w * 0.64 * i / 3, H / 2, 0, [0, 0, 0.02 * (i - 1.5)]);
-        }
-        box(w, 0.12, D * 0.9, hot, 0, 0.06, 0);
-        box(w, 0.12, D * 0.9, hot, 0, H - 0.06, 0);
-      } else {
-        /* 尾: 横へ薙ぐ（動きは LASER_SCAN と同じ規則）。1レーン幅・全高 */
-        const H = CFG.H;
-        box(w * 0.66, H, D * 0.55, flesh, 0, H / 2, 0);
-        box(w * 0.94, H * 0.72, D * 0.35, flesh, 0, H / 2, 0.02);
-        for (let i = 0; i < 3; i++) box(0.09, H - 0.3, D * 0.5, bone, (i - 1) * w * 0.3, H / 2, 0);
-        box(w * 0.98, 0.10, D * 0.9, hot, 0, 0.05, 0);
-        box(w * 0.98, 0.10, D * 0.9, hot, 0, H - 0.05, 0);
-      }
-      g.userData.fish = true;
-      g.userData.fishMats = own;
-      /* 発光部は materials をビュー専用に持つので、捨てるときに一緒に開放する */
-      const add = (list) => { list.forEach((m) => { if (own.indexOf(m) < 0) own.push(m); }); };
-      add([hot]);
-    };
-
     /* ------------------------------------------------------------------------
        S6 の新ギミックの骨組み（ゾーン共通・2026-09-22 P4b）
        ここまでと同じ考え方。スキンは色（mats）を渡すだけでよく、
@@ -2074,217 +2008,14 @@ const Obstacles = {
       g.userData.shardMats = own;
     };
 
-    /* ------------------------------------------------------------------------
-       ジャンプ障害物（ローバー／ローレーザー）の視認性の骨格
-       — 契約§4.3（2026-09-23 実機評「柵が見づらい」）/ P5c
-       全ゾーン共通の骨格を **判定の外の装飾** として必ず建てる:
-         ・両脇に高い支柱 1.6m（レーン端 x = ±0.55。判定には一切含めない）
-         ・支柱の上端をつなぐ光る警告バー（対象キャラの色＝床は琥珀／天井は藍。
-           どちらを見せるかは place() が o.surface で切り替える）
-         ・手前の路面に警告帯（幅レーン・長さ 4m・シェブロン）
-       世界観はゾーンのスキンが受け持つ（色は必ずそのゾーンの配色から引く）。
-       ローレーザーでは支柱が発生装置になる（契約§4.3「発生装置を高い支柱に」）。
-       ここで建てる部品は **すべて userData.deco** が立つメッシュに入る
-       ＝ 見た目と判定のズレ検査（±10%）は deco を外して測る。
-       ------------------------------------------------------------------------ */
-    /* 寸法の根拠（変えるときはここを読むこと）:
-       ・H = 1.60 は契約の値であると同時に **幾何の上限** でもある。天井を走る
-         UMBRA が跳ぶと体の下端が y = 1.80 まで降りてくる（JUMP_APEX 1.3・体高 0.9）。
-         1.60 はその 0.20m 下＝「相方をすり抜けない一番高い支柱」。
-       ・X = 0.55 はレーン端（LANE_W/2 = 0.60）の内側。判定（w = span*LANE_W - 余白）
-         には一切入れない。
-       ・この骨格は **遠くから読めること** が仕事なので、光る部分は fog を掛けない
-         （霧は 48m で 26〜47% 効き、掛けると背景との輝度差が半分に潰れる。
-         実測: 霧つきの版は 6ゾーン中 4ゾーンで輝度差 +15 未満だった）。 */
-    const WARN = { H: 1.60, X: 0.55, BAND_L: 4.0, POST: 0.17 };
-    const ICON = Obstacles.WARN_ICON;
-    /* 光る標示の材質（霧なし・スキンごとに1つ使い回す）。_emissive と鍵空間を分ける */
-    const glowM = (key, color) => {
-      const k = Obstacles.skinId() + '|G' + Obstacles._matNS + key;
-      if (!Obstacles._mat[k]) Obstacles._mat[k] = new THREE.MeshBasicMaterial({ color: color, fog: false });
-      return Obstacles._mat[k];
-    };
-    const warnRig = () => {
-      const postM = Obstacles._material('p5cPost', C.steel);
-      const baseM = Obstacles._material('p5cBase', C.dark || C.deep);
-      const chevM = glowM('p5cChev', C.warn);
-      decoMats.push(postM, baseM, chevM);
-      const zf = D / 2;                                   // 判定の手前端
-      const PD = Math.max(D, 0.20);                       // 支柱の奥行き
-      /* 支柱（判定外）。手前・内側・外側の三面に光る帯を通す＝どの角度からも光って見える。
-         ローレーザーは上端が発生装置になる（契約§4.3）。 */
-      [-1, 1].forEach((s) => {
-        box(WARN.POST, WARN.H, PD, postM, s * WARN.X, WARN.H / 2, 0);
-        box(WARN.POST + 0.04, 0.10, PD + 0.06, postM, s * WARN.X, 0.05, 0);
-        /* 手前面の光る帯。遠景では支柱が数画素なので、ここが実質「支柱の見た目」。 */
-        box(WARN.POST, WARN.H - 0.12, 0.05, chevM, s * WARN.X, WARN.H / 2 + 0.06, PD / 2 + 0.035);
-        /* 内側（レーンの中心を向く面）にも通す＝斜めから見ても縦の光の線が残る */
-        box(0.05, WARN.H - 0.12, PD * 0.8, chevM, s * (WARN.X - WARN.POST / 2 - 0.02), WARN.H / 2 + 0.06, 0);
-        if (type === 'LASER_LOW') {
-          box(WARN.POST + 0.08, 0.24, PD + 0.08, postM, s * WARN.X, WARN.H - 0.26, 0);
-          box(WARN.POST + 0.02, 0.10, 0.05, chevM, s * WARN.X, WARN.H - 0.26, PD / 2 + 0.06);
-        }
-      });
-      /* 路面の警告帯（幅レーン・長さ 4m・シェブロン）。手前（+z）へ伸ばす */
-      const BW = CFG.LANE_W - 0.06;
-      box(BW, 0.02, WARN.BAND_L, baseM, 0, 0.012, zf + WARN.BAND_L / 2);
-      const n = 5;
-      for (let i = 0; i < n; i++) {
-        const z = zf + 0.42 + i * (WARN.BAND_L - 0.7) / (n - 1);
-        [-1, 1].forEach((s) => {
-          box(0.78, 0.03, 0.19, chevM, s * 0.28, 0.030, z, [0, s * 0.62, 0]);
-        });
-      }
-      /* 警告バー（支柱の上端をつなぐ）＋上端の灯を **1メッシュ** にまとめる。
-         色は place() が o.surface で塗り替える（床＝琥珀／天井＝藍）＝
-         プールで使い回しても取り違えず、ドローコールも1つで済む。
-         ここは「遠くから跳べと読ませる」要なので、画面上の面積を稼ぐために
-         バーを厚く（0.34m）取る。判定は一切持たない。 */
-      const BH = 0.34, BX = WARN.X * 2 + WARN.POST;
-      const barMat = new THREE.MeshBasicMaterial({ color: 0xffc24a, fog: false });
-      const barMesh = new THREE.Mesh(ZoneKit.merge([
-        { g: new THREE.BoxGeometry(BX, BH, 0.15), p: [0, WARN.H - BH / 2, 0] },
-        { g: new THREE.BoxGeometry(BX - 0.12, 0.07, 0.19), p: [0, WARN.H - BH - 0.05, 0] },
-        { g: new THREE.SphereGeometry(0.075, 6, 4), p: [-WARN.X, WARN.H + 0.07, 0] },
-        { g: new THREE.SphereGeometry(0.075, 6, 4), p: [WARN.X, WARN.H + 0.07, 0] }
-      ]), barMat);
-      barMesh.userData.deco = true;
-      g.add(barMesh);
-      /* 支柱の上に浮かぶ「▲」の警告アイコン（中に「!」の抜き）。
-         40m 先では支柱＋バーだけだと画面高さの 5〜6% にしかならない（実測）。
-         アイコンで上へ約 1.2m 伸ばして「遠くからでも跳ぶものが来る」と読ませる。
-         近づいたら（15m→7m）バーの中へ縮めて消す＝相方が跳んで降りてくる高さ
-         （y ≥ 1.80）に標示が居座らない。材質はバーと共有（色・明滅も同じ）。 */
-      const tri = new THREE.Shape();
-      tri.moveTo(-ICON.W / 2, 0); tri.lineTo(ICON.W / 2, 0); tri.lineTo(0, ICON.H); tri.closePath();
-      const hole = (x0, y0, x1, y1) => {
-        const p = new THREE.Path();
-        p.moveTo(x0, y0); p.lineTo(x0, y1); p.lineTo(x1, y1); p.lineTo(x1, y0); p.closePath();
-        tri.holes.push(p);
-      };
-      const ih = ICON.H, iw = ih * 0.07;
-      hole(-iw, ih * 0.33, iw, ih * 0.73);               // 「!」の棒
-      hole(-iw, ih * 0.13, iw, ih * 0.25);               // 「!」の点
-      const icon = new THREE.Mesh(new THREE.ShapeGeometry(tri), barMat);
-      icon.position.set(0, WARN.H + 0.14, 0.02);
-      icon.userData.deco = true;
-      g.add(icon);
-      g.userData.warnRig = { bar: barMesh, mat: barMat, icon: icon, pivot: WARN.H + 0.14 };
-    };
-
-    /* 「横に避ける」障害物（ピラー・縦レーザー・ワイド梁・壁の穴・壁）の警告色の縁取り
-       （契約§5「危険物は背景から浮く」/ P5c）。
-       P1 由来の実機評「障害物が背景に比べて地味」の点検で、遺跡・深海・鏡・コアでは
-       これらが **背景より暗い**（同じ画素で測って −25 〜 +12）ことがあった。
-       ゾーンの造形はそのままに、**手前の面に共通の警告枠** を1枚重ねて厚みを揃える。
-       ・枠は判定の手前面に「ほぼ面一」で置く（z 中心 = D/2 − 0.015・厚み 0.04
-         ＝ 判定より 0.005m しか出ない）ので、見た目と判定のズレは生まれない。
-         面一にすると本体と Z ファイトするので、その 0.005m だけ浮かせている。
-       ・縁取りも「遠くから読ませる」ための標示なので霧を掛けない（warnRig と同じ理由）。
-       ・跳び越える障害物（ローバー／ローレーザー）はこの枠ではなく warnRig が受け持つ
-         ＝「跳ぶ」と「よける」を見た目で取り違えさせない。 */
-    const rimWarn = () => {
-      const m = glowM('p5cWallWarn', C.warn);
-      const y0 = (type === 'WALLHOLE') ? t.y0 : 0;
-      /* 全高の障害物（ピラー・縦レーザー）も **全高を** 囲う（P5c 補強）。
-         2.4m で切ると、40m 先では柱の上 4割が背景に溶けて「短い枠」に見えた。 */
-      const y1 = t.y1;
-      /* 枠の太さ 0.20m（40m 先で約 2.5px）。0.10m では 1px を割って、明るいゾーン
-         （深海・宇宙）で柱の平均輝度が背景を下回った（実測 −28〜+9）。 */
-      /* 枠はスキンの一番手前の面の **さらに手前** に置く（深海の柱は上下の笠が判定の
-         手前へ 0.05m 張り出していて、面一の枠を隠していた）。張り出しは 0.10m で頭打ち。 */
-      let zf = D / 2;
-      for (let i = parts0; i < parts.length; i++) {
-        const pp = parts[i];
-        if (!pp.g.boundingBox) pp.g.computeBoundingBox();
-        const sz = pp.s ? pp.s[2] : 1;
-        zf = Math.max(zf, pp.p[2] + pp.g.boundingBox.max.z * sz);
-      }
-      zf = Math.min(zf, D / 2 + 0.10);
-      const zc = zf - 0.015, TH = 0.20;
-      /* 縦レーザーは上下の枠を厚く（0.55m）＝光線の「発生装置」が両端で光る */
-      const TC = (type === 'LASER_V') ? 0.55 : TH;
-      box(w, TC, 0.04, m, 0, y1 - TC / 2, zc);
-      box(w, TC, 0.04, m, 0, y0 + TC / 2, zc);
-      [-1, 1].forEach((s) => box(TH, y1 - y0 - TC * 2, 0.04, m, s * (w / 2 - TH / 2), (y0 + y1) / 2, zc));
-      /* 側面の手前の角にも光の縦線（横のレーンから斜めに見ても柱の輪郭が光る） */
-      [-1, 1].forEach((s) => box(0.03, y1 - y0, 0.14, m, s * (w / 2 + 0.005), (y0 + y1) / 2, zf - 0.07));
-      /* 光線そのもの（縦レーザー）には縞を重ねない＝「光の柱」と「壁」を見分けさせる */
-      if (type === 'LASER_V') return;
-      /* 枠の内側に 45度の警告縞（虎縞）。内側の矩形で切り抜いた平行四辺形を平面で重ねる
-         （箱を斜めに置くと枠からはみ出す）。縞の幅 0.26m・間隔 0.40m ＝ 内側の約 65%
-         （0.18〜0.22m では深海・宇宙・コアの柱が背景 +40 に届かなかった）。 */
-      const ix0 = -w / 2 + TH, ix1 = w / 2 - TH, iy0 = y0 + TH, iy1 = y1 - TH;
-      if (ix1 - ix0 < 0.1 || iy1 - iy0 < 0.1) return;
-      const clip = (poly, f) => {                 // f(p) >= 0 を残す（凸多角形の半平面クリップ）
-        const out = [];
-        for (let i = 0; i < poly.length; i++) {
-          const a = poly[i], b = poly[(i + 1) % poly.length];
-          const fa = f(a), fb = f(b);
-          if (fa >= 0) out.push(a);
-          if ((fa >= 0) !== (fb >= 0)) {
-            const k = fa / (fa - fb);
-            out.push([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]);
-          }
-        }
-        return out;
-      };
-      const SW = 0.26 * Math.SQRT2, PITCH = 0.40 * Math.SQRT2;    // y − x の値で測った幅・間隔
-      const rect = [[ix0, iy0], [ix1, iy0], [ix1, iy1], [ix0, iy1]];
-      for (let c = (iy0 - ix1) - PITCH; c < (iy1 - ix0); c += PITCH) {
-        let poly = clip(rect, (q) => (q[1] - q[0]) - c);
-        poly = clip(poly, (q) => (c + SW) - (q[1] - q[0]));
-        if (poly.length < 3) continue;
-        const sh = new THREE.Shape();
-        sh.moveTo(poly[0][0], poly[0][1]);
-        for (let k = 1; k < poly.length; k++) sh.lineTo(poly[k][0], poly[k][1]);
-        sh.closePath();
-        solid(new THREE.ShapeGeometry(sh), m, 0, 0, zf + 0.006);
-      }
-    };
-
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
-                padKit: padKit, syncKit: syncKit, dropKit: dropKit, columnKit: columnKit,
-                beltKit: beltKit, doorKit: doorKit, liftKit: liftKit, fishKit: fishKit,
+                padKit: padKit, syncKit: syncKit, dropKit: dropKit,
+                beltKit: beltKit, doorKit: doorKit, liftKit: liftKit,
+                deco: (m) => { if (decoMats.indexOf(m) < 0) decoMats.push(m); return m; },
                 gateKit: gateKit, zeroFieldKit: zeroFieldKit, netKit: netKit,
                 shardKit: shardKit, variant: variant || '' };
-    const childs0 = g.children.length, blink0 = g.userData.blink.length, parts0 = parts.length;
-    const lamps0 = lampParts.length;
     skin.build(type, x);
-    /* スキンが S4 の新ギミック（P3b）を知らないゾーンでも必ず動く形にする。
-       汎用の当て板を捨ててから共通の骨組みを建てる＝見た目と判定がずれない。 */
-    const needKit = (t.pad && !g.userData.pad) || (type === 'SYNCGAP' && !g.userData.sync) ||
-                    (type === 'DROPCEIL' && !g.userData.drop) || (type === 'COLUMN' && !g.userData.column) ||
-                    (t.belt && !g.userData.belt) || (t.door && !g.userData.door) ||
-                    (type === 'LIFTPAD' && !g.userData.lift) || (t.fish && !g.userData.fish) ||
-                    (t.gate && !g.userData.gate) || (t.net && !t.gate && !g.userData.net) ||
-                    (type === 'ZEROFIELD' && !g.userData.zfield) ||
-                    (type === 'SHARDGAP' && !g.userData.shard);
-    if (needKit) {
-      for (let i = g.children.length - 1; i >= childs0; i--) { const c = g.children[i]; g.remove(c); ZoneKit.free(c); }
-      g.userData.blink.length = blink0;
-      lampParts.length = lamps0;
-      for (let i = parts.length - 1; i >= parts0; i--) if (parts[i].g.dispose) parts[i].g.dispose();
-      parts.length = parts0;
-      if (t.gate) gateKit(null);
-      else if (type === 'SHARDGAP') shardKit(null);
-      else if (t.net) netKit(null);
-      else if (type === 'ZEROFIELD') zeroFieldKit(null);
-      else if (t.pad) padKit(null);
-      else if (type === 'SYNCGAP') syncKit(null);
-      else if (type === 'DROPCEIL') dropKit(null);
-      else if (t.belt) beltKit(null);
-      else if (t.door) doorKit(null);
-      else if (type === 'LIFTPAD') liftKit(null);
-      else if (t.fish) fishKit(null);
-      else columnKit(null);
-    }
-    /* ジャンプ障害物の視認性の骨格（契約§4.3 / P5c）は **全ゾーン共通で必ず建てる**。
-       スキンの造形（バリケード・石柵・サンゴ・コンテナ・鏡片・混在）はそのまま残す。 */
-    if (type === 'ROVER' || type === 'LASER_LOW') warnRig();
-    if (type === 'WIDEBAR' || type === 'WALLHOLE' || type === 'WALLSOLID' ||
-        type === 'PILLAR' || type === 'LASER_V') rimWarn();
     buildLamps();
 
     /* 材質ごとに融合して1メッシュにする（点滅灯だけは個別マテリアルなので別メッシュのまま） */
@@ -2392,31 +2123,6 @@ const Obstacles = {
     else { g.position.y = lift; g.rotation.set(0, 0, 0); }
     /* ローカル座標への変換（天井側は Z 180度ぶん x が反転する） */
     const lx = (wx) => (ceil ? (xc - wx) : (wx - xc));
-
-    /* ジャンプ障害物の警告バー（契約§4.3 / P5c）: 対象キャラの色を出す
-       （床＝琥珀＝LUMEN ／ 天井＝藍＝UMBRA）。どちらの持ち場かが色で分かる。 */
-    if (ud.warnRig) {
-      const wr = ud.warnRig, IC = Obstacles.WARN_ICON;
-      /* 明滅（2段）: 暗い側でも BLINK_LO 倍＝背景より十分明るい（遠目の輝度差を割らない） */
-      const on = Math.sin((t || 0) * IC.BLINK_W + o.at * 0.7) > -0.35;
-      wr.mat.color.setHex(ceil ? 0xb9c8ff : 0xffcf6a).multiplyScalar(on ? 1 : IC.BLINK_LO);
-      /* ▲ は遠くでだけ出す。近づいたらバーの中へ縮めて消す（相方の跳躍帯に居座らない） */
-      const rel = o.at - dist;
-      if (wr.icon) {
-        const k = U.smooth(U.clamp((rel - IC.NEAR) / (IC.FAR - IC.NEAR), 0, 1));
-        wr.icon.visible = k > 0.02;
-        wr.icon.scale.set(k, k, 1);
-      }
-      /* 警告バーは跳んだ体の高さ（足 1.3m・頭 2.2m）を横切る。通過の直前に
-         支柱の上端へ畳み込む（シャッターが上がる動き）＝ 自分の体がバーを貫通して見えない。 */
-      if (wr.bar) {
-        const kb = U.smooth(U.clamp((rel - IC.BAR_NEAR) / (IC.BAR_FAR - IC.BAR_NEAR), 0, 1));
-        const sy = Math.max(0.001, kb);
-        wr.bar.scale.set(1, sy, 1);
-        wr.bar.position.y = wr.pivot * (1 - sy);
-        wr.bar.visible = kb > 0.01;
-      }
-    }
 
     if (OBS[o.type].pad && ud.pad) {
       /* スイッチのパッド: 長さは z窓（＝0.36秒ぶん）と同じにする。

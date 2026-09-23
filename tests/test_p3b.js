@@ -576,8 +576,8 @@
       U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4']);
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
-      t.eq(In.Obstacles.skinId(), 'neon', 'エンドレスはネオン都市のスキン');
-      ['SYNCPAD', 'SYNCGAP', 'DROPCEIL', 'COLUMN'].forEach((type) => {
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
+      ['SYNCPAD', 'SYNCGAP', 'DROPCEIL'].forEach((type) => {
         const v = In.Obstacles.acquire(type);
         const ud = v.userData;
         const okView = (type === 'SYNCPAD') ? !!ud.pad

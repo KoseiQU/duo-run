@@ -65,7 +65,7 @@
       t.eq(typeof z.build, 'function', 'mirror: build がある');
       t.eq(typeof z.sync, 'function', 'mirror: sync がある');
       t.eq(typeof z.propsAhead, 'function', 'mirror: propsAhead がある');
-      t.ok(!!z.obstacleSkin && typeof z.obstacleSkin.build === 'function', 'mirror: 障害物スキンがある');
+      t.ok(!z.obstacleSkin, 'mirror: ゾーン別の障害物スキンは持たない（契約§4.3 v2）');
       ['road', 'roadRough', 'roadMetal', 'skirt', 'metal', 'amber', 'indigo', 'fog'].forEach((k) => {
         t.ok(z.PAL[k] !== undefined, 'mirror: PAL.' + k + ' がある');
       });
@@ -89,7 +89,7 @@
            '霧の色は「銀だが暗部を作れる」輝度 ' + fogY.toFixed(1) + '（黒潰れ 8 の上・中間調 60 の下）');
       t.eq(W._roadMat.color.getHex(), z.PAL.road, '路面の色が鏡の銀へ替わる');
       t.eq(W._fogBase.color, z.PAL.fog, '演出から戻すときの霧の基準値も更新される');
-      t.eq(In.Obstacles.skinId(), 'mirror', '障害物のスキンも鏡になる');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, '鏡のドローコール ' + W.drawCalls() + ' ≤ 300');
       t.ok(Zs.propsAhead() >= 40, '前方60mの小物 ' + Zs.propsAhead() + '個（40個以上 / 契約§3）');
       const kinds = {};
@@ -152,7 +152,7 @@
       DUO.reset(); DUO.start('S2', 2);
       Zs.switchTo('mirror');
       DUO.pump(1 / 60);
-      t.eq(In.Obstacles.skinId(), 'mirror', '鏡のスキンで測る');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       /* 【2026-09-23 P5c】ジャンプ障害物（ローバー／ローレーザー）に足した
            ・両脇の高い支柱 1.6m（レーン端 x=±0.55）
            ・支柱上端をつなぐ光る警告バー
@@ -878,7 +878,7 @@
       U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']);
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
-      t.eq(In.Obstacles.skinId(), 'neon', 'エンドレスはネオン都市のスキン');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       ['MIRGATE', 'SWAPGATE', 'SHARDGAP'].forEach((type) => {
         const v = In.Obstacles.acquire(type);
         const ud = v.userData;

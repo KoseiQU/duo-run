@@ -41,7 +41,7 @@
         t.eq(typeof z.build, 'function', id + ': build がある');
         t.eq(typeof z.sync, 'function', id + ': sync がある');
         t.eq(typeof z.propsAhead, 'function', id + ': propsAhead がある');
-        t.ok(!!z.obstacleSkin && typeof z.obstacleSkin.build === 'function', id + ': 障害物スキンがある');
+        t.ok(!z.obstacleSkin, id + ': ゾーン別の障害物スキンは持たない（契約§4.3 v2）');
         ['road', 'roadRough', 'roadMetal', 'skirt', 'metal', 'amber', 'indigo', 'fog'].forEach((k) => {
           t.ok(z.PAL[k] !== undefined, id + ': PAL.' + k + ' がある');
         });
@@ -70,7 +70,7 @@
       t.eq(W._roadMat.color.getHex(), Zs.get('ruins').PAL.road, '路面の色が砂岩に替わる');
       t.ok(W._roadMat.roughness > 0.5, '石の路面はざらざら（roughness ' + W._roadMat.roughness + '）');
       t.eq(W._fogBase.color, Zs.get('ruins').PAL.fog, '演出から戻すときの霧の基準値も更新される');
-      t.eq(In.Obstacles.skinId(), 'ruins', '障害物のスキンも遺跡になる');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, '遺跡のドローコール ' + W.drawCalls() + ' ≤ 300');
       t.ok(Zs.propsAhead() >= 40, '前方60mの小物 ' + Zs.propsAhead() + '個（40個以上 / 契約§3）');
       /* 小物の種類（契約§3「小物20種以上」） */
@@ -118,7 +118,7 @@
     run(t) {
       const In = I(), OBS = In.OBS, CFG = In.CFG, Zs = In.Zones;
       DUO.reset(); DUO.start('S3', 2); DUO.pump(1 / 60);
-      t.eq(In.Obstacles.skinId(), 'ruins', '遺跡のスキンで測る');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       /* 例外（意図的に判定の外へ出る装飾。test_p2a と同じ考え方）:
          GAP/WALLHOLE/LASER_SCAN/LASER_ROT … ネオンと同じ理由
          BRIDGE … 板（判定の外＝乗っている間は無害）と谷が前後・下へ伸びる */

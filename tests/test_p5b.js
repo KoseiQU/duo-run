@@ -56,7 +56,7 @@
       ['build', 'sync', 'propsAhead', 'setGlide'].forEach((k) => {
         t.eq(typeof z[k], 'function', 'core: ' + k + ' がある');
       });
-      t.ok(!!z.obstacleSkin && typeof z.obstacleSkin.build === 'function', 'core: 障害物スキンがある');
+      t.ok(!z.obstacleSkin, 'core: ゾーン別の障害物スキンは持たない（契約§4.3 v2）');
       ['road', 'roadRough', 'roadMetal', 'skirt', 'metal', 'amber', 'indigo', 'fog'].forEach((k) => {
         t.ok(z.PAL[k] !== undefined, 'core: PAL.' + k + ' がある');
       });
@@ -84,7 +84,7 @@
       t.ok(red > blue, '霧は赤寄り（R ' + red + ' > B ' + blue + '）');
       t.eq(W._roadMat.color.getHex(), z.PAL.road, '路面の色がコアへ替わる');
       t.eq(W._fogBase.color, z.PAL.fog, '演出から戻すときの霧の基準値も更新される');
-      t.eq(In.Obstacles.skinId(), 'core', '障害物のスキンもコアになる');
+      t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
 
       /* 小物・ドローコール・食い込み（契約§3） */
       for (let i = 0; i < 12; i++) DUO.pump(1 / 60);
@@ -140,39 +140,15 @@
      2. 混在スキン（契約§5「全ゾーンの断片が混ざる」を障害物でも）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P5b: コアの障害物スキン＝全ゾーン混在（寄り親が障害物ごとに決まる・判定は不変）',
+    name: 'P5b→P7a: コアの障害物も共通デザイン（寄り親の混在は失効・判定は不変）',
     quick: true,
     run(t) {
       const In = I(), Ob = In.Obstacles, Zs = In.Zones;
       DUO.reset(); DUO.start('S8', 5);
       for (let i = 0; i < 6; i++) DUO.pump(1 / 60);
       const skin = Zs.skin();
-      t.eq(skin.id, 'core', 'S8 のスキンは core');
-      t.eq(typeof skin.variant, 'function', 'core のスキンは variant(o) を持つ');
-      t.eq(skin.DONORS.length, 5, '寄り親は既存5ゾーン: ' + skin.DONORS.join(','));
-
-      /* 決定論（同じ障害物なら必ず同じ寄り親） */
-      const o1 = Ob.make('PILLAR', 'floor', 0, 123.5, 0);
-      t.eq(skin.variant(o1), skin.variant(o1), '寄り親は決定論（同じ障害物＝同じ答え）');
-      t.ok(skin.DONORS.indexOf(skin.variant(o1)) >= 0, '寄り親は5ゾーンのどれか');
-
-      /* 散らばり: 同じ型でも at が違えば寄り親が散る */
-      const seen = {};
-      for (let i = 0; i < 400; i++) seen[skin.variant(Ob.make('PILLAR', 'floor', 0, i * 7.3, 0))] = 1;
-      t.eq(Object.keys(seen).length, 5, 'PILLAR の寄り親は5ゾーンすべてに散る');
-      const seen2 = {};
-      for (let i = 0; i < 400; i++) seen2[skin.variant(Ob.make('ROVER', 'floor', 0, i * 7.3, 0))] = 1;
-      t.eq(Object.keys(seen2).length, 5, 'ROVER の寄り親も5ゾーンすべてに散る');
-
-      /* プールが変種で分かれる＝使い回しで別ゾーンの姿に化けない */
-      const gN = Ob.acquire('PILLAR', 'neon');
-      const gR = Ob.acquire('PILLAR', 'ruins');
-      t.ok(gN !== gR, '寄り親が違えば別の見た目を作る');
-      t.eq(gN.userData._vk, 'neon', '見た目は自分の寄り親を覚えている');
-      Ob.release('PILLAR', gN); Ob.release('PILLAR', gR);
-      t.eq(Ob.acquire('PILLAR', 'neon'), gN, 'プールへ返すと同じ寄り親の枠へ戻る');
-      t.eq(Ob.acquire('PILLAR', 'ruins'), gR, '〃 もう一方も');
-      Ob.release('PILLAR', gN); Ob.release('PILLAR', gR);
+      t.eq(skin.id, 'common', 'S8 の障害物も共通デザイン（契約§4.3 v2）');
+      t.eq(Ob.variantOf(Ob.make('PILLAR', 'floor', 0, 123.5, 0)), '', '寄り親（変種）は失効');
 
       /* 判定（OBS）はゾーンによらず不変 */
       const before = JSON.stringify(In.OBS.PILLAR) + JSON.stringify(In.OBS.ROVER);
@@ -199,7 +175,7 @@
           const bw = box.max.x - box.min.x;
           const want = T.span * CFG.LANE_W;
           checked++;
-          /* 縁光（コアの印）と警告の張り出しぶんを見込んで ±22% で見る。
+          /* 張り出しぶんを見込んで緩めに見る。
              判定そのものは OBS が唯一の出所なので、ここは「大きく外れていない」の確認。 */
           if (bw > want * 1.25 || bw < want * 0.6) bad.push(o.type + ' w=' + bw.toFixed(2) + '/' + want.toFixed(2));
         }
