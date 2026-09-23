@@ -82,7 +82,7 @@
            '霧の色は「暗赤だが黒潰れしない」輝度 ' + fogY.toFixed(1) + '（黒潰れ 8 の上）');
       const red = ((z.PAL.fog >> 16) & 255), blue = (z.PAL.fog & 255);
       t.ok(red > blue, '霧は赤寄り（R ' + red + ' > B ' + blue + '）');
-      t.eq(W._roadMat.color.getHex(), z.PAL.road, '路面の色がコアへ替わる');
+      t.eq(W._roadMat.color.getHex(), W.roadColor(z.PAL.road), '路面の色がコアへ替わる（無地の暗色へ沈めた色 / 契約§5 v2）');
       t.eq(W._fogBase.color, z.PAL.fog, '演出から戻すときの霧の基準値も更新される');
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
 

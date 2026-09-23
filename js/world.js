@@ -30,10 +30,10 @@ const World = {
     renderer.setClearColor(P.fog, 1);
 
     /* --- 路面／天井面（InstancedMesh 1つ。材質の色・質感はゾーンで替わる） -- */
-    const tileGeo = new THREE.BoxGeometry(CFG.LANE_W - 0.07, 0.14, World.TILE - 0.10);
-    const roadMat = new THREE.MeshStandardMaterial({
-      color: P.road, roughness: P.roadRough, metalness: P.roadMetal
-    });
+    /* 道の簡素化（契約§5 v2）: 路面・天井面は **無地の暗色**（継ぎ目・光沢・模様なし）。
+       ゾーンの色味は路肩のラインと壁・遠景で出すので、路面はゾーンの色をごく暗く沈めた1色。 */
+    const tileGeo = new THREE.BoxGeometry(CFG.LANE_W + 0.002, 0.14, World.TILE + 0.002);
+    const roadMat = new THREE.MeshBasicMaterial({ color: World.roadColor(P.road), fog: true });
     World._roadMat = roadMat;
     World.nTiles = Math.ceil((CFG.VIEW_FAR + World.TILE_BEHIND) / World.TILE) + 2;
     World.tileMesh = {};
@@ -805,6 +805,15 @@ const World = {
     return g;
   },
 
+  /* 路面の無地の暗色（契約§5 v2）: ゾーンの路面色の色相だけを残し、明るさを沈める */
+  ROAD_L: 0.085,         // sRGB の明度（≈ 22/255）
+  roadColor(hex) {
+    const c = new THREE.Color(hex), hsl = {};
+    c.getHSL(hsl, THREE.SRGBColorSpace);
+    c.setHSL(hsl.h, Math.min(0.35, hsl.s), Math.min(hsl.l, World.ROAD_L), THREE.SRGBColorSpace);
+    return c.getHex();
+  },
+
   /* ゾーンが変わったときに、World 側が持っている材質・霧の基準を合わせる（契約§6 P3a）。
      ＝ 路面の色と質感・路肩・ゲートの枠・背景色・霧の基準値。
      縁の発光ライン（琥珀＝床／藍＝天井）は**意味を持つ色**なので、どのゾーンでも変えない。 */
@@ -812,12 +821,7 @@ const World = {
     if (!World.ready) return false;
     const P = Zones.pal();
     if (!P) return false;
-    if (World._roadMat) {
-      World._roadMat.color.setHex(P.road);
-      World._roadMat.roughness = P.roadRough;
-      World._roadMat.metalness = P.roadMetal;
-      World._roadMat.needsUpdate = true;
-    }
+    if (World._roadMat) World._roadMat.color.setHex(World.roadColor(P.road));
     if (World._skirtMat) World._skirtMat.color.setHex(P.skirt);
     (World._frameMats || []).forEach((m) => m.color.setHex(P.metal));
     World.renderer.setClearColor(P.fog, 1);

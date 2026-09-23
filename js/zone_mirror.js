@@ -408,7 +408,7 @@ const ZoneMirror = {
     ZoneMirror.speedLines = [];
     [['floor', 0.022, -Math.PI / 2, P.amber], ['ceil', H - 0.022, Math.PI / 2, P.indigo]].forEach((sfc, si) => {
       ZoneMirror.speedLines.push(ZoneMirror._field({
-        name: 'speedline', onTrack: true, spacing: 2.0, geo: streak, mat: ZoneKit.add(sfc[3], 0.16),
+        name: 'speedline', roadMark: true, onTrack: true, spacing: 2.0, geo: streak, mat: ZoneKit.add(sfc[3], 0.16),
         prop: false, order: 4,
         place(slot, m) {
           if ((slot & 1) !== si) return null;

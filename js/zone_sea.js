@@ -360,7 +360,7 @@ const ZoneSea = {
     ZoneSea.speedLines = [];
     [['floor', 0.022, -Math.PI / 2, P.amber], ['ceil', H - 0.022, Math.PI / 2, P.indigo]].forEach((sfc, si) => {
       ZoneSea.speedLines.push(ZoneSea._field({
-        name: 'speedline', onTrack: true, spacing: 2.0, geo: streak, mat: ZoneKit.add(sfc[3], 0.18), prop: false, order: 4,
+        name: 'speedline', roadMark: true, onTrack: true, spacing: 2.0, geo: streak, mat: ZoneKit.add(sfc[3], 0.18), prop: false, order: 4,
         place(slot, m) {
           if ((slot & 1) !== si) return null;
           const lane = CFG.LANES[Math.floor(ZoneKit.hash(slot, 211) * 3)];

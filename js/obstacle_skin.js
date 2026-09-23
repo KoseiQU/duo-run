@@ -16,7 +16,7 @@
      動くレーザー            上記レーザーの色・形のまま動く（予告線は白）
 
    ■ 判定（OBS）は一切変えない。寸法はすべて OBS の y0/y1/depth/span から引く
-     （見た目と判定のズレ ±10% / tests/test_p2a.js）。判定の外の標示（路面の薄い赤の帯）は
+     （見た目と判定のズレ ±10% / tests/test_p2a.js）。判定の外の標示を足すときは
      x.deco() で印を付け、ズレ検査から外す。
    ============================================================================ */
 'use strict';
@@ -96,7 +96,7 @@ const ObstacleSkin = {
       x.solid(new THREE.ShapeGeometry(sh), blk, 0, 0, z1 + 0.004);
     });
     /* 縁の白い光（正面の縦の縁＋上下）。判定の内側に収める */
-    const E = 0.08;
+    const E = opt.edge || 0.08;
     [-1, 1].forEach((s) => x.box(E, Hh, 0.03, wht, (s < 0) ? x0 + E / 2 : x1 - E / 2, yc, z1 + 0.012));
     if (opt.topEdge !== false) x.box(W, E, 0.03, wht, xc, y1 - E / 2, z1 + 0.012);
     if (opt.bottomEdge) x.box(W, E, 0.03, wht, xc, y0 + E / 2, z1 + 0.012);
@@ -114,10 +114,9 @@ const ObstacleSkin = {
       x.box(w / n, TH, BD, (i % 2) ? b : a, -w / 2 + w * (i + 0.5) / n, top - TH / 2, 0);
     }
     /* 下の幕（判定 0〜top を塞いでいることを見せる。薄い＝道の暗さは残す） */
-    x.box(w, top - TH, 0.05, G('hCurtain', C.red, 0.28), 0, (top - TH) / 2, 0);
-    /* 手前の路面の薄い赤の帯（判定の外の標示 / 契約§4.3「手前の路面に薄い赤の帯は可」） */
-    const band = x.deco(G('hBand', C.red, 0.20));
-    x.box(w, 0.01, 1.4, band, 0, 0.006, D / 2 + 0.75);
+    x.box(w, top - TH, 0.05, G('hCurtain', C.red, 0.22), 0, (top - TH) / 2, 0);
+    /* 手前の路面の赤い帯（契約§4.3「可」）は置かない: 40m 先で帯の暗い赤が障害物の平均輝度を
+       下げ、背景との差（+40）を割った（実測 コア +35）。路面は無地のまま */
   },
 
   build(type, x) {
@@ -141,7 +140,7 @@ const ObstacleSkin = {
 
     } else if (type === 'WIDEBAR' || type === 'ADPANEL') {
       /* 赤黒の縞のゲート（2レーン）。判定どおりの高さ（2.2）＝ 床と天井の対で全高になる */
-      S.stripedBlock(x, -w / 2, w / 2, 0, t.y1, -D * 0.45, D * 0.45);
+      S.stripedBlock(x, -w / 2, w / 2, 0, t.y1, -D * 0.45, D * 0.45, { bottomEdge: true, edge: 0.12 });
 
     } else if (type === 'WALLHOLE' || type === 'WALLSOLID') {
       /* 白い壁。穴のレーンは下端 0.5 まで開き、開口の縁が橙に光る */
@@ -169,11 +168,8 @@ const ObstacleSkin = {
         x.box(0.12, y1, D, dev, s * (w / 2 - 0.06), y1 / 2, 0);
         x.box(0.13, 0.08, D + 0.02, G('red', C.red), s * (w / 2 - 0.06), beam, 0);
       });
-      x.box(w - 0.2, 0.12, 0.10, beamMat(G('core', C.core)), 0, beam, 0);
-      x.box(w - 0.2, 0.26, 0.18, beamMat(G('halo', C.red, 0.55)), 0, beam, 0);
-      x.box(w - 0.2, beam, 0.04, beamMat(G('curtain', C.red, 0.24)), 0, beam / 2, 0);
-      const band = x.deco(G('hBand', C.red, 0.20));
-      x.box(w, 0.01, 1.4, band, 0, 0.006, D / 2 + 0.75);
+      x.box(w - 0.2, 0.14, 0.10, beamMat(G('core', C.core)), 0, beam, 0);
+      x.box(w - 0.2, 0.28, 0.18, beamMat(G('halo', C.red, 0.70)), 0, beam, 0);
 
     } else if (type === 'LASER_V' || type === 'LASER_SCAN') {
       /* 赤い光柱＋床天井の発生装置（横スキャンも同じ形のまま横へ動く） */

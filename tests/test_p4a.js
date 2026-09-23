@@ -43,7 +43,7 @@
       t.eq(Zs.id(), 'sea', '深海ゾーンへ切り替わる');
       t.eq(W.scene.fog.color.getHex(), z.PAL.fog, '霧が青緑に替わる');
       t.ok(W.scene.fog.far <= 82, '霧は濃い目（far ' + W.scene.fog.far + ' ≤ 82 / 契約§5 深海の距離感）');
-      t.eq(W._roadMat.color.getHex(), z.PAL.road, '路面の色が海底の岩に替わる');
+      t.eq(W._roadMat.color.getHex(), W.roadColor(z.PAL.road), '路面の色が海底の岩に替わる（無地の暗色へ沈めた色 / 契約§5 v2）');
       t.eq(W._fogBase.color, z.PAL.fog, '演出から戻すときの霧の基準値も更新される');
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, '深海のドローコール ' + W.drawCalls() + ' ≤ 300');

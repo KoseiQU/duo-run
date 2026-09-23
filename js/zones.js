@@ -76,6 +76,8 @@ const ZoneKit = {
     const count = Math.ceil((CFG.VIEW_FAR + behind) / spec.spacing) + 2;
     const mesh = new THREE.InstancedMesh(spec.geo, spec.mat, count);
     mesh.frustumCulled = false;
+    mesh.name = spec.name || '';
+    mesh.userData.roadMark = !!spec.roadMark;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     if (spec.order !== undefined) mesh.renderOrder = spec.order;
     zone.scene.add(mesh);
@@ -84,7 +86,17 @@ const ZoneKit = {
                 /* onTrack: 走行空間の上に置いてよい（床の意匠・粒子）。
                    これ以外の小物は 2体の通り道（|x| ≤ HALF_W + 体半幅）に入ってはいけない。
                    機械テストがこの印を見て検査する。 */
-                onTrack: !!spec.onTrack, geo: spec.geo };
+                onTrack: !!spec.onTrack, geo: spec.geo, roadMark: !!spec.roadMark };
+    /* 路肩のラインを流れる光（契約§4.1 体感速度 × §5 v2 道の簡素化）: レーンの上ではなく
+       路肩のライン（|x| = SHOULDER_X）の上を流す＝路面は無地のまま速度だけが伝わる */
+    if (spec.roadMark) {
+      const pl = spec.place;
+      f.place = function (slot, m, t, dist) {
+        const o = pl(slot, m, t, dist);
+        if (o) o.x = ((ZoneKit.hash(slot, 919) < 0.5) ? -1 : 1) * ZoneKit.SHOULDER_X;
+        return o;
+      };
+    }
     zone.fields.push(f);
     if (f.prop) zone.propFields.push(f);
     return f;
@@ -108,7 +120,10 @@ const ZoneKit = {
         /* f.thin（World.quality ≥ 1 の粒子）は1つおきに間引く＝奥まで均等に半分 */
         const o = (hideProps || (mk && m >= mk[0] && m <= mk[1]) || (f.thin && (slot & 1)))
           ? null : f.place(slot, m, t, dist);
-        if (!o) {
+        /* 道の簡素化（契約§5 v2）: コリドー内（|x| < CLEAR_X・0 < y < H）に小物を置かない。
+           壁際の小物は外へ押し出し、道の上の小物（床の意匠・水たまり・粒子）は出さない。 */
+        const hid = o ? (!f.roadMark && ZoneKit.clearCorridor(f, o)) : true;
+        if (!o || hid) {
           d.position.set(0, -9999, 0);
           d.rotation.set(0, 0, 0);
           d.scale.set(0.0001, 0.0001, 0.0001);
@@ -125,6 +140,102 @@ const ZoneKit = {
       f.mesh.instanceMatrix.needsUpdate = true;
     }
     return ahead;
+  },
+
+  /* ---- 道の簡素化（契約§5【2026-09-24 改訂】） -------------------------------
+     「コリドー内（3レーン＋路肩）には小物を置かない。路面・天井面は無地の暗色」。
+     コリドー内 ＝ |x| < CLEAR_X かつ 0 < y < H（P7a 指示: x ±2.0・y 0〜4）。
+     小物フィールドの1個ずつについて、ジオメトリの外接箱（回転は外接球で安全側）を置いた形で
+       ・コリドーを跨ぐ骨組み（アーチ・リブ・ガントリー＝左右の外まで届く形）… そのまま
+         （骨組みは両脇と上下の外側にあり、中身の判定は機械テストが頂点で行う）
+       ・壁際の小物（中心 |x| ≥ SIDE_X）… 内側の端が CLEAR_X に来るまで外へ押し出す
+       ・道の上の小物（床の意匠・水たまり・粒子など）… 出さない
+     をこの1か所で決める（ゾーンの place() は書き換えない＝景色の個性はそのまま外側に残る）。 */
+  CLEAR_X: 2.0,
+  SHOULDER_X: 1.66,
+  SIDE_X: 0.9,
+  _bbOf(f) {
+    if (!f._bb) {
+      if (!f.geo.boundingBox) f.geo.computeBoundingBox();
+      const b = f.geo.boundingBox;
+      f._bb = { x0: b.min.x, x1: b.max.x, y0: b.min.y, y1: b.max.y, z0: b.min.z, z1: b.max.z,
+                r: Math.sqrt(Math.max(b.min.x * b.min.x, b.max.x * b.max.x) +
+                             Math.max(b.min.y * b.min.y, b.max.y * b.max.y) +
+                             Math.max(b.min.z * b.min.z, b.max.z * b.max.z)) };
+    }
+    return f._bb;
+  },
+  /* o を書き換えることがある（外へ押し出す）。戻り値 true ＝ 出さない */
+  clearCorridor(f, o) {
+    const b = ZoneKit._bbOf(f), L = ZoneKit.CLEAR_X, H = CFG.H;
+    const sx = Math.abs(o.sx === undefined ? 1 : o.sx), sy = Math.abs(o.sy === undefined ? 1 : o.sy),
+          sz = Math.abs(o.sz === undefined ? 1 : o.sz);
+    let x0, x1, y0, y1;
+    if (o.rx || o.ry || o.rz) {
+      /* 回転つき: 外接箱の8隅を実際に回して測る（外接球だと骨組みと取り違える） */
+      const q = ZoneKit._q || (ZoneKit._q = new THREE.Quaternion());
+      const e = ZoneKit._e || (ZoneKit._e = new THREE.Euler());
+      const v = ZoneKit._v || (ZoneKit._v = new THREE.Vector3());
+      q.setFromEuler(e.set(o.rx || 0, o.ry || 0, o.rz || 0));
+      x0 = y0 = 1e9; x1 = y1 = -1e9;
+      for (let c = 0; c < 8; c++) {
+        v.set(((c & 1) ? b.x1 : b.x0) * sx, ((c & 2) ? b.y1 : b.y0) * sy, ((c & 4) ? b.z1 : b.z0) * sz).applyQuaternion(q);
+        if (v.x < x0) x0 = v.x; if (v.x > x1) x1 = v.x;
+        if (v.y < y0) y0 = v.y; if (v.y > y1) y1 = v.y;
+      }
+      x0 += o.x; x1 += o.x; y0 += o.y; y1 += o.y;
+    } else {
+      x0 = o.x + Math.min(b.x0 * sx, b.x1 * sx); x1 = o.x + Math.max(b.x0 * sx, b.x1 * sx);
+      y0 = o.y + Math.min(b.y0 * sy, b.y1 * sy); y1 = o.y + Math.max(b.y0 * sy, b.y1 * sy);
+    }
+    if (y1 <= 0 || y0 >= H || x1 <= -L || x0 >= L) return false;    // コリドーの外
+    if (x0 <= -L + 0.1 && x1 >= L - 0.1) {
+      /* 跨ぐもの: 床・天井に貼った薄い意匠（光の帯・模様）は道の上＝出さない。骨組みは残す */
+      return (y1 - y0 < 0.4 && (y1 < 0.4 || y0 > H - 0.4));
+    }
+    const cx = (x0 + x1) / 2;
+    if (Math.abs(cx) < ZoneKit.SIDE_X) return true;                   // 道の上の小物
+    o.x += (cx > 0) ? (L - x0 + 0.01) : (-L - x1 - 0.01);             // 壁際 → 外へ
+    return false;
+  },
+
+  /* 監査・機械テスト用: いま描かれている「ゾーンの物」（小物フィールドの各個体＋ゾーンが足した
+     メッシュ）の頂点で、コリドー内（|x| < CLEAR_X − eps・eps < y < H − eps）に入っているものを数える。
+     z は前方 zMax m まで（カメラの後ろ・遠景の果ては見ない）。戻り値 [{name, n}] */
+  corridorScan(zmax, eps) {
+    const L = ZoneKit.CLEAR_X - (eps || 0.02), Y0 = (eps || 0.02), Y1 = CFG.H - (eps || 0.02);
+    const Z0 = -(zmax || 80), Z1 = 2;
+    const out = [], m = new THREE.Matrix4(), v = new THREE.Vector3(), mw = new THREE.Matrix4();
+    const scan = (name, geo, mat) => {
+      const pa = geo.attributes && geo.attributes.position;
+      if (!pa) return 0;
+      const step = Math.max(1, Math.floor(pa.count / 240));
+      for (let i = 0; i < pa.count; i += step) {
+        v.fromBufferAttribute(pa, i).applyMatrix4(mat);
+        if (v.z < Z0 || v.z > Z1) continue;
+        if (Math.abs(v.x) < L && v.y > Y0 && v.y < Y1) return 1;
+      }
+      return 0;
+    };
+    Zones._owned.forEach((root) => {
+      root.updateMatrixWorld(true);
+      root.traverse((o) => {
+        if (!o.visible || !o.geometry || o.userData.roadMark) return;   // 路肩のラインの光＝路面の標示
+        let hit = 0;
+        if (o.isInstancedMesh) {
+          for (let k = 0; k < o.count; k++) {
+            o.getMatrixAt(k, m);
+            if (m.elements[13] < -999) continue;                      // 伏せた個体
+            mw.multiplyMatrices(o.matrixWorld, m);
+            hit += scan(o.name, o.geometry, mw);
+          }
+        } else {
+          hit = scan(o.name, o.geometry, o.matrixWorld);
+        }
+        if (hit) out.push({ name: (o.name || o.type) + (o.isInstancedMesh ? '[I]' : ''), n: hit });
+      });
+    });
+    return out;
   },
 
   /* 装飾が「2体の通り道」に侵入していないかを調べる（契約§4.1 の走行空間を守る）。
@@ -243,7 +354,7 @@ const Zones = {
     const z = Zones.active();
     const scene = Zones.scene;
     /* 走行中に切り替えても取りこぼさないよう、出ている障害物の見た目をプールへ返す
-       （ビューはゾーンと無関係＝プールへ返して使い回す） */
+       （返してからプールごと捨てる。返さないと捨てた材質を参照したまま残る） */
     if (typeof Game !== 'undefined' && Game.active && typeof World !== 'undefined' && World.ready) {
       for (let i = 0; i < Game.active.length; i++) World.dropView(Game.active[i]);
     }
@@ -255,7 +366,9 @@ const Zones = {
     }
     Zones._owned = [];
     if (z) { z.fields = []; z.propFields = []; }
-    /* 障害物の見た目は全ゾーン共通（契約§4.3 v2）＝プールはゾーンを跨いで使い回す */
+    /* 障害物の見た目は全ゾーン共通（契約§4.3 v2）。ただしプールはゾーンの切替で空にする
+       （切替のたびに溜めない＝エンドレスで一巡してもジオメトリ数が増え続けない / P6） */
+    if (typeof Obstacles !== 'undefined' && Zones._cur) Obstacles.disposeSkin(Obstacles.skinId());
     Zones._cur = null;
   },
 

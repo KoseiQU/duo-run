@@ -98,7 +98,7 @@ const ZoneNeon = {
     ZoneNeon.speedLines = [];
     [['floor', 0.022, -Math.PI / 2, P.amber], ['ceil', H - 0.022, Math.PI / 2, P.indigo]].forEach((sfc, si) => {
       const f = ZoneNeon._field({
-        name: 'speedline', spacing: 2.0, geo: streak, mat: ZoneNeon.add(sfc[3], 0.2), prop: false, order: 4,
+        name: 'speedline', roadMark: true, spacing: 2.0, geo: streak, mat: ZoneNeon.add(sfc[3], 0.2), prop: false, order: 4,
         place(slot, m) {
           if ((slot & 1) !== si) return null;
           const lane = CFG.LANES[Math.floor(hash(slot, 211) * 3)];
@@ -352,7 +352,9 @@ const ZoneNeon = {
     const pos = new Float32Array(N * 6);
     ZoneNeon.RAIN_CELL = 3.2;
     for (let i = 0; i < N; i++) {
-      const x = (ZoneNeon.hash(i, 71) - 0.5) * 30;
+      /* 道の簡素化（契約§5 v2）: 雨はコリドーの外だけに降らせる（|x| ≥ 2.2） */
+      const x0 = (ZoneNeon.hash(i, 71) - 0.5) * 30;
+      const x = (Math.abs(x0) < 2.2) ? ((x0 < 0 ? -1 : 1) * (2.2 + Math.abs(x0))) : x0;
       const y = ZoneNeon.hash(i, 73) * 22 - 7;
       const z = -ZoneNeon.hash(i, 79) * 108 + 8;
       const len = 0.30 + ZoneNeon.hash(i, 83) * 0.34;

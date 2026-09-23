@@ -67,8 +67,7 @@
       t.eq(Zs.id(), 'ruins', 'S3 は古代遺跡ゾーン');
       t.eq(W.scene.fog.color.getHex(), Zs.get('ruins').PAL.fog, '霧が黄土色に替わる');
       t.ok(W.scene.fog.color.getHex() !== neonFog, '霧の色がネオン都市と違う');
-      t.eq(W._roadMat.color.getHex(), Zs.get('ruins').PAL.road, '路面の色が砂岩に替わる');
-      t.ok(W._roadMat.roughness > 0.5, '石の路面はざらざら（roughness ' + W._roadMat.roughness + '）');
+      t.eq(W._roadMat.color.getHex(), W.roadColor(Zs.get('ruins').PAL.road), '路面の色が砂岩に替わる（無地の暗色へ沈めた色 / 契約§5 v2）');
       t.eq(W._fogBase.color, Zs.get('ruins').PAL.fog, '演出から戻すときの霧の基準値も更新される');
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, '遺跡のドローコール ' + W.drawCalls() + ' ≤ 300');

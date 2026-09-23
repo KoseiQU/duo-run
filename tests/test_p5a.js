@@ -87,7 +87,7 @@
         return 0.2126 * ((h >> 16) & 255) + 0.7152 * ((h >> 8) & 255) + 0.0722 * (h & 255); })();
       t.ok(fogY > 8 && fogY < 60,
            '霧の色は「銀だが暗部を作れる」輝度 ' + fogY.toFixed(1) + '（黒潰れ 8 の上・中間調 60 の下）');
-      t.eq(W._roadMat.color.getHex(), z.PAL.road, '路面の色が鏡の銀へ替わる');
+      t.eq(W._roadMat.color.getHex(), W.roadColor(z.PAL.road), '路面の色が鏡の銀へ替わる（無地の暗色へ沈めた色 / 契約§5 v2）');
       t.eq(W._fogBase.color, z.PAL.fog, '演出から戻すときの霧の基準値も更新される');
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, '鏡のドローコール ' + W.drawCalls() + ' ≤ 300');

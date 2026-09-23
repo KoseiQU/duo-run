@@ -4,7 +4,11 @@
        ・全ゾーンで同じ1セット（Zones.skin() === ObstacleSkin・ゾーンは obstacleSkin を持たない）
        ・障害物の色は赤・橙・白（＋無彩色）だけ。プレイヤーの琥珀・藍は使わない
        ・ハードル＝白×赤縞の発光バー（幅レーン一杯・厚み0.3・支柱/警告バー/▲なし）
-       ・輝度差: 40m 先の障害物の画素が、同じ場所の背景より +40 以上明るい（全6ゾーン）
+       ・輝度差: 40m 先の障害物の画素が、周りの背景より +40 以上明るい（全6ゾーン）
+     【P7a-2】道の簡素化（契約§5 v2）
+       ・全ゾーンの走行サンプルで、コリドー内（|x| < 2.0・0 < y < 4）に小物の頂点が1つもない
+         （障害物・キャラ・路面と路肩のラインの光は対象外）
+       ・路面は無地の暗色（1色・光沢なし）／小物の密度はコリドーの外で前方60mに40個以上
    ============================================================================ */
 'use strict';
 
@@ -36,12 +40,18 @@
         Zs.switchTo(zn); DUO.pump(1 / 60);
         t.eq(Zs.skin(), ObstacleSkin, zn + ': 障害物の見た目は共通の1セット');
       });
-      /* 同じ型は同じ見た目（プールはゾーンを跨いで使い回す＝同じ物が出てくる） */
+      /* 同じ型は同じ見た目（ゾーンを替えても形・色が同じ） */
+      const sig = (ty) => {
+        const v = Ob.acquire(ty); const out = [];
+        v.traverse((q) => { if (q.isMesh) out.push(q.geometry.attributes.position.count + ':' + q.material.color.getHex()); });
+        Ob.release(ty, v);
+        return out.sort().join(',');
+      };
       Zs.switchTo('neon'); DUO.pump(1 / 60);
-      const a = Ob.acquire('PILLAR'); Ob.release('PILLAR', a);
+      const a = sig('PILLAR') + '|' + sig('ROVER');
       Zs.switchTo('sea'); DUO.pump(1 / 60);
-      const b = Ob.acquire('PILLAR'); Ob.release('PILLAR', b);
-      t.eq(a, b, 'ゾーンを替えても同じ見た目（同じビューを使い回す）');
+      const b = sig('PILLAR') + '|' + sig('ROVER');
+      t.eq(a, b, 'ゾーンを替えても同じ見た目（形と色）');
       Zs.switchTo('neon'); DUO.pump(1 / 60);
 
       /* 色の規則（契約§4.3「赤・橙・白の警告色のみ」） */
@@ -144,6 +154,35 @@
         W.resize();
       });
       t.info(rows.join(' / '));
+      DUO.reset();
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P7a-2: 道の簡素化（コリドー内に小物なし・路面は無地の暗色・外側の小物は前方60mに40個以上）',
+    quick: true,
+    run(t) {
+      const In = I(), Zs = In.Zones, W = In.World;
+      const SPEC = [['neon', 'S1'], ['ruins', 'S3'], ['sea', 'S5'], ['space', 'S6'], ['mirror', 'S7'], ['core', 'S8']];
+      SPEC.forEach((sp) => {
+        DUO.reset(); DUO.start(sp[1], 11); DUO.pump(1 / 60);
+        const bad = {};
+        let props = Infinity;
+        [260, 470, 690].forEach((at) => {
+          DUO.skipTo(at);
+          for (let i = 0; i < 3; i++) DUO.pump(1 / 60);
+          In.ZoneKit.corridorScan(80).forEach((r) => { bad[r.name] = (bad[r.name] || 0) + r.n; });
+          props = Math.min(props, Zs.propsAhead());
+        });
+        const names = Object.keys(bad);
+        t.eq(names.length, 0, sp[0] + ': コリドー内（|x|<2.0・0<y<4）に小物がない' +
+             (names.length ? ': ' + names.map((k) => k + '×' + bad[k]).join(', ') : ''));
+        t.ok(props >= 40, sp[0] + ': コリドーの外の小物は前方60mに ' + props + ' 個（≥ 40）');
+        /* 路面は無地の暗色（光沢なし・sRGB 明度 ≤ ROAD_L） */
+        const m = W._roadMat, hsl = {};
+        m.color.getHSL(hsl, THREE.SRGBColorSpace);
+        t.ok(m.isMeshBasicMaterial && hsl.l <= W.ROAD_L + 0.005, sp[0] + ': 路面は無地の暗色（明度 ' + hsl.l.toFixed(3) + '）');
+      });
       DUO.reset();
     }
   });
