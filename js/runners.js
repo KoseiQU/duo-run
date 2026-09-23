@@ -65,19 +65,6 @@ const Runners = {
     return false;
   },
 
-  /* 海流ベルトに流される（契約§4.5 / S5）。プレイヤーの入力ではないので
-     「1スワイプ1レーン」「空中横移動禁止」の制限は掛からない（水に流されるので、
-     跳んでいても押される）。鏡ゾーンの反転も掛けない（流れは画面基準）。
-     ＝ 押された結果は必ず「隣のレーンへ 0.12秒で移る」だけなので、
-        Fair（不変条件）とボットは Current.driftBetween で同じ結果を予測できる。 */
-  push(r, dir) {
-    if (!r.alive || !dir) return false;
-    const target = U.clamp(r.laneTo + dir, -1, 1);
-    if (target === r.laneTo) return false;               // すでに端＝これ以上は流されない
-    r.laneFrom = r.laneVal; r.laneTo = target; r.laneT = 0;
-    return true;
-  },
-
   update(r, dt) {
     /* レーン補間（0.12秒） */
     if (r.laneT < CFG.LANE_T) {

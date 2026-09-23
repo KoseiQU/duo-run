@@ -212,18 +212,6 @@ const ObstacleSkin = {
       x.padKit({ stone: G('dev', C.dev) });
     } else if (type === 'SYNCGAP') {
       x.syncKit({ stone: Obstacles._material('sgStone', 0x9aa0a8), pit: G('pit', C.pit) });
-    } else if (type === 'DROPCEIL') {
-      x.dropKit(null);
-    } else if (OBS[type].belt) {
-      x.beltKit(null);
-    } else if (OBS[type].door) {
-      x.doorKit(null);
-    } else if (type === 'LIFTPAD') {
-      x.liftKit(null);
-    } else if (type === 'GAP') {
-      /* 失効（契約§4.3 v2）。段階C で型ごと消す。それまでの仮の穴 */
-      x.box(w, 0.04, D, G('pit', C.pit), 0, -1.55, 0);
-      x.box(w, 0.06, 0.08, G('orange', C.orange), 0, 0.03, D / 2 - 0.04);
     }
   },
 

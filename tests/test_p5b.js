@@ -381,13 +381,13 @@
       let errs = 0, blanks = 0, spOk = 0, mergeCounts = {}, mergeIn = {};
       const mergeLen = [];
       const densA = [], densB = [], ratio = { lane: 0, jump: 0, slide: 0, total: 0 };
-      const gimmick = { bridge: 0, pend: 0, sync: 0, drop: 0, cur: 0, lift: 0, door: 0,
+      const gimmick = { bridge: 0, pend: 0, sync: 0,
                         warp: 0, zero: 0, net: 0, mir: 0, swap: 0, merge: 0 };
       const firstErr = [];
       for (let seed = 1; seed <= 50; seed++) {
         const g = In.createGenerator(st, seed);
         g.ensure(st.lengthM + 60, 0);
-        const opt = { startLanes: 'any', reactBoth: st.reactBoth, currents: g.currents,
+        const opt = { startLanes: 'any', reactBoth: st.reactBoth,
                       zeros: g.zeros, warps: g.warps, mirrors: g.mirrors, swaps: g.swaps,
                       merges: g.merges };
         const e = In.Fair.validate(g.obstacles, st.speedAt, opt);
@@ -516,10 +516,10 @@
         return C.BACK.some((w) => e.at > w[0] - 2 && e.at < w[1] + 2);
       });
       t.eq(inCut.length, 0, 'カットの窓には障害物を置かない');
-      /* 崩落の中の譜面（崩れる橋＋落ちる天井の連鎖 / 契約§4.4） */
+      /* 崩落の中の譜面（崩れる橋＋縦レーザーの連鎖。旧 落ちる天井は契約 v2 で失効） */
       const types = D.floor.map((e) => e.type);
       t.ok(types.indexOf('BRIDGE') >= 0, '崩落の中に「崩れる橋」がある');
-      t.ok(types.indexOf('DROPCEIL') >= 0, '崩落の中に「落ちる天井」がある');
+      t.ok(types.indexOf('LASER_V') >= 0 && types.indexOf('DROPCEIL') < 0, '崩落の中は縦レーザー（落ちる天井は失効）');
       t.ok(types.indexOf('GRAVWARP') >= 0, '「重力反転ワープ」がある（契約§4.4 …→反転→着地）');
       const flip = D.floor.filter((e) => e.type === 'GRAVWARP')[0];
       t.ok(flip.at > C.LAND, '反転は着地のあと（契約の順: 大ジャンプ→崩落→反転→着地→出口）');

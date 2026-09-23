@@ -58,10 +58,10 @@
       t.near(stage.checkpoints[0], 300, 1e-6, 'チェックポイント1 は 300m');
       t.near(stage.checkpoints[1], 600, 1e-6, 'チェックポイント2 は 600m');
 
-      /* 導入区間の順番: ローバー(床)→ローバー(天井)→ピラー→ギャップ→ローレーザー→ワイド梁→同時 */
+      /* 導入区間の順番: ハードル(床)→ハードル(天井)→ピラー→ローレーザー→ワイド梁→同時（穴は契約 v2 で失効） */
       const want = [
         ['ROVER', 'floor'], ['ROVER', 'ceil'], ['PILLAR', 'both'],
-        ['GAP', 'floor'], ['LASER_LOW', 'ceil'], ['WIDEBAR', 'floor']
+        ['LASER_LOW', 'ceil'], ['WIDEBAR', 'floor']
       ];
       const gen = In.createGenerator(stage, 1);
       for (let d = 0; d < 900; d += 20) gen.ensure(d + In.CFG.SPAWN_AHEAD, d);
@@ -74,8 +74,8 @@
         t.ok(o && o.type === w[0] && o.surface === w[1],
              (i + 1) + '番目の紹介は ' + w[0] + '(' + w[1] + ')：' + (o ? o.type + '(' + o.surface + ')@' + o.at.toFixed(0) + 'm' : 'なし'));
       });
-      /* 7つ目は床と天井の同時 */
-      const both = intro.slice(6, 8);
+      /* 最後は床と天井の同時 */
+      const both = intro.slice(want.length, want.length + 2);
       t.ok(both.length === 2 && Math.abs(both[0].at - both[1].at) < 1e-6 && both[0].surface !== both[1].surface,
            '最後は床と天井が同時に来る');
       t.ok(intro.length >= 8, '導入区間（〜' + INTRO_END + 'm）に 8個の紹介障害物（' + intro.length + '個）');

@@ -249,16 +249,6 @@
   #sync.miss #sync-main{color:#ffb4a0; text-shadow:0 0 16px rgba(255,110,60,.9),0 0 40px rgba(255,70,20,.5);
     animation:none;}
 
-  /* ---------- 海流ベルトの向き（§4.5 / S5・P4a） ----------
-     上＝天井（UMBRA）の流れ／下＝床（LUMEN）の流れ。分割線のすぐ横（左端）に置いて
-     2体にも他のHUDにも被らせない。 */
-  #cur{position:absolute; left:12px; top:50%; transform:translateY(-50%) scale(.9);
-    text-align:center; opacity:0; pointer-events:none; transition:opacity .16s, transform .16s;
-    font-size:15px; font-weight:800; letter-spacing:.12em; line-height:1.25;}
-  #cur.on{opacity:1; transform:translateY(-50%) scale(1);}
-  #cur-c{color:var(--umbra); text-shadow:0 0 12px rgba(125,140,255,.9);}
-  #cur-f{color:var(--lumen); text-shadow:0 0 12px rgba(255,179,71,.9);}
-  #cur .cur-label{font-size:9px; letter-spacing:.24em; opacity:.7; color:#cfeaff; margin:1px 0;}
 </style>
 </head>
 <body>
@@ -296,7 +286,6 @@
     <div id="tip" data-ui="tip"></div>
     <div id="cue" data-ui="cue"><div id="cue-main">JUMP!</div><div id="cue-sub"></div></div>
     <div id="sync" data-ui="sync"><div id="sync-main">SYNC!</div><div id="sync-sub"></div></div>
-    <div id="cur" data-ui="cur"><div id="cur-c">—</div><div class="cur-label">CURRENT</div><div id="cur-f">—</div></div>
     <div class="hands">
       <div class="hand" id="hand-left" data-char="lumen">
         <b id="hand-left-name">LUMEN</b><span id="hand-left-keys">下半分</span>

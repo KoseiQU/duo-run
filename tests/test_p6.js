@@ -15,7 +15,7 @@
     try { U.lsSet('cleared', list); return fn(); }
     finally { U.lsRestore(snap); }
   }
-  const OPT = (g) => ({ startLanes: [0], reactBoth: g.reactBoth, currents: g.currents, zeros: g.zeros,
+  const OPT = (g) => ({ startLanes: [0], reactBoth: g.reactBoth, zeros: g.zeros,
                         warps: g.warps, mirrors: g.mirrors, swaps: g.swaps, merges: g.merges });
 
   /* ==========================================================================
@@ -86,7 +86,7 @@
             const inside = g.obstacles.filter((o) => o.at > a + 1e-6 && o.at < b - 1e-6);
             if (inside.length) bad.push('seed' + seed + ' 猶予内に障害物 ' + inside[0].type + '@' + inside[0].at.toFixed(1));
             /* ゲート型ギミックの区間の途中で切り替えない */
-            ['currents', 'zeros', 'warps', 'mirrors', 'swaps', 'merges'].forEach((k) => {
+            ['zeros', 'warps', 'mirrors', 'swaps', 'merges'].forEach((k) => {
               g[k].forEach((r) => {
                 if (r.from < b && r.to > a) bad.push('seed' + seed + ' ' + k + ' の区間が切替に重なる @' + r.from.toFixed(0));
               });

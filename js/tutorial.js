@@ -22,7 +22,6 @@ const Tutorial = {
     jump_l: { ph: ['<span class="finger">👆</span><b class="k">下半分</b>を', '<b class="k">上へフリック</b>で', 'ジャンプ'] },
     jump_r: { ph: ['<span class="finger">👇</span><b class="k2">上半分</b>は', '<b class="k2">下へフリック</b>で', 'ジャンプ'] },
     lane:   { ph: ['<span class="finger">👈</span>柱は', '<b>横へフリック</b>で避ける', '（上下それぞれ）'] },
-    gap:    { ph: ['<span class="finger">👆</span>穴はジャンプ', '（下半分を上へ）'] },
     laser:  { ph: ['<span class="finger">👇</span>赤い光線もジャンプ', '（上半分は下へ）'] },
     wide:   { ph: ['<span class="finger">👉</span>2レーンをふさぐ梁は', '空いたレーンへ'] },
     both:   { ph: ['同時に来る！', '<b class="k">下</b>と<b class="k2">上</b>を', '別々に'] },
@@ -32,11 +31,6 @@ const Tutorial = {
     /* S4 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     sync: { ph: ['<span class="finger">👆</span>光る踏み板を', '<b class="k">下</b>と<b class="k2">上</b>で<b>同時に</b>',
                  '踏むと橋が架かる'] },
-    dropceil: { ph: ['<span class="finger">👇</span>天井が落ちる', '<b class="k">下</b>は<b>横へ</b>、<b class="k2">上</b>は<b>跳ぶ</b>'] },
-    /* S5 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
-    current: { ph: ['<span class="finger">👈</span>海流に流される', '<b>逆へフリック</b>で踏みとどまる'] },
-    liftpad: { ph: ['<span class="finger">👆</span>浮き上がる足場は', '<b>跳び越える</b>', '沈んでいれば通れる'] },
-    colordoor: { ph: ['<span class="finger">👉</span>扉は<b class="k">同じ色</b>だけ通れる', '<b class="k">下は琥珀</b>／<b class="k2">上は藍</b>へ'] },
     /* S6 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     gravwarp: { ph: ['<span class="finger">👆</span>黄のゲートで<b>上下が入れ替わる</b>',
                      '<b class="k">下半分</b>は<b>床を走る方</b>のまま'] },

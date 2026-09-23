@@ -172,278 +172,9 @@
   /* ==========================================================================
      3. 海流ベルト（契約§4.5 / S5）
      ========================================================================== */
-  DUO.__suites.push({
-    name: 'S5: 海流ベルト（1.0秒ごとに1レーン流される・逆らう横入力で相殺・流れ込みで評価）',
-    quick: true,
-    run(t) {
-      const In = I(), Cur = In.Current, CFG = In.CFG;
-
-      /* --- 展開の形と時刻の規則 --- */
-      const items = [];
-      const reg = Cur.expand(items, { lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
-                             'floor', 500, 0, 2.6, null);
-      t.eq(CFG.CURRENT.PUSH_T, 1.00, '押し出しは 1.0秒ごと（契約§4.5「1レーンぶんを1.0秒で」）');
-      t.eq(reg.n, 3, '区間の長さ＝押し出し3回');
-      t.eq(reg.pushes.length, 3, '押し出しの位置が3つ決まっている');
-      t.near(reg.unit, CFG.REF_SPEED * 2.6, 1e-9, 'unit ＝ その地点の「1秒ぶんの距離」');
-      t.near(reg.pushes[1] - reg.pushes[0], reg.unit * CFG.CURRENT.PUSH_T, 1e-9,
-             '押し出しの間隔は 1.0秒ぶんの距離（速度によらず一定）');
-      t.near(reg.to - reg.from, reg.unit * 3, 1e-9, '区間の長さは 3.0秒ぶん');
-      t.eq(reg.dir.floor, 1, '床は右へ流れる');
-      t.eq(reg.dir.ceil, -1, '天井は左へ流れる（契約§4.5「床側と天井側で向きが違う区間も」）');
-      t.eq(items.filter((o) => o.type === 'CURGATE').length, 1, '入口ゲート（予告）が1つ');
-      t.ok(items.filter((o) => o.type === 'CURRENT').length >= 6, '矢印の帯が床と天井に並ぶ');
-      t.eq(items.every((o) => In.Obstacles.bands(o, o.at, []).length === 0), true,
-           '帯もゲートも当たり判定を持たない（流れるだけ）');
-
-      /* --- Fair（不変条件）とボットが読む窓口 --- */
-      t.eq(Cur.driftBetween([reg], 'floor', reg.from - 1, reg.to + 1), 3, '床は区間内で +3 レーンぶん流される');
-      t.eq(Cur.driftBetween([reg], 'ceil', reg.from - 1, reg.to + 1), -3, '天井は -3 レーンぶん');
-      t.eq(Cur.driftBetween([reg], 'floor', reg.pushes[0] + 0.1, reg.pushes[2] + 0.1), 2, '区間の途中は跨いだ数だけ');
-      t.eq(Cur.pushNear([reg], 'floor', reg.pushes[1] + 1, 5), true, '押し出しの直後は「直前に押し出しがある」');
-      t.eq(Cur.pushNear([reg], 'floor', reg.pushes[1] - 1, 5), false, '押し出しの手前は掛からない');
-
-      /* --- 実プレイ: 押し出しが効く・逆らうと相殺できる --- */
-      const play = (opt) => {
-        DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300);
-        In.clearObstacles();
-        Game.gen.currents.length = 0;
-        const its = [];
-        const r = Cur.expand(its, { lane: 0, type: 'CURRENT', params: { cur: { dir: opt.dir, cdir: opt.cdir, n: opt.n } } },
-                             'floor', Game.dist + 40, Game.dist, Game.speed / CFG.REF_SPEED, Game.gen.currents);
-        its.forEach((o) => Game.active.push(o));
-        Game.runners.forEach((rn) => { rn.laneFrom = rn.laneTo = rn.laneVal = 0; rn.laneT = CFG.LANE_T; });
-        let g = 0, countered = 0;
-        while (Game.dist < r.to + 4 && g++ < 4000 && Game.status === 'playing') {
-          DUO.__step(1 / 60);
-          if (opt.counter) {
-            /* 流れに逆らう横入力（人と同じ入口）。押されたら押し返す */
-            Game.runners.forEach((rn) => {
-              const want = 0;
-              if (rn.laneTo !== want && rn.laneT >= CFG.LANE_T) {
-                In.Input.push(rn.hand, (rn.laneTo > want) ? 'left' : 'right');
-                countered++;
-              }
-            });
-          }
-        }
-        const f = Game.runners.filter((x) => x.surface === 'floor')[0];
-        const c = Game.runners.filter((x) => x.surface === 'ceil')[0];
-        return { floor: f.laneTo, ceil: c.laneTo, countered: countered, alive: Game.status === 'playing' };
-      };
-      const a = play({ dir: 1, cdir: -1, n: 3 });
-      t.eq(a.floor, 1, '床は右端まで流される（端で止まる）');
-      t.eq(a.ceil, -1, '天井は左端まで流される');
-      const b = play({ dir: -1, cdir: -1, n: 2 });
-      t.eq(b.floor, -1, '向きを変えれば逆へ流される');
-      t.eq(b.ceil, -1, '天井も同じ向きの区間にできる');
-      const c2 = play({ dir: 1, cdir: -1, n: 3, counter: true });
-      t.eq(c2.floor, 0, '逆らう横入力で相殺できる（床は真ん中のまま）');
-      t.eq(c2.ceil, 0, '天井も相殺できる');
-      t.ok(c2.countered >= 4, '押し戻した回数 ' + c2.countered + '（押し出しのたびに戻している）');
-
-      /* --- 流されて隣レーンの障害物に当たれば死ぬ（到達時刻の位置で判定） --- */
-      const hit = (counter) => {
-        DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300);
-        In.clearObstacles();
-        Game.gen.currents.length = 0;
-        const its = [];
-        /* 天井は流さない（cdir:0）＝ 床の押し出しだけを見る */
-        const r = Cur.expand(its, { lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: 0, n: 1 } } },
-                             'floor', Game.dist + 30, Game.dist, Game.speed / CFG.REF_SPEED, Game.gen.currents);
-        its.forEach((o) => Game.active.push(o));
-        /* 流された先（レーン+1）に柱を置く。流されなければ当たらない */
-        Game.active.push(In.Obstacles.make('PILLAR', 'floor', 1, r.to + Game.speed * 0.8, Game.dist));
-        Game.runners.forEach((rn) => { rn.laneFrom = rn.laneTo = rn.laneVal = 0; rn.laneT = CFG.LANE_T; });
-        let g = 0, done = false;
-        while (Game.dist < r.to + Game.speed * 1.2 && g++ < 4000 && Game.status === 'playing') {
-          DUO.__step(1 / 60);
-          if (counter && !done) {
-            const rn = Game.runners[0];
-            if (rn.laneTo === 1) { In.Input.push(rn.hand, 'left'); done = true; }
-          }
-        }
-        return { alive: Game.status === 'playing', killer: Game.killer };
-      };
-      const died = hit(false);
-      t.eq(died.alive, false, '流されて隣レーンの柱に当たると死ぬ（契約§4.5）');
-      t.eq(died.killer && died.killer.obstacle, 'PILLAR', '死因は流された先の障害物');
-      t.eq(hit(true).alive, true, '逆らって戻れば当たらない');
-
-      /* --- 不変条件: 押し出しの直前にウォールを置かない（§4.7 の反応窓） --- */
-      const st = In.makeStage('S5');
-      const its2 = [];
-      const r2 = Cur.expand(its2, { lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: 1, n: 2 } } },
-                            'floor', 500, 0, st.speedAt(500) / CFG.REF_SPEED, null);
-      const near = [In.Obstacles.make('PILLAR', 'floor', 0, r2.pushes[0] + 1, 0)];
-      const errs = In.Fair.validate(near, st.speedAt, { startLanes: 'any', currents: [r2] });
-      t.ok(errs.some((e) => e.indexOf('海流') >= 0), '押し出しの直後にウォールがあると §4.7 違反になる');
-      const far = [In.Obstacles.make('PILLAR', 'floor', 0, r2.pushes[0] - r2.unit * 0.5, 0)];
-      t.eq(In.Fair.validate(far, st.speedAt, { startLanes: 'any', currents: [r2] })
-             .filter((e) => e.indexOf('海流') >= 0).length, 0,
-           '押し出しと押し出しの中間なら置ける（0.5秒＞0.45秒）');
-      DUO.reset();
-    }
-  });
-
-  /* ==========================================================================
-     4. 浮上足場（契約§4.5 / S5）
-     ========================================================================== */
-  DUO.__suites.push({
-    name: 'S5: 浮上足場（到達時に浮いていれば跳ぶ／沈んでいれば通れる・到達時刻で判定）',
-    quick: true,
-    run(t) {
-      const In = I(), Ob = In.Obstacles, MOT = In.MOT, CFG = In.CFG, R = In.Runners;
-      const mk = (up) => Ob.make('LIFTPAD', 'floor', 0, 500, 0, { lift: { upAtArrival: up, periodM: 60 } });
-      const up = mk(true), down = mk(false);
-
-      /* --- 到達時刻の高さ（点滅レーザーと同じ流儀） --- */
-      t.near(MOT.liftK(up, 500), 1, 1e-9, '到達の瞬間は浮ききっている（upAtArrival:true）');
-      t.near(MOT.liftK(down, 500), 0, 1e-9, '到達の瞬間は沈みきっている（upAtArrival:false）');
-      t.near(MOT.liftK(up, 500 - 60), 0, 1e-9, '1枠 手前では逆の姿');
-      t.near(MOT.liftK(up, 500 + 60), 0, 1e-9, '1枠 先でも逆の姿');
-      t.near(MOT.liftK(up, 500 + 0.6), 1, 1e-6, '通過窓（±0.6m）の中では高さが変わらない＝譜面どおり');
-
-      /* --- 判定（bands ⇔ occ ⇔ hits） --- */
-      t.eq(Ob.bands(up, 500, []).length, 1, '浮いている足場は帯を返す');
-      t.eq(Ob.bands(down, 500, []).length, 0, '沈んでいる足場は帯を返さない（通れる）');
-      const b = Ob.bands(up, 500, [])[0];
-      t.near(b.y1 - b.y0, 0.60, 1e-9, '浮ききった高さは 0.60（ローバー相当 / 契約§4.5）');
-      const oU = Ob.occ(up), oD = Ob.occ(down);
-      t.eq(oU.floor.lanes[0].run, false, '浮いていると走っては通れない');
-      t.eq(oU.floor.lanes[0].jump, true, '跳べば越えられる');
-      t.eq(Ob.demand(up, 'floor'), 'jump', '要求はジャンプ');
-      t.eq(oD.floor.lanes[0].run, true, '沈んでいればそのまま走れる');
-      t.eq(Ob.demand(down, 'floor'), 'none', '沈んでいれば要求なし');
-      t.eq(oU.ceil.lanes[0].run, true, '床の足場は天井には効かない');
-      /* 天井側は「垂れ下がる」＝天井から 0.60 ぶら下がる（契約§4.5） */
-      const cu = Ob.make('LIFTPAD', 'ceil', 0, 500, 0, { lift: { upAtArrival: true, periodM: 60 } });
-      const cb = Ob.bands(cu, 500, [])[0];
-      t.near(cb.y1, CFG.H, 1e-9, '天井側は天井から垂れ下がる');
-      t.near(cb.y0, CFG.H - 0.60, 1e-9, '垂れ下がる長さも 0.60');
-      /* occ ⇔ hits の総当り一致 */
-      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
-      const W = (In.OBS.LIFTPAD.depth + CFG.SLIDE_D) / 2 + 0.2;
-      let bad = 0, over = 0;
-      [up, down].forEach((o) => {
-        const occ = Ob.occ(o);
-        ['floor', 'ceil'].forEach((side) => {
-          CFG.LANES.forEach((lane) => {
-            ['run', 'jump', 'slide'].forEach((act) => {
-              const want = occ[side].lanes[lane][act];
-              let hit = false;
-              for (let d = -W; d <= W; d += 0.01) {
-                if (Ob.hits(o, R.boxOf(side, lane, act, probe[act]), o.at + d)) { hit = true; break; }
-              }
-              if (want && hit) bad++;
-              if (!want && !hit) over++;
-            });
-          });
-        });
-      });
-      t.eq(bad, 0, '「安全」と判定した動作は1つも当たらない');
-      t.eq(over, 0, '「危険」と判定した動作は必ず当たる');
-
-      /* --- 実プレイ --- */
-      const trial = (upAt, jump) => {
-        DUO.reset(); DUO.start('S5', 9); DUO.skipTo(300);
-        In.clearObstacles();
-        const o = Ob.make('LIFTPAD', 'floor', 0, Game.dist + 60, Game.dist,
-                          { lift: { upAtArrival: upAt, periodM: Game.speed * 6 } });
-        Game.active.push(o);
-        Game.runners.forEach((r) => { r.laneFrom = r.laneTo = r.laneVal = 0; r.laneT = CFG.LANE_T; });
-        let g = 0;
-        while (Game.dist < o.at - Game.speed * CFG.BOT.JUMP_LEAD && g++ < 3000 && Game.status === 'playing') DUO.__step(1 / 60);
-        if (jump) DUO.touch('bottom', 'up');
-        while (Game.dist < o.at + 3 && g++ < 3000 && Game.status === 'playing') DUO.__step(1 / 60);
-        return Game.status === 'playing';
-      };
-      t.eq(trial(true, false), false, '浮いている足場に走り込むと当たる');
-      t.eq(trial(true, true), true, '跳べば越えられる');
-      t.eq(trial(false, false), true, '沈んでいる足場はそのまま通れる');
-      DUO.reset();
-    }
-  });
-
-  /* ==========================================================================
-     5. 色の扉（契約§4.5 / S5）
-     ========================================================================== */
-  DUO.__suites.push({
-    name: 'S5: 色の扉（同色＝通れる／異色＝通れない・床と天井で別々の判断）',
-    quick: true,
-    run(t) {
-      const In = I(), Ob = In.Obstacles, CFG = In.CFG;
-      /* --- 展開の形: 書いたレーンが同色の扉、残り2レーンが異色 --- */
-      const items = [];
-      In.expandEntry(items, { lane: 1, type: 'DOOR' }, 'floor', 500, 0, 1, null);
-      t.eq(items.length, 3, '全幅に3枚の扉が並ぶ');
-      t.eq(items.filter((o) => o.type === 'DOOR').length, 1, '同色の扉は1枚');
-      t.eq(items.filter((o) => o.type === 'DOOR')[0].lane, 1, '同色の扉は書いたレーン');
-      t.eq(items.filter((o) => o.type === 'DOORX').length, 2, '残り2レーンは異色の扉');
-
-      const ok = items.filter((o) => o.type === 'DOOR')[0];
-      const ng = items.filter((o) => o.type === 'DOORX')[0];
-      t.eq(Ob.bands(ok, 500, []).length, 0, '同色の扉は当たり判定を持たない（通れる）');
-      t.ok(Ob.bands(ng, 500, []).length > 0, '異色の扉は塞いでいる');
-      const occ = Ob.occ(ng);
-      t.eq(occ.floor.lanes[ng.lane].run, false, '異色の扉は走っては通れない');
-      t.eq(occ.floor.lanes[ng.lane].jump, false, '跳んでも越えられない（高さ ' + In.OBS.DOORX.y1 + '）');
-      t.eq(occ.floor.lanes[ng.lane].slide, false, '潜っても抜けられない');
-      t.eq(Ob.demand(ng, 'floor'), 'lane', '要求は **レーン移動**（契約§4.5「隣レーンへ」）');
-      t.eq(occ.ceil.lanes[ng.lane].run, true, '床の扉は天井には効かない（面ごとに別の判断）');
-      t.eq(Ob.demand(ok, 'floor'), 'none', '同色の扉は何も要求しない');
-      /* ウォールとしては「同色のレーンだけが生存経路」 */
-      const wall = In.Fair.walls(items, () => 26)[0];
-      t.eq(In.Fair.laneSurvivable(wall, 'floor', 1), true, '同色のレーンは生き残れる');
-      t.eq(In.Fair.laneSurvivable(wall, 'floor', 0), false, '異色のレーンは生き残れない');
-      t.eq(In.Fair.laneSurvivable(wall, 'floor', -1), false, '〃');
-
-      /* --- 実プレイ: 同色なら生存・異色なら死。床と天井で別のレーンにできる --- */
-      const play = (floorOk, ceilOk, fLane, cLane) => {
-        DUO.reset(); DUO.start('S5', 11); DUO.skipTo(300);
-        In.clearObstacles();
-        const its = [];
-        In.expandEntry(its, { lane: floorOk, type: 'DOOR' }, 'floor', Game.dist + 60, Game.dist, 1, null);
-        In.expandEntry(its, { lane: ceilOk, type: 'DOOR' }, 'ceil', Game.dist + 60, Game.dist, 1, null);
-        its.forEach((o) => Game.active.push(o));
-        Game.runners.forEach((r) => {
-          const l = (r.surface === 'floor') ? fLane : cLane;
-          r.laneFrom = r.laneTo = r.laneVal = l; r.laneT = CFG.LANE_T;
-        });
-        let g = 0;
-        while (Game.dist < Game.dist + 1 && g++ < 3000 && Game.status === 'playing') {
-          DUO.__step(1 / 60);
-          if (g > 2800) break;
-          if (Game.active.length && Game.dist > Game.active[0].at + 3) break;
-        }
-        return Game.status === 'playing';
-      };
-      t.eq(play(1, -1, 1, -1), true, '2人とも自分の色の扉を通れば生き残る');
-      t.eq(play(1, -1, 0, -1), false, 'LUMEN が異色の扉に入ると死ぬ');
-      t.eq(play(1, -1, 1, 0), false, 'UMBRA が異色の扉に入ると死ぬ');
-      t.eq(play(1, -1, 1, -1), true, '**床と天井で別のレーン**が正解になる（左右で別々の判断）');
-      /* 見た目の色: 床の同色は琥珀、天井の同色は藍（意味を持つ色） */
-      DUO.reset(); DUO.start('S5', 11); DUO.pump(1 / 60);
-      const vf = Ob.acquire('DOOR');
-      const of = Ob.make('DOOR', 'floor', 0, Game.dist + 20, Game.dist);
-      of.view = vf;
-      Ob.place(of, Game.dist, 0);
-      const cf = vf.userData.doorMats[0].color.getHex();
-      const oc = Ob.make('DOOR', 'ceil', 0, Game.dist + 20, Game.dist);
-      oc.view = vf;
-      Ob.place(oc, Game.dist, 0);
-      const cc = vf.userData.doorMats[0].color.getHex();
-      t.eq(cf, 0xffb347, '床の同色の扉は琥珀（LUMEN の色）');
-      t.eq(cc, 0x8b9bff, '天井の同色の扉は藍（UMBRA の色）');
-      of.view = null; oc.view = null;
-      Ob.release('DOOR', vf);
-      DUO.reset();
-    }
-  });
-
-  /* ==========================================================================
-     6. S5 の定義・不変条件・密度・動作比率（50シード）
-     ========================================================================== */
+  /* （S5: 海流ベルト（… は契約 v2 で失効したギミックの検査のため削除） */
+  /* （S5: 浮上足場（… は契約 v2 で失効したギミックの検査のため削除） */
+  /* （S5: 色の扉（… は契約 v2 で失効したギミックの検査のため削除） */
   DUO.__suites.push({
     name: 'S5: 定義と不変条件・密度・動作比率（50シード）',
     /* 50シードぶんの生成を回すので runAll 側へ（runQuick ≤20秒 / 契約§7・2026-09-22 P4a） */
@@ -464,11 +195,9 @@
       t.eq(s5.filter((c) => c.difficulty < 3).length, 0, 'すべて rank3 以上');
       t.ok(s5.filter((c) => c.difficulty === 4).length >= 6,
            'rank4 が ' + s5.filter((c) => c.difficulty === 4).length + '本');
-      t.ok(s5.filter((c) => c.cur).length >= 3, '海流ベルトのチャンクが ' + s5.filter((c) => c.cur).length + '本');
-      t.ok(s5.filter((c) => c.lift).length >= 3, '浮上足場のチャンクが ' + s5.filter((c) => c.lift).length + '本');
-      t.ok(s5.filter((c) => c.door).length >= 3, '色の扉のチャンクが ' + s5.filter((c) => c.door).length + '本');
+      t.eq(s5.filter((c) => c.cur || c.lift || c.door).length, 0, '海流・浮上足場・色の扉は失効（契約 v2）');
 
-      let bad = 0, spFound = 0, blanks = 0, curSeen = 0, liftSeen = 0, doorSeen = 0, tips = 0;
+      let bad = 0, spFound = 0, blanks = 0, tips = 0;
       const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
       const half = { a: 0, b: 0 };
       for (let seed = 1; seed <= 50; seed++) {
@@ -477,15 +206,12 @@
         for (let d = 0; d < 1500; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
         const l = g.obstacles.filter((o) => o.at <= 1500);
         const errs = In.Fair.validate(l, st.speedAt,
-                                      { startLanes: [0], reactBoth: st.reactBoth, currents: g.currents });
+                                      { startLanes: [0], reactBoth: st.reactBoth });
         if (errs.length) { bad++; if (bad === 1) t.info('seed' + seed + ': ' + errs.slice(0, 2).join(' | ')); }
         if (In.Fair.checkVisibility(l, st.speedAt).length) bad++;
         if (g.log.some((c) => c.setpiece)) spFound++;
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         blanks += g.log.filter((c) => c.id === '(blank)').length;
-        if (g.currents.length) curSeen++;
-        if (l.some((o) => o.type === 'LIFTPAD')) liftSeen++;
-        if (l.some((o) => o.type === 'DOORX')) doorSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
@@ -500,13 +226,10 @@
           if (w.at < 750) half.a += n; else half.b += n;
         });
       }
-      t.eq(bad, 0, 'S5 50シードで §4.7 違反なし（大演出区間・海流の押し出しを含む）');
+      t.eq(bad, 0, 'S5 50シードで §4.7 違反なし（大演出区間を含む）');
       t.eq(spFound, 50, '50シードすべてに巨大魚の通過が入る');
       t.eq(blanks, 0, '空白チャンク（生成の詰まり）は0回');
-      t.ok(curSeen >= 25, '海流ベルトが出る（' + curSeen + '/50 シード）');
-      t.ok(liftSeen >= 40, '浮上足場が出る（' + liftSeen + '/50 シード）');
-      t.ok(doorSeen >= 40, '色の扉が出る（' + doorSeen + '/50 シード）');
-      t.ok(tips >= 50, '新ギミックの初出に tip が撒かれる（計' + tips + '回 / 50シード）');
+      t.eq(tips, 0, 'S5 の新ギミック（海流・浮上足場・色の扉）は失効＝初出の tip はない（サメ・泡は P7b）');
       /* 密度（契約§4.7 S5 は 8→12回/100m・±25%） */
       const dens = In.STAGE_DEFS.S5.density;
       t.eq(dens[0] + '-' + dens[1], '8-12', '密度の目安は 8→12回/100m');
@@ -750,14 +473,8 @@
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
-      ['CURRENT', 'CURGATE', 'DOOR', 'DOORX', 'LIFTPAD'].forEach((type) => {
-        const v = In.Obstacles.acquire(type);
-        const ud = v.userData;
-        const okView = (type === 'CURRENT' || type === 'CURGATE') ? !!ud.belt
-                     : (type === 'DOOR' || type === 'DOORX') ? !!ud.door
-                     : (type === 'LIFTPAD') ? !!ud.lift : !!ud.fish;
-        t.eq(okView, true, 'ネオンのスキンでも ' + In.OBS[type].label + ' の骨組みが建つ（ゾーン共通の保険）');
-        In.Obstacles.release(type, v);
+      ['GAP', 'DROPCEIL', 'CURRENT', 'CURGATE', 'DOOR', 'DOORX', 'LIFTPAD'].forEach((type) => {
+        t.eq(In.OBS[type], undefined, type + ' は契約 v2 で失効（判定の型ごと無い）');
       });
       U.lsRestore(snap);
       DUO.reset();
@@ -767,70 +484,6 @@
   /* ==========================================================================
      10. チュートリアル tip（新ギミックの初出）
      ========================================================================== */
-  DUO.__suites.push({
-    name: 'S5: 新ギミックの初出にチュートリアル tip（海流・浮上足場・色の扉）',
-    quick: true,
-    run(t) {
-      const In = I(), Tut = In.Tutorial;
-      t.ok(!!Tut.TIPS.current, '海流ベルトの文言がある');
-      t.ok(!!Tut.TIPS.liftpad, '浮上足場の文言がある');
-      t.ok(!!Tut.TIPS.colordoor, '色の扉の文言がある');
-      t.eq(In.STAGE_DEFS.S5.tipOnce.cur, 'current', 'S5 は海流の初出で tip を出す');
-      t.eq(In.STAGE_DEFS.S5.tipOnce.lift, 'liftpad', 'S5 は浮上足場の初出で tip を出す');
-      t.eq(In.STAGE_DEFS.S5.tipOnce.door, 'colordoor', 'S5 は色の扉の初出で tip を出す');
-      const st = In.makeStage('S5');
-      const g = In.createGenerator(st, 3);
-      for (let d = 0; d < 1500; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-      const tips = g.events.filter((e) => e.type === 'tip');
-      const ids = tips.map((e) => e.params.id);
-      t.ok(ids.indexOf('liftpad') >= 0, '浮上足場の tip が撒かれる');
-      t.eq(ids.filter((x) => x === 'liftpad').length, 1, '同じ tip は1回だけ');
-      const firstLift = g.obstacles.filter((o) => o.type === 'LIFTPAD').sort((a, b) => a.at - b.at)[0];
-      const tipL = tips.filter((e) => e.params.id === 'liftpad')[0];
-      t.ok(tipL.at < firstLift.at,
-           'tip は浮上足場より手前（' + tipL.at.toFixed(0) + 'm < ' + firstLift.at.toFixed(0) + 'm）');
-      /* 実プレイで表示される */
-      DUO.reset(); DUO.start('S5', 3); DUO.bot('perfect');
-      let shown = null, guard = 0;
-      while (guard++ < 16000 && Game.dist < 1200 && Game.status === 'playing') {
-        DUO.__step(1 / 60);
-        if (Tut.current === 'current' || Tut.current === 'liftpad' || Tut.current === 'colordoor') { shown = Tut.current; break; }
-      }
-      t.ok(!!shown, '走っていると新ギミックの指示が出る（' + shown + '）');
-      const el = document.getElementById('tip');
-      t.eq(el.classList.contains('on'), true, '吹き出しが表示状態');
-      DUO.reset();
-    }
-  });
-
-  /* ==========================================================================
-     11. 中断・再開（海流の区間が残らない）
-     ========================================================================== */
-  DUO.__suites.push({
-    name: 'S5: 中断・チェックポイント再開（海流の区間が取り残されない）',
-    quick: true,
-    run(t) {
-      const In = I(), Cur = In.Current;
-      DUO.reset(); DUO.start('S5', 6);
-      /* 海流の区間をまたぐ位置まで進めてから、その真ん中へ再開する */
-      DUO.skipTo(400);
-      for (let i = 0; i < 30; i++) DUO.__step(1 / 60);
-      const regs = Game.gen.currents.slice();
-      t.ok(regs.length >= 0, '海流の区間が生成されている（' + regs.length + '本）');
-      /* 入口より先から再開した区間は「死んだ」印が付き、押し出しは起きない */
-      const mid = regs.length ? (regs[0].from + regs[0].to) / 2 : 600;
-      DUO.skipTo(mid + 1);
-      const dead = Game.gen.currents.filter((r) => r.from < Game.dist && !r.dead).length;
-      t.eq(dead, 0, '再開位置より手前に入口がある区間は無効になる');
-      t.eq(Game.active.some((o) => o.reg && o.reg.dead), false, '無効になった区間の帯は取り込まれない');
-      /* 押し出しが起きないことを実際に確かめる */
-      const lane0 = Game.runners[0].laneTo;
-      for (let i = 0; i < 120; i++) DUO.__step(1 / 60);
-      t.eq(Cur.inBelt(Game.gen.currents, 'floor', Game.dist), 0, '無効な区間の中でも流れは起きない');
-      t.ok(Math.abs(Game.runners[0].laneTo - lane0) <= 1, '勝手に端まで流されない');
-      /* タイトルへ戻すと HUD の矢印も消える */
-      DUO.reset();
-      t.eq(document.getElementById('cur').classList.contains('on'), false, 'タイトルで海流の表示が消える');
-    }
-  });
+  /* （S5: 新ギミックの初出にチュートリアル tip（海流… は契約 v2 で失効したギミックの検査のため削除） */
+  /* （S5: 中断・チェックポイント再開（海流… は契約 v2 で失効したギミックの検査のため削除） */
 })();

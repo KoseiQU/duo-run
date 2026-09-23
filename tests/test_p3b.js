@@ -179,97 +179,7 @@
   /* ==========================================================================
      3. 落ちる天井 — 床と天井で別の要求になる／キーフレーム
      ========================================================================== */
-  DUO.__suites.push({
-    name: 'S4: 落ちる天井（床＝レーン移動 / 天井＝ジャンプ・予告→落下0.5秒→着地）',
-    quick: true,
-    run(t) {
-      const In = I(), Ob = In.Obstacles, MOT = In.MOT, CFG = In.CFG, R = In.Runners;
-      const unit = 26;
-      const o = Ob.make('DROPCEIL', 'floor', 0, 500, 0, { drop: { unitM: unit } });
-      t.eq(o.surface, 'both', '落ちる天井は床にも天井にも効く（both 型）');
-
-      /* --- 1つの事象が床と天井で別の要求になる（契約§6 P3b の要） --- */
-      const occ = Ob.occ(o);
-      t.eq(occ.floor.lanes[0].run, false, '床: 落ちたブロックに当たる');
-      t.eq(occ.floor.lanes[0].jump, false, '床: 跳んでも越えられない（高さ ' + In.OBS.DROPCEIL.y1 + '）');
-      t.eq(occ.floor.lanes[0].slide, false, '床: 潜っても抜けられない');
-      t.eq(Ob.demand(o, 'floor'), 'lane', '床の要求は **レーン移動**');
-      t.eq(occ.ceil.lanes[0].run, false, '天井: 穴が開いているので走っていると落ちる');
-      t.eq(occ.ceil.lanes[0].jump, true, '天井: 跳べば穴を越えられる');
-      t.eq(Ob.demand(o, 'ceil'), 'jump', '天井の要求は **ジャンプ**');
-      t.eq(occ.floor.lanes[1].run, true, '隣のレーンは床も素通りできる');
-      t.eq(occ.ceil.lanes[1].run, true, '隣のレーンは天井も素通りできる');
-      /* 天井で跳んだ体が、床のブロックに引っかからない（高さの設計） */
-      const apex = R.boxOf('ceil', 0, 'jump', CFG.JUMP_T / 2);
-      t.ok(apex.y0 > In.OBS.DROPCEIL.y1,
-           '天井キャラの最高到達（体の下端 ' + apex.y0.toFixed(2) + '）はブロックの上（' +
-           In.OBS.DROPCEIL.y1 + '）より高い');
-
-      /* --- キーフレーム（到達の何秒手前か） --- */
-      t.near(MOT.dropLandAt(o), 500 - CFG.DROP.LAND_T * unit, 1e-9,
-             '着地は到達の ' + CFG.DROP.LAND_T + '秒手前');
-      t.ok(CFG.DROP.LAND_T >= CFG.FAIR.SEE,
-           '着地(' + CFG.DROP.LAND_T + '秒) は視認距離(' + CFG.FAIR.SEE + '秒) より手前＝見てから反応できる');
-      t.near(MOT.dropLandAt(o) - MOT.dropFallAt(o), CFG.DROP.FALL_T * unit, 1e-9,
-             '落下は ' + CFG.DROP.FALL_T + '秒（契約§6 P3b）');
-      t.ok(MOT.dropWarnAt(o) < MOT.dropFallAt(o), '予告（ひび・砂）は落下より手前');
-      t.eq(MOT.dropFall(o, MOT.dropFallAt(o) - 1), 0, '落ち始める前は落下 0');
-      t.eq(MOT.dropFall(o, MOT.dropLandAt(o) + 1), 1, '着地したら落下 1');
-      t.near(MOT.dropFall(o, (MOT.dropFallAt(o) + MOT.dropLandAt(o)) / 2), 0.5, 1e-9, '中間は 0.5');
-      /* 天井から外れるまでは無害 */
-      t.eq(Ob.bands(o, MOT.dropFallAt(o) - 1, []).length, 0, '天井にはまっている間は当たり判定を持たない');
-      t.eq(Ob.bands(o, 500, []).length, 2, '外れた後は「床のブロック」と「天井の穴」の2枚');
-      /* 路面は天井側だけ抜ける */
-      const hs = Ob.holeSpan(o, 500);
-      t.eq(hs && hs.side, 'ceil', '抜けるのは**天井側**の路面だけ');
-      t.eq(Ob.holeSpan(o, MOT.dropFallAt(o) - 1), null, '落ちる前は天井も抜けていない');
-
-      /* --- occ ⇔ 当たり判定 hits の総当り一致（通過窓を 0.01m 刻みでなめる） --- */
-      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
-      const W = (In.OBS.DROPCEIL.depth + CFG.SLIDE_D) / 2 + 0.2;
-      let bad = 0, over = 0;
-      ['floor', 'ceil'].forEach((side) => {
-        CFG.LANES.forEach((lane) => {
-          ['run', 'jump', 'slide'].forEach((act) => {
-            const want = occ[side].lanes[lane][act];
-            let hit = false;
-            for (let d = -W; d <= W; d += 0.01) {
-              if (Ob.hits(o, R.boxOf(side, lane, act, probe[act]), o.at + d)) { hit = true; break; }
-            }
-            if (want && hit) bad++;
-            if (!want && !hit) over++;
-          });
-        });
-      });
-      t.eq(bad, 0, '「安全」と判定した動作は1つも当たらない');
-      t.eq(over, 0, '「危険」と判定した動作は必ず当たる');
-
-      /* --- 実プレイ: 床はレーン移動・天井はジャンプで抜ける --- */
-      const trial = (floorLane, ceilAct) => {
-        DUO.reset(); DUO.start('S4', 9); DUO.skipTo(300);
-        In.clearObstacles();
-        const oo = Ob.make('DROPCEIL', 'floor', 0, Game.dist + 60, Game.dist,
-                           { drop: { unitM: Game.speed } });
-        Game.active.push(oo);
-        putLanes(floorLane, 0);
-        let g = 0;
-        while (Game.dist < oo.at - Game.speed * CFG.BOT.JUMP_LEAD && g++ < 3000 && Game.status === 'playing') DUO.__step(1 / 60);
-        if (ceilAct === 'jump') DUO.touch('top', 'down');
-        while (Game.dist < oo.at + 3 && g++ < 3000 && Game.status === 'playing') DUO.__step(1 / 60);
-        return { alive: Game.status === 'playing', killer: Game.killer };
-      };
-      t.eq(trial(1, 'jump').alive, true, '床は隣のレーン・天井はジャンプ → 2人とも抜けられる');
-      t.eq(trial(0, 'jump').alive, false, '床が同じレーンに居ると落ちてきたブロックに当たる');
-      const c = trial(1, 'run');
-      t.eq(c.alive, false, '天井が跳ばないと穴に落ちる');
-      t.eq(c.killer && c.killer.obstacle, 'DROPCEIL', '死因は落ちる天井');
-      DUO.reset();
-    }
-  });
-
-  /* ==========================================================================
-     4. S4 の定義・不変条件・密度・動作比率（50シード）
-     ========================================================================== */
+  /* （S4: 落ちる天井（… は契約 v2 で失効したギミックの検査のため削除） */
   DUO.__suites.push({
     name: 'S4: 定義と不変条件・密度・動作比率（50シード）',
     quick: true,
@@ -292,7 +202,6 @@
       t.ok(s4.filter((c) => c.difficulty === 4).length >= 5,
            'rank4 が ' + s4.filter((c) => c.difficulty === 4).length + '本');
       t.ok(s4.filter((c) => c.sync).length >= 3, '同時スイッチのチャンクが ' + s4.filter((c) => c.sync).length + '本');
-      t.ok(s4.filter((c) => c.drop).length >= 4, '落ちる天井のチャンクが ' + s4.filter((c) => c.drop).length + '本');
 
       let bad = 0, spFound = 0, blanks = 0, syncSeen = 0, dropSeen = 0, tips = 0;
       const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
@@ -309,7 +218,6 @@
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         blanks += g.log.filter((c) => c.id === '(blank)').length;
         if (l.some((o) => o.type === 'SYNCGAP')) syncSeen++;
-        if (l.some((o) => o.type === 'DROPCEIL')) dropSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
@@ -328,8 +236,8 @@
       t.eq(spFound, 50, '50シードすべてに神殿崩壊が入る');
       t.eq(blanks, 0, '空白チャンク（生成の詰まり）は0回');
       t.ok(syncSeen >= 40, '同時スイッチが出る（' + syncSeen + '/50 シード）');
-      t.ok(dropSeen >= 45, '落ちる天井はほぼ毎シード出る（' + dropSeen + '/50 シード）');
-      t.ok(tips >= 50, '新ギミックの初出に tip が撒かれる（計' + tips + '回 / 50シード）');
+      t.eq(dropSeen, 0, '落ちる天井は失効（契約 v2）');
+      t.ok(tips >= 40, '新ギミック（同時スイッチ）の初出に tip が撒かれる（計' + tips + '回 / 50シード）');
       /* 密度（契約§4.7 S4 は 6→10回/100m・±25%） */
       const dens = In.STAGE_DEFS.S4.density;
       t.eq(dens[0] + '-' + dens[1], '6-10', '密度の目安は 6→10回/100m');
@@ -458,8 +366,9 @@
       /* --- 譜面（落ちる天井の連鎖・倒れた柱・崩れる出口）と §4.7 --- */
       const def = In.Setpieces.DEFS.templefall;
       const all = (def.floor || []).concat(def.ceil || []);
-      t.ok(all.filter((e) => e.type === 'DROPCEIL').length >= 3,
-           '落ちる天井が連鎖する（' + all.filter((e) => e.type === 'DROPCEIL').length + '回）');
+      t.eq(all.filter((e) => e.type === 'DROPCEIL').length, 0, '落ちる天井は失効（契約 v2）');
+      t.ok(all.filter((e) => e.type === 'LASER_V').length >= 3,
+           '旧 落ちる天井の位置は縦レーザー（' + all.filter((e) => e.type === 'LASER_V').length + '本）');
       t.ok(all.filter((e) => e.type === 'COLUMN').length >= 2,
            '倒れた柱が横断する（' + all.filter((e) => e.type === 'COLUMN').length + '本）');
       t.eq(all.filter((e) => e.type === 'WALLHOLE').length, 1, '最後は崩れる出口を潜り抜ける');
@@ -577,12 +486,10 @@
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
-      ['SYNCPAD', 'SYNCGAP', 'DROPCEIL'].forEach((type) => {
+      ['SYNCPAD', 'SYNCGAP'].forEach((type) => {
         const v = In.Obstacles.acquire(type);
         const ud = v.userData;
-        const okView = (type === 'SYNCPAD') ? !!ud.pad
-                     : (type === 'SYNCGAP') ? !!ud.sync
-                     : (type === 'DROPCEIL') ? !!ud.drop : !!ud.column;
+        const okView = (type === 'SYNCPAD') ? !!ud.pad : !!ud.sync;
         t.eq(okView, true, 'ネオンのスキンでも ' + In.OBS[type].label + ' の骨組みが建つ（ゾーン共通の保険）');
         In.Obstacles.release(type, v);
       });
@@ -595,31 +502,31 @@
      8. チュートリアル tip（新ギミックの初出）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S4: 新ギミックの初出にチュートリアル tip（同時スイッチ・落ちる天井）',
+    name: 'S4: 新ギミックの初出にチュートリアル tip（同時スイッチ／落ちる天井は失効）',
     quick: true,
     run(t) {
       const In = I(), Tut = In.Tutorial;
       t.ok(!!Tut.TIPS.sync, '同時スイッチの文言がある');
-      t.ok(!!Tut.TIPS.dropceil, '落ちる天井の文言がある');
+      t.ok(!Tut.TIPS.dropceil, '落ちる天井の文言は失効（契約 v2）');
       t.eq(In.STAGE_DEFS.S4.tipOnce.sync, 'sync', 'S4 は同時スイッチの初出で tip を出す');
-      t.eq(In.STAGE_DEFS.S4.tipOnce.drop, 'dropceil', 'S4 は落ちる天井の初出で tip を出す');
+      t.eq(In.STAGE_DEFS.S4.tipOnce.drop, undefined, 'S4 の tip は同時スイッチだけ');
       const st = In.makeStage('S4');
       const g = In.createGenerator(st, 3);
       for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
       const tips = g.events.filter((e) => e.type === 'tip');
       const ids = tips.map((e) => e.params.id);
-      t.ok(ids.indexOf('dropceil') >= 0, '落ちる天井の tip が撒かれる');
-      t.eq(ids.filter((x) => x === 'dropceil').length, 1, '同じ tip は1回だけ');
-      const firstDrop = g.obstacles.filter((o) => o.type === 'DROPCEIL').sort((a, b) => a.at - b.at)[0];
-      const tipD = tips.filter((e) => e.params.id === 'dropceil')[0];
-      t.ok(tipD.at < firstDrop.at,
-           'tip は落ちる天井より手前（' + tipD.at.toFixed(0) + 'm < ' + firstDrop.at.toFixed(0) + 'm）');
+      t.ok(ids.indexOf('sync') >= 0, '同時スイッチの tip が撒かれる');
+      t.eq(ids.filter((x) => x === 'sync').length, 1, '同じ tip は1回だけ');
+      const firstS = g.obstacles.filter((o) => o.type === 'SYNCPAD').sort((a, b) => a.at - b.at)[0];
+      const tipS = tips.filter((e) => e.params.id === 'sync')[0];
+      t.ok(tipS.at < firstS.at,
+           'tip は同時スイッチより手前（' + tipS.at.toFixed(0) + 'm < ' + firstS.at.toFixed(0) + 'm）');
       /* 実プレイで表示される */
       DUO.reset(); DUO.start('S4', 3); DUO.bot('perfect');
       let shown = null, guard = 0;
       while (guard++ < 14000 && Game.dist < 1000 && Game.status === 'playing') {
         DUO.pump(1 / 60);
-        if (Tut.current === 'sync' || Tut.current === 'dropceil') { shown = Tut.current; break; }
+        if (Tut.current === 'sync') { shown = Tut.current; break; }
       }
       t.ok(!!shown, '走っていると新ギミックの指示が出る（' + shown + '）');
       const el = document.getElementById('tip');

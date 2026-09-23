@@ -19,7 +19,8 @@
      P5c-2: tip の猶予規則（契約§4.8）
      ========================================================================== */
   /* P5c 前（92c80df）の tip 数（50シード・ゴールより手前）。出現率はこの −10% 以内 */
-  const TIP_BASE = { S1: 350, S3: 87, S4: 97, S5: 129, S6: 121, S7: 118, S8: 50 };
+  /* 契約 v2（P7a）: S1 の「穴」の紹介・S4 の落ちる天井・S5 の3ギミックは失効（tip ごと無い） */
+  const TIP_BASE = { S1: 300, S3: 87, S4: 46, S6: 121, S7: 118, S8: 50 };
   DUO.__suites.push({
     name: 'P5c: tip の猶予規則（全ステージ×50シード・窓内は対象のみ・先行 speed×2.5秒・出現率）',
     quick: true,
@@ -59,12 +60,12 @@
   });
 
   DUO.__suites.push({
-    name: 'P5c: tip は対象の通過で消える（実走 S1・S5）・表示中の前方に他の障害物がない',
+    name: 'P5c: tip は対象の通過で消える（実走 S1・S6）・表示中の前方に他の障害物がない',
     quick: true,
     run(t) {
       const In = I(), Tut = In.Tutorial, CFG = In.CFG;
       const el = document.getElementById('tip');
-      [['S1', 3], ['S5', 2]].forEach((sp) => {
+      [['S1', 3], ['S6', 2]].forEach((sp) => {
         DUO.reset(); DUO.start(sp[0], sp[1]); DUO.bot('perfect');
         Game.gen.ensure(900, 0);
         const ev0 = Game.gen.events.filter((e) => e.type === 'tip')[0];

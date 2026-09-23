@@ -57,7 +57,7 @@ const DUO = {
   __internal: {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
-    Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF, Sync: Sync, Current: Current,
+    Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF, Sync: Sync,
     Warp: Warp, Zero: Zero, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless, Audio: Audio, Platform: Platform,
     expandEntry: expandEntry,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,

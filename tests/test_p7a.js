@@ -9,6 +9,9 @@
        ・全ゾーンの走行サンプルで、コリドー内（|x| < 2.0・0 < y < 4）に小物の頂点が1つもない
          （障害物・キャラ・路面と路肩のラインの光は対象外）
        ・路面は無地の暗色（1色・光沢なし）／小物の密度はコリドーの外で前方60mに40個以上
+     【P7a-3】失効ギミックの削除・ワイド梁の通常出現
+       ・ギャップ・落ちる天井・海流・浮上足場・色の扉が 判定・譜面・大演出・tip のどこにも無い
+       ・全ステージ（30シード）でピラー:ワイド梁 ≈ 6:4（ワイド梁の割合 0.40 ±0.10）・§4.7 違反0
    ============================================================================ */
 'use strict';
 
@@ -184,6 +187,61 @@
         t.ok(m.isMeshBasicMaterial && hsl.l <= W.ROAD_L + 0.005, sp[0] + ': 路面は無地の暗色（明度 ' + hsl.l.toFixed(3) + '）');
       });
       DUO.reset();
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P7a-3: 失効ギミックの削除・ワイド梁の通常出現（ピラー:ワイド梁 ≈ 6:4 ±10%・30シード）',
+    quick: false,
+    run(t) {
+      const In = I(), CFG = In.CFG;
+      const GONE = ['GAP', 'DROPCEIL', 'CURRENT', 'CURGATE', 'LIFTPAD', 'DOOR', 'DOORX'];
+      GONE.forEach((ty) => t.eq(In.OBS[ty], undefined, ty + ' の判定は無い（契約 v2 で失効）'));
+      const ents = [];
+      In.CHUNK_DEFS.forEach((c) => (c.floor || []).concat(c.ceil || []).forEach((e) => ents.push(c.id + ':' + e.type)));
+      Object.keys(In.Setpieces.DEFS).forEach((k) => {
+        const d = In.Setpieces.DEFS[k];
+        (d.floor || []).concat(d.ceil || []).forEach((e) => ents.push(k + ':' + e.type));
+      });
+      In.INTRO_S1.forEach((it) => (it.floor || []).concat(it.ceil || []).forEach((e) => ents.push('intro:' + e.type)));
+      const bad = ents.filter((x) => GONE.indexOf(x.split(':')[1]) >= 0);
+      t.eq(bad.length, 0, '譜面・大演出・導入区間に失効ギミックが無い' + (bad.length ? ': ' + bad.slice(0, 4).join(', ') : ''));
+      const flags = In.CHUNK_DEFS.filter((c) => c.drop || c.cur || c.lift || c.door).map((c) => c.id);
+      t.eq(flags.length, 0, 'チャンクの旗（drop/cur/lift/door）も無い');
+      Object.keys(In.STAGE_DEFS).forEach((sid) => {
+        const d = In.STAGE_DEFS[sid];
+        const tk = Object.keys(d.tipOnce || {}).concat(d.coverFlags || []);
+        t.ok(!tk.some((k) => ['drop', 'cur', 'lift', 'door'].indexOf(k) >= 0), sid + ': tip・網羅の旗に失効ギミックが無い');
+      });
+      t.eq(typeof Current, 'undefined', '海流の規則（Current）は無い');
+
+      t.eq(CFG.WIDE_SHARE, 0.40, 'ピラー:ワイド梁 ＝ 6:4');
+      const rows = [];
+      ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'endless'].forEach((sid) => {
+        const st = In.makeStage(sid);
+        const L = isFinite(st.lengthM) ? st.lengthM : 6000;
+        let P = 0, W = 0, bad = 0, pairs = 0;
+        for (let seed = 1; seed <= 30; seed++) {
+          const g = In.createGenerator(st, seed);
+          for (let d = 0; d < L; d += 40) g.ensure(d + CFG.SPAWN_AHEAD, d);
+          const l = g.obstacles.filter((o) => o.at <= L);
+          const seen = {};
+          l.forEach((o) => {
+            if (o.type === 'PILLAR') P++;
+            else if (o.type === 'WIDEBAR') {
+              const k = o.at.toFixed(2) + '|' + o.lane;
+              if (seen[k]) pairs++; else { seen[k] = 1; W++; }
+            }
+          });
+          if (In.Fair.validate(l, st.speedAt, { startLanes: [0], reactBoth: g.reactBoth, zeros: g.zeros, warps: g.warps,
+                                                mirrors: g.mirrors, swaps: g.swaps, merges: g.merges }).length) bad++;
+        }
+        const share = W / Math.max(1, P + W);
+        rows.push(sid + ' ' + P + ':' + W + '=' + share.toFixed(2) + '（対 ' + pairs + '）');
+        t.ok(Math.abs(share - CFG.WIDE_SHARE) <= 0.10, sid + ': ワイド梁の割合 ' + share.toFixed(3) + '（ピラー ' + P + '・ワイド梁 ' + W + '・目安 0.40 ±0.10）');
+        t.eq(bad, 0, sid + ': 30シードで §4.7 違反なし');
+      });
+      t.info(rows.join(' / '));
     }
   });
 })();

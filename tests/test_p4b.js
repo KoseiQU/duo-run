@@ -527,7 +527,7 @@
         const l = g.obstacles.filter((o) => o.at <= 1500);
         const errs = In.Fair.validate(l, st.speedAt,
                                       { startLanes: [0], reactBoth: st.reactBoth,
-                                        currents: g.currents, zeros: g.zeros, warps: g.warps });
+                                        zeros: g.zeros, warps: g.warps });
         if (errs.length) { bad++; if (bad === 1) t.info('seed' + seed + ': ' + errs.slice(0, 2).join(' | ')); }
         if (In.Fair.checkVisibility(l, st.speedAt).length) bad++;
         if (g.log.some((c) => c.setpiece)) spFound++;

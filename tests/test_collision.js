@@ -64,10 +64,6 @@
         ['LASER_LOW','floor',0,  0, 'jump',  true ],
         ['LASER_LOW','floor',0,  0, 'slide', false],
         ['LASER_LOW','floor',0,  1, 'run',   true ],
-        ['GAP',     'floor', 0,  0, 'run',   false],
-        ['GAP',     'floor', 0,  0, 'jump',  true ],
-        ['GAP',     'floor', 0,  0, 'slide', false],
-        ['GAP',     'floor', 0,  1, 'run',   true ],
         ['WIDEBAR', 'floor', -1, -1, 'run',  false],
         ['WIDEBAR', 'floor', -1,  0, 'run',  false],
         ['WIDEBAR', 'floor', -1,  0, 'jump', false],
@@ -90,9 +86,7 @@
         ['WALLHOLE', 'ceil', 1,  1, 'slide', true ],
         ['WALLHOLE', 'ceil', 1,  1, 'jump',  false],
         ['LASER_LOW','ceil', 1,  1, 'run',   false],
-        ['LASER_LOW','ceil', 1,  1, 'jump',  true ],
-        ['GAP',   'ceil', 0,  0, 'run',   false],
-        ['GAP',   'ceil', 0,  0, 'jump',  true ]
+        ['LASER_LOW','ceil', 1,  1, 'jump',  true ]
       ]);
       /* 天井の障害物で死ぬのは UMBRA（床の LUMEN ではない） */
       const r = trial('ROVER', 'ceil', 0, 0, 'run');

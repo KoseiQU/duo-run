@@ -25,9 +25,9 @@ const CHUNK_DEFS = [
   { id: 'c1_rover_c', zone: 'neon', lengthM: 46, difficulty: 1, minSpeed: 0,
     floor: [], ceil: [{ at: 14, lane: 1, type: 'ROVER' }, { at: 32, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'c1_gap_f', zone: 'neon', lengthM: 50, difficulty: 1, minSpeed: 0,
-    floor: [{ at: 16, lane: 0, type: 'GAP' }, { at: 36, lane: 1, type: 'GAP' }], ceil: [], events: [] },
+    floor: [{ at: 16, lane: 0, type: 'ROVER' }, { at: 36, lane: 1, type: 'ROVER' }], ceil: [], events: [] },
   { id: 'c1_gap_c', zone: 'neon', lengthM: 50, difficulty: 1, minSpeed: 0,
-    floor: [], ceil: [{ at: 16, lane: -1, type: 'GAP' }, { at: 36, lane: 0, type: 'GAP' }], events: [] },
+    floor: [], ceil: [{ at: 16, lane: -1, type: 'ROVER' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'c1_lowl_f', zone: 'neon', lengthM: 46, difficulty: 1, minSpeed: 0,
     floor: [{ at: 14, lane: 1, type: 'LASER_LOW' }, { at: 32, lane: 0, type: 'LASER_LOW' }], ceil: [], events: [] },
   { id: 'c1_lowl_c', zone: 'neon', lengthM: 46, difficulty: 1, minSpeed: 0,
@@ -48,7 +48,7 @@ const CHUNK_DEFS = [
     floor: [{ at: 12, lane: 0, type: 'ROVER' }, { at: 34, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 23, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'c2_alt_b', zone: 'neon', lengthM: 54, difficulty: 2, minSpeed: 0,
-    floor: [{ at: 13, lane: -1, type: 'GAP' }, { at: 40, lane: 1, type: 'PILLAR' }],
+    floor: [{ at: 13, lane: -1, type: 'ROVER' }, { at: 40, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 25, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 'c2_sync', zone: 'neon', lengthM: 50, difficulty: 2, minSpeed: 0,
     floor: [{ at: 14, lane: 0, type: 'ROVER' }, { at: 34, lane: -1, type: 'ROVER' }],
@@ -59,7 +59,7 @@ const CHUNK_DEFS = [
     floor: [{ at: 14, lane: 1, type: 'LASER_V' }, { at: 32, lane: 0, type: 'LASER_V' }], ceil: [], events: [] },
   { id: 'c2_mix', zone: 'neon', lengthM: 56, difficulty: 2, minSpeed: 0,
     floor: [{ at: 12, lane: 1, type: 'ROVER' }, { at: 42, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 27, lane: 0, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 27, lane: 0, type: 'ROVER' }], events: [] },
 
   /* --- rank3: 2体に別々の動作を同時に要求／ワイド梁／壁の穴 --------------- */
   { id: 'c3_dual_a', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0,
@@ -79,14 +79,14 @@ const CHUNK_DEFS = [
   { id: 'c3_wallhole_f', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, wallhole: 1, dense: 1,
     floor: [{ at: 14, lane: 0, type: 'WALLHOLE' }, { at: 29, lane: -1, type: 'ROVER' },
             { at: 44, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 29, lane: 0, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 29, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'c3_wallhole_c', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, wallhole: 1, dense: 1,
-    floor: [{ at: 14, lane: 1, type: 'GAP' }, { at: 29, lane: 0, type: 'LASER_LOW' },
+    floor: [{ at: 14, lane: 1, type: 'ROVER' }, { at: 29, lane: 0, type: 'LASER_LOW' },
             { at: 44, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 14, lane: -1, type: 'WALLHOLE' }, { at: 29, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'c3_wallhole_x', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, wallhole: 1, dense: 1,
     floor: [{ at: 12, lane: -1, type: 'ROVER' }, { at: 27, lane: 1, type: 'WALLHOLE' },
-            { at: 44, lane: 0, type: 'GAP' }],
+            { at: 44, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 12, lane: 0, type: 'LASER_LOW' }, { at: 27, lane: -1, type: 'PILLAR' },
             { at: 44, lane: 1, type: 'ROVER' }], events: [] },
 
@@ -112,7 +112,7 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 50, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'c2_scan_far', zone: 'neon', lengthM: 62, difficulty: 2, minSpeed: 0, moving: 1,
     floor: [{ at: 14, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.5 } } },
-            { at: 50, lane: -1, type: 'GAP' }],
+            { at: 50, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 32, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'c2_scan_mid', zone: 'neon', lengthM: 62, difficulty: 2, minSpeed: 0, moving: 1,
     /* 到達時は 0.5 レーン＝レーン0と1の両方を塞ぐ。空いているのは左だけ */
@@ -134,7 +134,7 @@ const CHUNK_DEFS = [
   { id: 'c2_rot_up', zone: 'neon', lengthM: 60, difficulty: 2, minSpeed: 0, moving: 1,
     /* 到達時に腕が真上＝そのレーンだけ全高で塞がる（レーン移動） */
     floor: [{ at: 16, lane: 0, type: 'LASER_ROT', params: { rot: { phase: 0.25 } } },
-            { at: 48, lane: -1, type: 'GAP' }],
+            { at: 48, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 32, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'c2_rot_low', zone: 'neon', lengthM: 62, difficulty: 2, minSpeed: 0, moving: 1,
     /* 到達時に腕が寝ている＝低いのでジャンプで越える */
@@ -146,9 +146,9 @@ const CHUNK_DEFS = [
     /* 斜め＝根元は跳べる／先は立っている。レーンで要求が変わる */
     floor: [{ at: 16, lane: -1, type: 'LASER_ROT', params: { rot: { phase: 0.18 } } },
             { at: 48, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 32, lane: 0, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 32, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'c3_rot_ceil', zone: 'neon', lengthM: 60, difficulty: 3, minSpeed: 0, moving: 1,
-    floor: [{ at: 32, lane: 0, type: 'GAP' }, { at: 48, lane: -1, type: 'ROVER' }],
+    floor: [{ at: 32, lane: 0, type: 'ROVER' }, { at: 48, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 16, lane: 1, type: 'LASER_ROT', params: { rot: { phase: 0.72 } } }], events: [] },
   { id: 'c3_rot_pair', zone: 'neon', lengthM: 64, difficulty: 3, minSpeed: 0, moving: 1,
     /* 床と天井で通過タイミングがずれる（契約§4.4「床側と天井側で通過タイミングが変わる」） */
@@ -172,53 +172,53 @@ const CHUNK_DEFS = [
      ========================================================================== */
   { id: 'd3_duo_a', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, dense: 1,
     floor: [{ at: 11, lane: 0, type: 'ROVER' }, { at: 22, lane: 1, type: 'LASER_V' },
-            { at: 33, lane: -1, type: 'GAP' }, { at: 44, lane: 0, type: 'PILLAR' }],
+            { at: 33, lane: -1, type: 'ROVER' }, { at: 44, lane: 0, type: 'PILLAR' }],
     ceil:  [{ at: 11, lane: 1, type: 'ROVER' }, { at: 33, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 'd3_duo_b', zone: 'neon', lengthM: 54, difficulty: 3, minSpeed: 0, dense: 1, moving: 1,
     floor: [{ at: 11, lane: 1, type: 'ROVER' },
             { at: 23, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0.5 } } },
             { at: 35, lane: 0, type: 'LASER_LOW' }, { at: 47, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 11, lane: -1, type: 'GAP' }, { at: 35, lane: 1, type: 'ROVER' }], events: [] },
+    ceil:  [{ at: 11, lane: -1, type: 'ROVER' }, { at: 35, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'd3_duo_c', zone: 'neon', lengthM: 54, difficulty: 3, minSpeed: 0, dense: 1, moving: 1,
     floor: [{ at: 11, lane: -1, type: 'LASER_ROT', params: { rot: { phase: 0.5 } } },
             { at: 23, lane: 1, type: 'PILLAR' }, { at: 35, lane: 0, type: 'ROVER' },
             { at: 47, lane: 0, type: 'LASER_ROT', params: { rot: { phase: 0.25 } } }],
     ceil:  [{ at: 11, lane: 0, type: 'ROVER' }, { at: 35, lane: -1, type: 'LASER_LOW' },
-            { at: 47, lane: 1, type: 'GAP' }], events: [] },
+            { at: 47, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'd3_duo_d', zone: 'neon', lengthM: 54, difficulty: 3, minSpeed: 0, dense: 1, moving: 1,
     floor: [{ at: 11, lane: 0, type: 'LASER_V', params: { blink: { onAtArrival: true } } },
-            { at: 23, lane: 1, type: 'ROVER' }, { at: 35, lane: -1, type: 'GAP' },
+            { at: 23, lane: 1, type: 'ROVER' }, { at: 35, lane: -1, type: 'ROVER' },
             { at: 47, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.25 } } }],
     ceil:  [{ at: 23, lane: -1, type: 'ROVER' }, { at: 35, lane: 0, type: 'LASER_LOW' }], events: [] },
   /* 最も密（S2 後半・エンドレス後半）: 5ウォール × 両者同時 = 10回 */
   { id: 'd3_duo_e', zone: 'neon', lengthM: 62, difficulty: 3, minSpeed: 0, dense: 2,
     floor: [{ at: 11, lane: 0, type: 'ROVER' }, { at: 22, lane: 1, type: 'PILLAR' },
-            { at: 33, lane: -1, type: 'GAP' }, { at: 44, lane: 0, type: 'LASER_V' },
+            { at: 33, lane: -1, type: 'ROVER' }, { at: 44, lane: 0, type: 'LASER_V' },
             { at: 55, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 11, lane: -1, type: 'LASER_LOW' }, { at: 33, lane: 1, type: 'ROVER' },
-            { at: 55, lane: -1, type: 'GAP' }], events: [] },
+            { at: 55, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'd3_duo_f', zone: 'neon', lengthM: 62, difficulty: 3, minSpeed: 0, dense: 2, moving: 1,
-    floor: [{ at: 11, lane: 1, type: 'GAP' },
+    floor: [{ at: 11, lane: 1, type: 'ROVER' },
             { at: 22, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.25 } } },
             { at: 33, lane: 0, type: 'ROVER' },
             { at: 44, lane: -1, type: 'LASER_ROT', params: { rot: { phase: 0.25 } } },
             { at: 55, lane: 0, type: 'LASER_LOW' }],
     ceil:  [{ at: 11, lane: -1, type: 'ROVER' }, { at: 33, lane: 1, type: 'LASER_LOW' },
-            { at: 44, lane: 1, type: 'ROVER' }, { at: 55, lane: -1, type: 'GAP' }], events: [] },
+            { at: 44, lane: 1, type: 'ROVER' }, { at: 55, lane: -1, type: 'ROVER' }], events: [] },
   /* 中くらいの密度（S2 前半・S1 後半） */
   { id: 'd2_duo_a', zone: 'neon', lengthM: 50, difficulty: 2, minSpeed: 0, dense: 1,
     floor: [{ at: 12, lane: 0, type: 'ROVER' }, { at: 27, lane: -1, type: 'LASER_V' },
-            { at: 42, lane: 1, type: 'GAP' }],
+            { at: 42, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 12, lane: -1, type: 'LASER_LOW' }, { at: 42, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'd2_duo_b', zone: 'neon', lengthM: 50, difficulty: 2, minSpeed: 0, dense: 1,
-    floor: [{ at: 12, lane: 1, type: 'GAP' }, { at: 27, lane: 0, type: 'PILLAR' },
+    floor: [{ at: 12, lane: 1, type: 'ROVER' }, { at: 27, lane: 0, type: 'PILLAR' },
             { at: 42, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 12, lane: 0, type: 'ROVER' }, { at: 42, lane: 1, type: 'LASER_LOW' }], events: [] },
   { id: 'd2_duo_c', zone: 'neon', lengthM: 50, difficulty: 2, minSpeed: 0, dense: 1, moving: 1,
     floor: [{ at: 12, lane: 1, type: 'ROVER' },
             { at: 27, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
             { at: 42, lane: 0, type: 'LASER_LOW' }],
-    ceil:  [{ at: 12, lane: 0, type: 'GAP' }, { at: 42, lane: -1, type: 'ROVER' }], events: [] },
+    ceil:  [{ at: 12, lane: 0, type: 'ROVER' }, { at: 42, lane: -1, type: 'ROVER' }], events: [] },
 
   { id: 'c3_scan_dual', zone: 'neon', lengthM: 66, difficulty: 3, minSpeed: 0, moving: 1,
     floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.25 } } },
@@ -254,7 +254,7 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 30, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'r2_pend_b', zone: 'ruins', lengthM: 58, difficulty: 2, minSpeed: 0, s3: 1, moving: 1, pend: 1,
     floor: [{ at: 16, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0.5 } } },
-            { at: 44, lane: -1, type: 'GAP' }],
+            { at: 44, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 30, lane: 1, type: 'LASER_LOW' }], events: [] },
   { id: 'r2_fire', zone: 'ruins', lengthM: 54, difficulty: 2, minSpeed: 0, s3: 1, moving: 1,
     /* 噴き出す炎（点滅）: 到達時に消えている方はそのまま走り抜ける */
@@ -267,41 +267,41 @@ const CHUNK_DEFS = [
   { id: 'r3_duo_a', zone: 'ruins', lengthM: 52, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1,
     floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 21, lane: 1, type: 'LASER_V' },
             { at: 31, lane: -1, type: 'BRIDGE' }, { at: 45, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: -1, type: 'GAP' },
+    ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: -1, type: 'ROVER' },
             { at: 45, lane: 1, type: 'LASER_LOW' }], events: [] },
   { id: 'r3_duo_b', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, moving: 1, pend: 1,
-    floor: [{ at: 10, lane: 1, type: 'GAP' },
+    floor: [{ at: 10, lane: 1, type: 'ROVER' },
             { at: 21, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.25 } } },
             { at: 31, lane: 0, type: 'LASER_LOW' }, { at: 45, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 31, lane: 1, type: 'ROVER' },
-            { at: 45, lane: 0, type: 'GAP' }], events: [] },
+            { at: 45, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'r3_duo_c', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, moving: 1,
     floor: [{ at: 10, lane: -1, type: 'LASER_ROT', params: { rot: { phase: 0.5 } } },
             { at: 21, lane: 1, type: 'PILLAR' }, { at: 32, lane: 0, type: 'ROVER' },
             { at: 46, lane: 0, type: 'LASER_ROT', params: { rot: { phase: 0.25 } } }],
     ceil:  [{ at: 10, lane: 0, type: 'ROVER' }, { at: 21, lane: -1, type: 'LASER_LOW' },
-            { at: 32, lane: 1, type: 'GAP' }], events: [] },
+            { at: 32, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'r3_duo_d', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1, pend: 1, moving: 1,
     floor: [{ at: 10, lane: 0, type: 'BRIDGE' }, { at: 26, lane: 1, type: 'PILLAR' },
             { at: 37, lane: -1, type: 'ROVER' },
             { at: 48, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.5 } } }],
     ceil:  [{ at: 26, lane: -1, type: 'ROVER' }, { at: 37, lane: 0, type: 'LASER_LOW' },
-            { at: 48, lane: 1, type: 'GAP' }], events: [] },
+            { at: 48, lane: 1, type: 'ROVER' }], events: [] },
   { id: 'r3_duo_e', zone: 'ruins', lengthM: 60, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
     floor: [{ at: 10, lane: 1, type: 'ROVER' }, { at: 21, lane: 0, type: 'PILLAR' },
-            { at: 32, lane: -1, type: 'GAP' }, { at: 43, lane: 1, type: 'LASER_V' },
+            { at: 32, lane: -1, type: 'ROVER' }, { at: 43, lane: 1, type: 'LASER_V' },
             { at: 54, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 10, lane: -1, type: 'LASER_LOW' }, { at: 32, lane: 1, type: 'ROVER' },
-            { at: 54, lane: -1, type: 'GAP' }], events: [] },
+            { at: 54, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'r3_wallhole', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, wallhole: 1, dense: 1,
     floor: [{ at: 14, lane: 0, type: 'WALLHOLE' }, { at: 30, lane: -1, type: 'ROVER' },
             { at: 44, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'r3_bridge_duo', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, bridge: 1,
     /* 崩れる橋を跳び越した直後に、逆側でレーン移動を要求する（§4.7 の 0.92秒を使い切る） */
     floor: [{ at: 12, lane: 1, type: 'BRIDGE' }, { at: 34, lane: 0, type: 'LASER_V' },
             { at: 48, lane: -1, type: 'ROVER' }],
-    ceil:  [{ at: 12, lane: -1, type: 'GAP' }, { at: 34, lane: 1, type: 'ROVER' },
+    ceil:  [{ at: 12, lane: -1, type: 'ROVER' }, { at: 34, lane: 1, type: 'ROVER' },
             { at: 48, lane: 0, type: 'LASER_LOW' }], events: [] },
   /* --- 列柱の縫い（両者にレーン移動を要求するウォールを連ねる） ------------
      PILLAR / LASER_V / LASER_SCAN は both 型＝1本で床と天井の両方に要求が出る。
@@ -335,22 +335,22 @@ const CHUNK_DEFS = [
      ジャンプ連続の下限（着地+0.15秒＝0.70秒）を守った 8基準m 間隔。
      列柱の縫い（レーン移動）と釣り合わせて §4.3 の比率を作る。 */
   { id: 'r3_leap_a', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 2,
-    floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 18, lane: -1, type: 'GAP' },
+    floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 18, lane: -1, type: 'ROVER' },
             { at: 26, lane: 1, type: 'LASER_LOW' }, { at: 34, lane: 0, type: 'ROVER' },
-            { at: 42, lane: -1, type: 'GAP' }],
+            { at: 42, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 18, lane: 0, type: 'LASER_LOW' },
-            { at: 26, lane: -1, type: 'GAP' }, { at: 34, lane: 1, type: 'ROVER' },
+            { at: 26, lane: -1, type: 'ROVER' }, { at: 34, lane: 1, type: 'ROVER' },
             { at: 42, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 'r3_leap_b', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s3: 1, dense: 2, bridge: 1,
     floor: [{ at: 10, lane: 1, type: 'LASER_LOW' }, { at: 18, lane: 0, type: 'ROVER' },
             { at: 28, lane: -1, type: 'BRIDGE' }, { at: 44, lane: 1, type: 'ROVER' }],
-    ceil:  [{ at: 10, lane: -1, type: 'GAP' }, { at: 18, lane: 1, type: 'ROVER' },
-            { at: 28, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 18, lane: 1, type: 'ROVER' },
+            { at: 28, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'r3_pend_pair', zone: 'ruins', lengthM: 62, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, moving: 1, pend: 1,
     floor: [{ at: 12, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0 } } },
             { at: 34, lane: 0, type: 'ROVER' },
             { at: 52, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0 } } }],
-    ceil:  [{ at: 23, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 23, lane: 1, type: 'ROVER' }, { at: 34, lane: -1, type: 'ROVER' }], events: [] },
 
   /* ==========================================================================
      S4「古代遺跡・内部」（契約§4.4 / §4.5 / P3b）
@@ -361,28 +361,28 @@ const CHUNK_DEFS = [
                 params.sync = { cl:天井パッドのレーン, safe:床の迂回レーン,
                                 csafe:天井の迂回レーン, gapT:橋までの秒 }
                 **パッドのレーン＝迂回レーン** にそろえる（踏んだ者はそのまま渡れる）。
-       DROPCEIL 落ちる天井。1つの事象が **床＝レーン移動／天井＝ジャンプ** に割れる。
+       （落ちる天井 DROPCEIL は契約 v2 で失効。譜面の位置は縦レーザー LASER_V に置き換えた）
      密度は S3 よりさらに高い（6→10回/100m）。both 型（柱・火柱・落ちる天井・同時スイッチ）を
      厚く敷いて、間隔を詰めずに密度を稼ぐ。
      ========================================================================== */
   /* --- 落ちる天井を1つずつ覚える（rank3） -------------------------------- */
-  { id: 'r4_drop_a', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, dense: 1,
-    floor: [{ at: 12, lane: 0, type: 'DROPCEIL' }, { at: 30, lane: -1, type: 'PILLAR' },
+  { id: 'r4_drop_a', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, dense: 1,
+    floor: [{ at: 12, lane: 0, type: 'LASER_V' }, { at: 30, lane: -1, type: 'PILLAR' },
             { at: 46, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 46, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 'r4_drop_b', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, dense: 1,
-    floor: [{ at: 14, lane: 1, type: 'GAP' }, { at: 30, lane: 0, type: 'DROPCEIL' },
+  { id: 'r4_drop_b', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, dense: 1,
+    floor: [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'LASER_V' },
             { at: 48, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 14, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 'r4_drop_c', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, bridge: 1, dense: 1,
-    floor: [{ at: 12, lane: -1, type: 'ROVER' }, { at: 26, lane: 1, type: 'DROPCEIL' },
+  { id: 'r4_drop_c', zone: 'ruins', lengthM: 56, difficulty: 3, minSpeed: 0, s4: 1, bridge: 1, dense: 1,
+    floor: [{ at: 12, lane: -1, type: 'ROVER' }, { at: 26, lane: 1, type: 'LASER_V' },
             { at: 44, lane: 0, type: 'BRIDGE' }],
     ceil:  [{ at: 12, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: 1, type: 'ROVER' }], events: [] },
   /* 落ちる天井の連鎖（rank4）: 床は縫い、天井は跳び継ぎ＝1本で2体に別の譜面を配る */
-  { id: 'r4_drop_chain', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, dense: 2,
-    floor: [{ at: 9, lane: 0, type: 'DROPCEIL' }, { at: 17, lane: 1, type: 'DROPCEIL' },
-            { at: 27, lane: -1, type: 'PILLAR' }, { at: 35, lane: 0, type: 'DROPCEIL' },
-            { at: 45, lane: 1, type: 'LASER_V' }, { at: 53, lane: -1, type: 'DROPCEIL' }],
+  { id: 'r4_drop_chain', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
+    floor: [{ at: 9, lane: 0, type: 'LASER_V' }, { at: 17, lane: 1, type: 'LASER_V' },
+            { at: 27, lane: -1, type: 'PILLAR' }, { at: 35, lane: 0, type: 'LASER_V' },
+            { at: 45, lane: 1, type: 'LASER_V' }, { at: 53, lane: -1, type: 'LASER_V' }],
     ceil: [], events: [] },
 
   /* --- 同時スイッチ（rank3〜4） ------------------------------------------ */
@@ -397,9 +397,9 @@ const CHUNK_DEFS = [
             { at: 30, lane: 0, type: 'ROVER' }, { at: 40, lane: 1, type: 'PILLAR' },
             { at: 50, lane: -1, type: 'LASER_LOW' }],
     ceil:  [{ at: 30, lane: -1, type: 'ROVER' }, { at: 50, lane: 1, type: 'ROVER' }], events: [] },
-  { id: 'r4_sync_drop', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, drop: 1, dense: 2,
+  { id: 'r4_sync_drop', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
     floor: [{ at: 8, lane: 1, type: 'SYNCSW', params: { sync: { cl: -1, safe: 1, csafe: -1 } } },
-            { at: 30, lane: 0, type: 'DROPCEIL' }, { at: 40, lane: -1, type: 'DROPCEIL' },
+            { at: 30, lane: 0, type: 'LASER_V' }, { at: 40, lane: -1, type: 'LASER_V' },
             { at: 52, lane: 1, type: 'PILLAR' }],
     ceil: [], events: [] },
   { id: 'r4_sync_weave', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
@@ -410,77 +410,70 @@ const CHUNK_DEFS = [
     ceil: [], events: [] },
   { id: 'r4_sync_leap', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
     floor: [{ at: 8, lane: 1, type: 'SYNCSW', params: { sync: { cl: -1, safe: 1, csafe: -1 } } },
-            { at: 30, lane: 0, type: 'ROVER' }, { at: 38, lane: -1, type: 'GAP' },
+            { at: 30, lane: 0, type: 'ROVER' }, { at: 38, lane: -1, type: 'ROVER' },
             { at: 48, lane: 1, type: 'PILLAR' }, { at: 55, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 30, lane: -1, type: 'ROVER' }, { at: 38, lane: 1, type: 'LASER_LOW' }], events: [] },
 
   /* --- 内部の回廊（列柱の縫い・跳び継ぎ・壁の穴） ------------------------ */
-  { id: 'r4_weave', zone: 'ruins', lengthM: 60, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, dense: 2,
+  { id: 'r4_weave', zone: 'ruins', lengthM: 60, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
     floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 15, lane: -1, type: 'LASER_V' },
-            { at: 22, lane: 1, type: 'PILLAR' }, { at: 31, lane: 0, type: 'DROPCEIL' },
+            { at: 22, lane: 1, type: 'PILLAR' }, { at: 31, lane: 0, type: 'LASER_V' },
             { at: 41, lane: -1, type: 'PILLAR' }, { at: 48, lane: 1, type: 'LASER_V' }],
     ceil: [], events: [] },
   { id: 'r4_leap', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, dense: 2,
-    floor: [{ at: 9, lane: 0, type: 'ROVER' }, { at: 17, lane: -1, type: 'GAP' },
+    floor: [{ at: 9, lane: 0, type: 'ROVER' }, { at: 17, lane: -1, type: 'ROVER' },
             { at: 25, lane: 1, type: 'LASER_LOW' }, { at: 33, lane: 0, type: 'ROVER' },
-            { at: 41, lane: -1, type: 'GAP' }, { at: 49, lane: 1, type: 'ROVER' }],
+            { at: 41, lane: -1, type: 'ROVER' }, { at: 49, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 9, lane: 1, type: 'ROVER' }, { at: 17, lane: 0, type: 'LASER_LOW' },
-            { at: 25, lane: -1, type: 'GAP' }, { at: 33, lane: 1, type: 'ROVER' },
-            { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 49, lane: -1, type: 'GAP' }], events: [] },
-  { id: 'r4_wallhole', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, wallhole: 1, drop: 1, dense: 1,
-    floor: [{ at: 12, lane: 1, type: 'WALLHOLE' }, { at: 30, lane: 0, type: 'DROPCEIL' },
+            { at: 25, lane: -1, type: 'ROVER' }, { at: 33, lane: 1, type: 'ROVER' },
+            { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 49, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 'r4_wallhole', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, wallhole: 1, dense: 1,
+    floor: [{ at: 12, lane: 1, type: 'WALLHOLE' }, { at: 30, lane: 0, type: 'LASER_V' },
             { at: 46, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 12, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'r4_duo', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
-    floor: [{ at: 9, lane: 1, type: 'GAP' }, { at: 19, lane: 0, type: 'PILLAR' },
+    floor: [{ at: 9, lane: 1, type: 'ROVER' }, { at: 19, lane: 0, type: 'PILLAR' },
             { at: 27, lane: -1, type: 'ROVER' }, { at: 37, lane: 1, type: 'LASER_V' },
             { at: 45, lane: 0, type: 'ROVER' }, { at: 55, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 9, lane: -1, type: 'ROVER' }, { at: 27, lane: 1, type: 'ROVER' },
-            { at: 45, lane: -1, type: 'GAP' }], events: [] },
+            { at: 45, lane: -1, type: 'ROVER' }], events: [] },
   /* 内部の最奥（rank4・最も密）: 列柱の縫いに落ちる天井を挟む／両者とも跳び継ぐ */
-  { id: 'r4_gauntlet', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, dense: 2,
+  { id: 'r4_gauntlet', zone: 'ruins', lengthM: 64, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
     floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 15, lane: 1, type: 'LASER_V' },
-            { at: 22, lane: -1, type: 'PILLAR' }, { at: 32, lane: 0, type: 'DROPCEIL' },
+            { at: 22, lane: -1, type: 'PILLAR' }, { at: 32, lane: 0, type: 'LASER_V' },
             { at: 42, lane: 1, type: 'PILLAR' }, { at: 49, lane: -1, type: 'LASER_V' },
             { at: 56, lane: 0, type: 'PILLAR' }],
     ceil: [], events: [] },
   { id: 'r4_leap2', zone: 'ruins', lengthM: 56, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
     /* 両者が 0.72秒おきに跳び継ぐ（§4.7 ジャンプ連続 0.70秒の下限ぎりぎり） */
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: -1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: -1, type: 'ROVER' },
             { at: 22.4, lane: 1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'ROVER' },
-            { at: 36.8, lane: -1, type: 'GAP' }, { at: 44, lane: 1, type: 'ROVER' }],
+            { at: 36.8, lane: -1, type: 'ROVER' }, { at: 44, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
-            { at: 22.4, lane: -1, type: 'GAP' }, { at: 29.6, lane: 1, type: 'ROVER' },
-            { at: 36.8, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'GAP' }], events: [] },
+            { at: 22.4, lane: -1, type: 'ROVER' }, { at: 29.6, lane: 1, type: 'ROVER' },
+            { at: 36.8, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'ROVER' }], events: [] },
   /* 短い密集（つなぎ）: 大演出の手前に残る半端な距離にも入る長さにしておく。
      これが無いと終盤に 80m 級の空白ができて、契約§4.7 の密度が落ちる。 */
   { id: 'r4_fill_a', zone: 'ruins', lengthM: 26, difficulty: 3, minSpeed: 0, s4: 1, dense: 2, fill: 1,
     floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 12, lane: 1, type: 'LASER_V' },
             { at: 19, lane: -1, type: 'PILLAR' }],
     ceil: [], events: [] },
-  { id: 'r4_fill_b', zone: 'ruins', lengthM: 30, difficulty: 3, minSpeed: 0, s4: 1, drop: 1, dense: 2, fill: 1,
-    floor: [{ at: 5, lane: 0, type: 'DROPCEIL' }, { at: 15, lane: 1, type: 'PILLAR' },
+  { id: 'r4_fill_b', zone: 'ruins', lengthM: 30, difficulty: 3, minSpeed: 0, s4: 1, dense: 2, fill: 1,
+    floor: [{ at: 5, lane: 0, type: 'LASER_V' }, { at: 15, lane: 1, type: 'PILLAR' },
             { at: 23, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 23, lane: 1, type: 'ROVER' }], events: [] },
-  { id: 'r4_drop_duo', zone: 'ruins', lengthM: 66, difficulty: 4, minSpeed: 0, s4: 1, drop: 1, sync: 1, dense: 2,
-    floor: [{ at: 8, lane: 0, type: 'DROPCEIL' },
+  { id: 'r4_drop_duo', zone: 'ruins', lengthM: 66, difficulty: 4, minSpeed: 0, s4: 1, sync: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'LASER_V' },
             { at: 20, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
-            { at: 44, lane: 1, type: 'DROPCEIL' }, { at: 54, lane: 0, type: 'ROVER' }],
+            { at: 44, lane: 1, type: 'LASER_V' }, { at: 54, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 54, lane: -1, type: 'ROVER' }], events: [] },
 
   /* ==========================================================================
      S5「深海」（契約§4.4 / §4.5 / P4a）
      ------------------------------------------------------------------------
      新ギミック:
-       CURRENT  海流ベルト。区間に入ると **1.0秒ごとに1レーンぶん** 横へ流される。
-                params.cur = { dir:床の向き, cdir:天井の向き（既定 -dir）, n:押し出し回数 }
-                押し出しの直前にはウォールを置けない（Fair が §4.7 の余白で弾く）ので、
-                譜面は「流された先で次の壁を迎える」ように組む。
-       LIFTPAD  浮上足場。到達時に浮いていれば ローバー相当（跳ぶ）、沈んでいれば通れる。
-                params.lift = { upAtArrival:true/false }（点滅レーザーと同じ流儀）
-       DOOR     色の扉。lane が **同色＝通れる扉**、残り2レーンは異色＝レーン移動。
-                床に置けば LUMEN、天井に置けば UMBRA の判断になる。
-                床と天井で別のレーンに置くと「左右で別々の判断」になる（契約§4.5）。
+       （海流ベルト・浮上足場・色の扉は契約 v2 で失効。浮上足場は ローレーザー、
+        色の扉は「空いた1レーンへ」のワイド梁に置き換えた。海流の区間は外した）
      密度は 8→12回/100m（契約§4.7）。both 型（柱・放電柱・触手）を厚く敷いて、
      間隔を詰めずに密度を稼ぐ。§4.7 の両者同時要求の余白は 0.45秒。
      ========================================================================== */
@@ -510,132 +503,127 @@ const CHUNK_DEFS = [
     ceil: [], events: [] },
   /* --- 跳び継ぎ（両者が 0.72秒おきに跳ぶ。§4.7 ジャンプ連続 0.70秒の下限ぎりぎり） -- */
   { id: 's5_leap', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, leap: 1,
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: -1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: -1, type: 'ROVER' },
             { at: 22.4, lane: 1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'ROVER' },
-            { at: 36.8, lane: -1, type: 'GAP' }, { at: 44, lane: 1, type: 'ROVER' },
+            { at: 36.8, lane: -1, type: 'ROVER' }, { at: 44, lane: 1, type: 'ROVER' },
             { at: 51.2, lane: 0, type: 'LASER_LOW' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
-            { at: 22.4, lane: -1, type: 'GAP' }, { at: 29.6, lane: 1, type: 'ROVER' },
-            { at: 36.8, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'GAP' },
+            { at: 22.4, lane: -1, type: 'ROVER' }, { at: 29.6, lane: 1, type: 'ROVER' },
+            { at: 36.8, lane: 0, type: 'LASER_LOW' }, { at: 44, lane: -1, type: 'ROVER' },
             { at: 51.2, lane: 1, type: 'ROVER' }], events: [] },
-  { id: 's5_leap_b', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, dense: 2, leap: 1, lift: 1,
+  { id: 's5_leap_b', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, dense: 2, leap: 1,
     /* 浮上足場を跳び継ぎに混ぜる（沈んでいる足場は素通り＝読みの要素） */
     floor: [{ at: 8, lane: 0, type: 'ROVER' },
-            { at: 15.2, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 22.4, lane: 1, type: 'GAP' },
-            { at: 29.6, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 15.2, lane: -1, type: 'LASER_LOW' },
+            { at: 22.4, lane: 1, type: 'ROVER' },
+            { at: 29.6, lane: 0, type: 'LASER_LOW' },
             { at: 36.8, lane: -1, type: 'ROVER' }, { at: 44, lane: 1, type: 'LASER_LOW' },
-            { at: 51.2, lane: 0, type: 'GAP' }],
+            { at: 51.2, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 8, lane: 1, type: 'LASER_LOW' }, { at: 15.2, lane: 0, type: 'ROVER' },
-            { at: 22.4, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 29.6, lane: 1, type: 'GAP' }, { at: 36.8, lane: 0, type: 'LASER_LOW' },
-            { at: 44, lane: -1, type: 'ROVER' }, { at: 51.2, lane: 1, type: 'GAP' }], events: [] },
+            { at: 22.4, lane: -1, type: 'LASER_LOW' },
+            { at: 29.6, lane: 1, type: 'ROVER' }, { at: 36.8, lane: 0, type: 'LASER_LOW' },
+            { at: 44, lane: -1, type: 'ROVER' }, { at: 51.2, lane: 1, type: 'ROVER' }], events: [] },
   { id: 's5_leap_c', zone: 'sea', lengthM: 56, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, leap: 1,
-    floor: [{ at: 8, lane: 0, type: 'GAP' }, { at: 15.2, lane: 1, type: 'ROVER' },
-            { at: 22.4, lane: -1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.2, lane: 1, type: 'ROVER' },
+            { at: 22.4, lane: -1, type: 'LASER_LOW' }, { at: 29.6, lane: 0, type: 'ROVER' },
             { at: 36.8, lane: 1, type: 'ROVER' }, { at: 44, lane: -1, type: 'LASER_LOW' }],
     ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
             { at: 22.4, lane: 1, type: 'ROVER' }, { at: 29.6, lane: -1, type: 'LASER_LOW' },
-            { at: 36.8, lane: 0, type: 'GAP' }, { at: 44, lane: 1, type: 'ROVER' }], events: [] },
+            { at: 36.8, lane: 0, type: 'ROVER' }, { at: 44, lane: 1, type: 'ROVER' }], events: [] },
 
   /* --- 浮上足場（rank3〜4） ---------------------------------------------
      到達時に浮いていれば ローバー相当（跳ぶ）、沈んでいれば通れる。
      ジャンプを要求するウォールの後は 9.2 基準m（0.92秒）空けてから横移動を要求する。 */
-  { id: 's5_lift_a', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, lift: 1, dense: 2,
-    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+  { id: 's5_lift_a', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'LASER_LOW' },
             { at: 18, lane: 1, type: 'PILLAR' }, { at: 24, lane: -1, type: 'LASER_V' },
             { at: 30, lane: 0, type: 'PILLAR' },
-            { at: 36, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 36, lane: -1, type: 'LASER_LOW' },
             { at: 46, lane: 1, type: 'PILLAR' }, { at: 52, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 's5_lift_b', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, lift: 1, dense: 2,
+  { id: 's5_lift_b', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2,
     /* 到達時に沈んでいる足場＝そのまま走り抜ける（読み切れば動かなくてよい） */
-    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: false } } },
-            { at: 14, lane: 1, type: 'PILLAR' }, { at: 20, lane: -1, type: 'LASER_V' },
+    floor: [{ at: 14, lane: 1, type: 'PILLAR' }, { at: 20, lane: -1, type: 'LASER_V' },
             { at: 26, lane: 0, type: 'PILLAR' },
-            { at: 36, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 36, lane: 1, type: 'LASER_LOW' },
             { at: 46, lane: -1, type: 'PILLAR' }, { at: 52, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 36, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 's5_lift_duo', zone: 'sea', lengthM: 62, difficulty: 4, minSpeed: 0, s5: 1, lift: 1, dense: 2,
+  { id: 's5_lift_duo', zone: 'sea', lengthM: 62, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
     /* 床と天井で別レーンの足場＝2体に別の譜面 */
-    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+    floor: [{ at: 8, lane: 0, type: 'LASER_LOW' },
             { at: 18, lane: 1, type: 'PILLAR' }, { at: 24, lane: -1, type: 'LASER_V' },
-            { at: 34, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 34, lane: 1, type: 'LASER_LOW' },
             { at: 44, lane: 0, type: 'PILLAR' }, { at: 50, lane: 1, type: 'LASER_V' },
             { at: 56, lane: -1, type: 'PILLAR' }],
-    ceil:  [{ at: 8, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 34, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } }], events: [] },
+    ceil:  [{ at: 8, lane: 1, type: 'LASER_LOW' },
+            { at: 34, lane: -1, type: 'LASER_LOW' }], events: [] },
 
   /* --- 色の扉（rank3〜4） -----------------------------------------------
      lane に書いたレーンだけが同色＝通れる。床に置けば LUMEN、天井に置けば UMBRA の判断。 */
-  { id: 's5_door_f', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, door: 1, dense: 2,
-    floor: [{ at: 8, lane: 1, type: 'DOOR' }, { at: 14, lane: 0, type: 'PILLAR' },
+  { id: 's5_door_f', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 14, lane: 0, type: 'PILLAR' },
             { at: 20, lane: -1, type: 'LASER_V' }, { at: 26, lane: 1, type: 'PILLAR' },
             { at: 36, lane: 0, type: 'ROVER' }, { at: 46, lane: 1, type: 'LASER_V' },
             { at: 52, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 36, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 's5_door_c', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, door: 1, dense: 2,
+  { id: 's5_door_c', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 2,
     floor: [{ at: 14, lane: 0, type: 'PILLAR' }, { at: 20, lane: 1, type: 'LASER_V' },
             { at: 26, lane: -1, type: 'PILLAR' }, { at: 36, lane: 1, type: 'ROVER' },
             { at: 46, lane: 0, type: 'LASER_V' }, { at: 52, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 8, lane: -1, type: 'DOOR' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 's5_door_duo', zone: 'sea', lengthM: 62, difficulty: 4, minSpeed: 0, s5: 1, door: 1, dense: 2,
+    ceil:  [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's5_door_duo', zone: 'sea', lengthM: 62, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
     /* **床と天井で別のレーンの扉**＝左右で別々の判断（契約§4.5 の主題） */
-    floor: [{ at: 8, lane: -1, type: 'DOOR' }, { at: 14, lane: 0, type: 'PILLAR' },
-            { at: 20, lane: 1, type: 'LASER_V' }, { at: 30, lane: 1, type: 'DOOR' },
+    floor: [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 14, lane: 0, type: 'PILLAR' },
+            { at: 20, lane: 1, type: 'LASER_V' }, { at: 30, lane: -1, type: 'WIDEBAR' },
             { at: 36, lane: -1, type: 'PILLAR' }, { at: 42, lane: 0, type: 'LASER_V' },
             { at: 48, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 8, lane: 1, type: 'DOOR' }, { at: 30, lane: -1, type: 'DOOR' }], events: [] },
-  { id: 's5_door_lift', zone: 'sea', lengthM: 64, difficulty: 4, minSpeed: 0, s5: 1, door: 1, lift: 1, dense: 2,
-    floor: [{ at: 8, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 18, lane: 1, type: 'DOOR' }, { at: 24, lane: -1, type: 'PILLAR' },
+    ceil:  [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 30, lane: 0, type: 'WIDEBAR' }], events: [] },
+  { id: 's5_door_lift', zone: 'sea', lengthM: 64, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 8, lane: 0, type: 'LASER_LOW' },
+            { at: 18, lane: -1, type: 'WIDEBAR' }, { at: 24, lane: -1, type: 'PILLAR' },
             { at: 30, lane: 0, type: 'LASER_V' },
-            { at: 40, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 50, lane: -1, type: 'DOOR' }, { at: 56, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 18, lane: -1, type: 'DOOR' },
-            { at: 40, lane: 0, type: 'ROVER' }, { at: 50, lane: 1, type: 'DOOR' }], events: [] },
+            { at: 40, lane: 1, type: 'LASER_LOW' },
+            { at: 50, lane: 0, type: 'WIDEBAR' }, { at: 56, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 18, lane: 0, type: 'WIDEBAR' },
+            { at: 40, lane: 0, type: 'ROVER' }, { at: 50, lane: -1, type: 'WIDEBAR' }], events: [] },
 
   /* --- 海流ベルト（rank3〜4） -------------------------------------------
      ベルトは 1.0秒ごとに1レーンぶん流す。押し出しの直前 0.45秒にはウォールを置けない
      （Fair が弾く）ので、**押し出しと押し出しのちょうど中間** に壁を置く＝
      「流されてから 0.5秒で避ける」が譜面になる。 */
-  { id: 's5_cur_a', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, cur: 1, dense: 1,
+  { id: 's5_cur_a', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 1,
     /* 床は右へ、天井は左へ流れる＝2体が逆向きに逆らう */
-    floor: [{ at: 8, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
-            { at: 18, lane: 0, type: 'PILLAR' }, { at: 28, lane: 1, type: 'PILLAR' },
+    floor: [{ at: 18, lane: 0, type: 'PILLAR' }, { at: 28, lane: 1, type: 'PILLAR' },
             { at: 38, lane: -1, type: 'LASER_V' }, { at: 44, lane: 0, type: 'PILLAR' },
             { at: 50, lane: 1, type: 'LASER_V' }],
     ceil: [], events: [] },
-  { id: 's5_cur_b', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, cur: 1, dense: 1,
+  { id: 's5_cur_b', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, dense: 1,
     /* 床も天井も同じ向き（2人とも同じ側へ寄せられる） */
-    floor: [{ at: 8, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: -1, n: 3 } } },
-            { at: 18, lane: 1, type: 'LASER_V' }, { at: 28, lane: 0, type: 'PILLAR' },
+    floor: [{ at: 18, lane: 1, type: 'LASER_V' }, { at: 28, lane: 0, type: 'PILLAR' },
             { at: 38, lane: -1, type: 'LASER_V' }, { at: 44, lane: 1, type: 'PILLAR' },
             { at: 50, lane: 0, type: 'LASER_V' }],
     ceil: [], events: [] },
-  { id: 's5_cur_door', zone: 'sea', lengthM: 66, difficulty: 4, minSpeed: 0, s5: 1, cur: 1, door: 1, dense: 2,
+  { id: 's5_cur_door', zone: 'sea', lengthM: 66, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
     /* 流された先に色の扉＝「流れに逆らって自分の色へ入る」 */
-    floor: [{ at: 6, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
-            { at: 16, lane: 0, type: 'PILLAR' }, { at: 26, lane: -1, type: 'PILLAR' },
-            { at: 36, lane: 1, type: 'LASER_V' }, { at: 46, lane: -1, type: 'DOOR' },
+    floor: [{ at: 16, lane: 0, type: 'PILLAR' }, { at: 26, lane: -1, type: 'PILLAR' },
+            { at: 36, lane: 1, type: 'LASER_V' }, { at: 46, lane: 0, type: 'WIDEBAR' },
             { at: 52, lane: 0, type: 'PILLAR' }, { at: 58, lane: 1, type: 'LASER_V' }],
-    ceil:  [{ at: 46, lane: 1, type: 'DOOR' }], events: [] },
-  { id: 's5_cur_lift', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, cur: 1, lift: 1, dense: 2,
-    floor: [{ at: 6, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: 1, n: 3 } } },
-            { at: 16, lane: 0, type: 'PILLAR' }, { at: 26, lane: 1, type: 'PILLAR' },
-            { at: 36, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+    ceil:  [{ at: 46, lane: -1, type: 'WIDEBAR' }], events: [] },
+  { id: 's5_cur_lift', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 16, lane: 0, type: 'PILLAR' }, { at: 26, lane: 1, type: 'PILLAR' },
+            { at: 36, lane: -1, type: 'LASER_LOW' },
             { at: 46, lane: 0, type: 'PILLAR' }, { at: 52, lane: 1, type: 'LASER_V' },
             { at: 58, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 36, lane: 1, type: 'ROVER' }], events: [] },
 
   /* --- 深海の最奥（rank4・最も密）と、壁の穴・つなぎ -------------------- */
-  { id: 's5_gauntlet', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, door: 1, lift: 1, dense: 2,
+  { id: 's5_gauntlet', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
     floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 14, lane: 1, type: 'LASER_V' },
-            { at: 20, lane: -1, type: 'PILLAR' }, { at: 26, lane: 0, type: 'DOOR' },
+            { at: 20, lane: -1, type: 'PILLAR' }, { at: 26, lane: -1, type: 'ADPANEL' }, { at: 26, lane: 1, type: 'ADPANEL' },
             { at: 32, lane: 1, type: 'LASER_V' }, { at: 38, lane: -1, type: 'PILLAR' },
-            { at: 48, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+            { at: 48, lane: 0, type: 'LASER_LOW' },
             { at: 58, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 26, lane: -1, type: 'DOOR' }, { at: 48, lane: -1, type: 'ROVER' }], events: [] },
+    ceil:  [{ at: 26, lane: 0, type: 'WIDEBAR' }, { at: 48, lane: -1, type: 'ROVER' }], events: [] },
   /* 最奥の縫い（rank4・0.5秒おき＝§4.7 反応窓 0.45秒の下限ぎりぎり）。
      ランク4は進行率50%から出るので、ここが「後半ほど濃い」を作る主役になる。 */
   { id: 's5_weave_x', zone: 'sea', lengthM: 58, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
@@ -644,12 +632,12 @@ const CHUNK_DEFS = [
             { at: 28, lane: 1, type: 'PILLAR' }, { at: 33, lane: -1, type: 'LASER_V' },
             { at: 38, lane: 0, type: 'PILLAR' }, { at: 43, lane: 1, type: 'LASER_V' }],
     ceil: [], events: [] },
-  { id: 's5_door_x', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, door: 1, dense: 2,
-    floor: [{ at: 8, lane: 1, type: 'DOOR' }, { at: 13, lane: 0, type: 'PILLAR' },
+  { id: 's5_door_x', zone: 'sea', lengthM: 60, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
+    floor: [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 13, lane: 0, type: 'PILLAR' },
             { at: 18, lane: -1, type: 'LASER_V' }, { at: 23, lane: 1, type: 'PILLAR' },
-            { at: 28, lane: -1, type: 'DOOR' }, { at: 33, lane: 0, type: 'LASER_V' },
+            { at: 28, lane: 0, type: 'WIDEBAR' }, { at: 33, lane: 0, type: 'LASER_V' },
             { at: 38, lane: 1, type: 'PILLAR' }, { at: 43, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 8, lane: -1, type: 'DOOR' }, { at: 28, lane: 1, type: 'DOOR' }], events: [] },
+    ceil:  [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 28, lane: -1, type: 'WIDEBAR' }], events: [] },
   { id: 's5_wallhole', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, wallhole: 1, dense: 1,
     floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 20, lane: 0, type: 'PILLAR' },
             { at: 26, lane: -1, type: 'LASER_V' }, { at: 36, lane: 1, type: 'ROVER' },
@@ -659,8 +647,8 @@ const CHUNK_DEFS = [
     floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 11, lane: 1, type: 'LASER_V' },
             { at: 17, lane: -1, type: 'PILLAR' }],
     ceil: [], events: [] },
-  { id: 's5_fill_b', zone: 'sea', lengthM: 30, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, fill: 1, lift: 1,
-    floor: [{ at: 5, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+  { id: 's5_fill_b', zone: 'sea', lengthM: 30, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, fill: 1,
+    floor: [{ at: 5, lane: 0, type: 'LASER_LOW' },
             { at: 15, lane: 1, type: 'PILLAR' }, { at: 21, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 5, lane: 1, type: 'ROVER' }], events: [] },
 
@@ -704,23 +692,23 @@ const CHUNK_DEFS = [
      ------------------------------------------------------------------------ */
   /* --- 主役: 跳2・レーン3 の繰り返し（密度と比率を同時に作る） -------------- */
   { id: 's6_mix_a', zone: 'space', lengthM: 74, difficulty: 4, minSpeed: 0, s6: 1, dense: 2, leap: 1,
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'ROVER' },
             { at: 25.1, lane: 0, type: 'PILLAR' }, { at: 29.9, lane: 1, type: 'LASER_V' },
             { at: 34.7, lane: -1, type: 'PILLAR' },
             { at: 39.5, lane: 0, type: 'ROVER' }, { at: 46.9, lane: 1, type: 'LASER_LOW' },
             { at: 56.6, lane: -1, type: 'PILLAR' }, { at: 61.4, lane: 0, type: 'LASER_V' },
             { at: 66.2, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'LASER_LOW' },
-            { at: 39.5, lane: -1, type: 'ROVER' }, { at: 46.9, lane: 0, type: 'GAP' }], events: [] },
+            { at: 39.5, lane: -1, type: 'ROVER' }, { at: 46.9, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's6_mix_b', zone: 'space', lengthM: 74, difficulty: 4, minSpeed: 0, s6: 1, dense: 2, leap: 1, moving: 1,
     floor: [{ at: 8, lane: 1, type: 'LASER_LOW' }, { at: 15.4, lane: 0, type: 'ROVER' },
             { at: 25.1, lane: -1, type: 'LASER_V' },
             { at: 29.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: 0, phase: 0.5 } } },
             { at: 34.7, lane: 1, type: 'PILLAR' },
-            { at: 39.5, lane: -1, type: 'GAP' }, { at: 46.9, lane: 0, type: 'ROVER' },
+            { at: 39.5, lane: -1, type: 'ROVER' }, { at: 46.9, lane: 0, type: 'ROVER' },
             { at: 56.6, lane: 1, type: 'PILLAR' }, { at: 61.4, lane: -1, type: 'LASER_V' },
             { at: 66.2, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'GAP' },
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'ROVER' },
             { at: 39.5, lane: 0, type: 'ROVER' }, { at: 46.9, lane: -1, type: 'LASER_LOW' }], events: [] },
   { id: 's6_mix_c', zone: 'space', lengthM: 74, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, leap: 1, net: 1,
     /* 横ビーム（床寄り＝LUMEN が跳ぶ／天井寄り＝UMBRA が跳ぶ）を跳の枠に混ぜる */
@@ -729,38 +717,38 @@ const CHUNK_DEFS = [
             { at: 25.1, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
             { at: 29.9, lane: 1, type: 'PILLAR' },
             { at: 34.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
-            { at: 39.5, lane: -1, type: 'GAP' }, { at: 46.9, lane: 1, type: 'ROVER' },
+            { at: 39.5, lane: -1, type: 'ROVER' }, { at: 46.9, lane: 1, type: 'ROVER' },
             { at: 56.6, lane: 0, type: 'LASER_V' }, { at: 61.4, lane: -1, type: 'PILLAR' },
             { at: 66.2, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: -1 } } }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'LASER_LOW' },
-            { at: 39.5, lane: 0, type: 'ROVER' }, { at: 46.9, lane: -1, type: 'GAP' }], events: [] },
+            { at: 39.5, lane: 0, type: 'ROVER' }, { at: 46.9, lane: -1, type: 'ROVER' }], events: [] },
   { id: 's6_mix_d', zone: 'space', lengthM: 76, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, leap: 1, net: 1, moving: 1,
-    floor: [{ at: 8, lane: 0, type: 'GAP' }, { at: 15.4, lane: 1, type: 'ROVER' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'ROVER' },
             { at: 25.1, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 29.9, lane: -1, type: 'PILLAR' },
             { at: 34.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 0, phase: 0.5 } } },
-            { at: 39.5, lane: 1, type: 'ROVER' }, { at: 46.9, lane: 0, type: 'GAP' },
+            { at: 39.5, lane: 1, type: 'ROVER' }, { at: 46.9, lane: 0, type: 'ROVER' },
             { at: 56.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 0 } } },
             { at: 61.4, lane: 1, type: 'LASER_V' }, { at: 66.2, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 8, lane: -1, type: 'LASER_LOW' }, { at: 15.4, lane: 0, type: 'ROVER' },
-            { at: 39.5, lane: 1, type: 'GAP' }, { at: 46.9, lane: -1, type: 'ROVER' }], events: [] },
+            { at: 39.5, lane: 1, type: 'ROVER' }, { at: 46.9, lane: -1, type: 'ROVER' }], events: [] },
 
   /* 跳2・レーン2（ジャンプ比率 50%。§4.3 の比率を引き上げる役） */
   { id: 's6_mix_e', zone: 'space', lengthM: 66, difficulty: 4, minSpeed: 0, s6: 1, dense: 2, leap: 1,
     floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'LASER_LOW' },
             { at: 25.1, lane: 0, type: 'PILLAR' }, { at: 29.9, lane: -1, type: 'LASER_V' },
-            { at: 34.7, lane: 1, type: 'GAP' }, { at: 42.1, lane: 0, type: 'ROVER' },
+            { at: 34.7, lane: 1, type: 'ROVER' }, { at: 42.1, lane: 0, type: 'ROVER' },
             { at: 51.8, lane: -1, type: 'PILLAR' }, { at: 56.6, lane: 0, type: 'LASER_V' }],
-    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'GAP' },
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 1, type: 'ROVER' }, { at: 42.1, lane: -1, type: 'LASER_LOW' }], events: [] },
   { id: 's6_mix_f', zone: 'space', lengthM: 68, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, leap: 1, wallhole: 1,
     /* 壁の穴（唯一のスライディング要素）を1つだけ混ぜる。契約§4.3「1チャンクに最大1」 */
     floor: [{ at: 8, lane: 0, type: 'WALLHOLE' }, { at: 17.7, lane: 1, type: 'PILLAR' },
             { at: 22.5, lane: -1, type: 'LASER_V' }, { at: 27.3, lane: 0, type: 'ROVER' },
-            { at: 34.7, lane: 1, type: 'GAP' }, { at: 44.4, lane: -1, type: 'PILLAR' },
+            { at: 34.7, lane: 1, type: 'ROVER' }, { at: 44.4, lane: -1, type: 'PILLAR' },
             { at: 49.2, lane: 0, type: 'LASER_V' }, { at: 54, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 27.3, lane: -1, type: 'ROVER' },
-            { at: 34.7, lane: 0, type: 'LASER_LOW' }, { at: 54, lane: -1, type: 'GAP' }], events: [] },
+            { at: 34.7, lane: 0, type: 'LASER_LOW' }, { at: 54, lane: -1, type: 'ROVER' }], events: [] },
 
   /* --- 支柱の縫い（レーン移動だけを 4.8 基準m おきに連ねる＝密度の上限） ---- */
   { id: 's6_weave_a', zone: 'space', lengthM: 68, difficulty: 4, minSpeed: 0, s6: 1, dense: 2,
@@ -786,23 +774,23 @@ const CHUNK_DEFS = [
 
   /* --- 跳び継ぎ（両者が 0.74秒おきに跳ぶ。§4.7 ジャンプ連続 0.70秒の下限） -- */
   { id: 's6_leap', zone: 'space', lengthM: 62, difficulty: 4, minSpeed: 0, s6: 1, dense: 2, leap: 1,
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'ROVER' },
             { at: 22.8, lane: 1, type: 'LASER_LOW' }, { at: 30.2, lane: 0, type: 'ROVER' },
-            { at: 37.6, lane: -1, type: 'GAP' }, { at: 45, lane: 1, type: 'ROVER' },
+            { at: 37.6, lane: -1, type: 'ROVER' }, { at: 45, lane: 1, type: 'ROVER' },
             { at: 52.4, lane: 0, type: 'LASER_LOW' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'LASER_LOW' },
-            { at: 22.8, lane: -1, type: 'GAP' }, { at: 30.2, lane: 1, type: 'ROVER' },
-            { at: 37.6, lane: 0, type: 'LASER_LOW' }, { at: 45, lane: -1, type: 'GAP' },
+            { at: 22.8, lane: -1, type: 'ROVER' }, { at: 30.2, lane: 1, type: 'ROVER' },
+            { at: 37.6, lane: 0, type: 'LASER_LOW' }, { at: 45, lane: -1, type: 'ROVER' },
             { at: 52.4, lane: 1, type: 'ROVER' }], events: [] },
   { id: 's6_leap_b', zone: 'space', lengthM: 62, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, leap: 1, net: 1,
     /* 跳び継ぎに横ビームを混ぜる（床寄り＝LUMEN が跳ぶ／天井寄り＝UMBRA が跳ぶ） */
     floor: [{ at: 8, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
             { at: 15.4, lane: 0, type: 'ROVER' }, { at: 22.8, lane: 1, type: 'LASER_LOW' },
-            { at: 30.2, lane: -1, type: 'GAP' }, { at: 37.6, lane: 0, type: 'ROVER' },
+            { at: 30.2, lane: -1, type: 'ROVER' }, { at: 37.6, lane: 0, type: 'ROVER' },
             { at: 45, lane: 1, type: 'ROVER' }, { at: 52.4, lane: 0, type: 'ROVER' }],
-    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'GAP' },
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.4, lane: -1, type: 'ROVER' },
             { at: 22.8, lane: 0, type: 'ROVER' }, { at: 30.2, lane: 1, type: 'LASER_LOW' },
-            { at: 37.6, lane: -1, type: 'GAP' },
+            { at: 37.6, lane: -1, type: 'ROVER' },
             { at: 45, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_HIGH, y1: CFG.NET.Y_LOW, phase: 0 } } },
             { at: 52.4, lane: 1, type: 'ROVER' }], events: [] },
 
@@ -844,7 +832,7 @@ const CHUNK_DEFS = [
             { at: 36.8, lane: 1, type: 'ROVER' }, { at: 44.2, lane: -1, type: 'LASER_LOW' },
             { at: 53.9, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: 0 } } },
             { at: 58.7, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 36.8, lane: -1, type: 'ROVER' }, { at: 44.2, lane: 0, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 36.8, lane: -1, type: 'ROVER' }, { at: 44.2, lane: 0, type: 'ROVER' }], events: [] },
 
   /* --- 無重力ジャンプ（契約§4.5「滞空1.5倍」。区間内は跳びの間合いが伸びる） */
   { id: 's6_zero_a', zone: 'space', lengthM: 78, difficulty: 4, minSpeed: 0, s6: 1, dense: 2, zero: 1,
@@ -855,16 +843,16 @@ const CHUNK_DEFS = [
             { at: 54.7, lane: 1, type: 'ROVER' }, { at: 64.4, lane: 0, type: 'PILLAR' },
             { at: 69.2, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 20.3, lane: 0, type: 'LASER_LOW' },
-            { at: 47.3, lane: -1, type: 'ROVER' }, { at: 54.7, lane: 0, type: 'GAP' }], events: [] },
+            { at: 47.3, lane: -1, type: 'ROVER' }, { at: 54.7, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's6_zero_b', zone: 'space', lengthM: 84, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, zero: 1, leap: 1,
     floor: [{ at: 4, lane: 0, type: 'ZEROG', params: { zero: { n: 4.6 } } },
             { at: 10, lane: 0, type: 'ROVER' }, { at: 20.3, lane: 1, type: 'ROVER' },
-            { at: 30.6, lane: -1, type: 'GAP' }, { at: 43.2, lane: 0, type: 'PILLAR' },
+            { at: 30.6, lane: -1, type: 'ROVER' }, { at: 43.2, lane: 0, type: 'PILLAR' },
             { at: 48, lane: 1, type: 'LASER_V' }, { at: 52.8, lane: -1, type: 'PILLAR' },
             { at: 57.6, lane: 0, type: 'ROVER' }, { at: 65, lane: 1, type: 'LASER_LOW' },
             { at: 74.7, lane: 0, type: 'PILLAR' }],
     ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 20.3, lane: 0, type: 'LASER_LOW' },
-            { at: 30.6, lane: 1, type: 'ROVER' }, { at: 57.6, lane: -1, type: 'GAP' },
+            { at: 30.6, lane: 1, type: 'ROVER' }, { at: 57.6, lane: -1, type: 'ROVER' },
             { at: 65, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's6_zero_net', zone: 'space', lengthM: 70, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, zero: 1, net: 1,
     floor: [{ at: 4, lane: 0, type: 'ZEROG', params: { zero: { n: 4.5 } } },
@@ -890,7 +878,7 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 31, lane: -1, type: 'ROVER' }, { at: 38.4, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's6_warp_b', zone: 'space', lengthM: 84, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, warp: 1, leap: 1,
     floor: [{ at: 6, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 4.4 } } },
-            { at: 16.6, lane: 0, type: 'ROVER' }, { at: 24, lane: -1, type: 'GAP' },
+            { at: 16.6, lane: 0, type: 'ROVER' }, { at: 24, lane: -1, type: 'ROVER' },
             { at: 33.7, lane: 1, type: 'PILLAR' }, { at: 38.5, lane: 0, type: 'LASER_V' },
             { at: 43.3, lane: -1, type: 'PILLAR' },
             { at: 60.6, lane: 0, type: 'PILLAR' }, { at: 65.4, lane: 1, type: 'LASER_V' },
@@ -910,7 +898,7 @@ const CHUNK_DEFS = [
 
   /* --- 最奥（rank5・最も密）と、壁の穴・つなぎ ---------------------------- */
   { id: 's6_gauntlet', zone: 'space', lengthM: 78, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, net: 1, leap: 1, moving: 1,
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'ROVER' },
             { at: 25.1, lane: 0, type: 'PILLAR' },
             { at: 29.9, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 34.7, lane: -1, type: 'LASER_V' },
@@ -919,11 +907,11 @@ const CHUNK_DEFS = [
             { at: 49.1, lane: 1, type: 'ROVER' }, { at: 56.5, lane: -1, type: 'LASER_LOW' },
             { at: 66.2, lane: 0, type: 'PILLAR' }, { at: 71, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'LASER_LOW' },
-            { at: 49.1, lane: 0, type: 'ROVER' }, { at: 56.5, lane: 1, type: 'GAP' }], events: [] },
+            { at: 49.1, lane: 0, type: 'ROVER' }, { at: 56.5, lane: 1, type: 'ROVER' }], events: [] },
   { id: 's6_wallhole', zone: 'space', lengthM: 66, difficulty: 4, minSpeed: 0, s6: 1, wallhole: 1, dense: 1,
     floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 19.7, lane: 0, type: 'PILLAR' },
             { at: 24.5, lane: -1, type: 'LASER_V' }, { at: 29.3, lane: 1, type: 'PILLAR' },
-            { at: 34.1, lane: 0, type: 'ROVER' }, { at: 41.5, lane: -1, type: 'GAP' },
+            { at: 34.1, lane: 0, type: 'ROVER' }, { at: 41.5, lane: -1, type: 'ROVER' },
             { at: 51.2, lane: 1, type: 'PILLAR' }, { at: 56, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 34.1, lane: 1, type: 'ROVER' },
             { at: 41.5, lane: 0, type: 'LASER_LOW' }], events: [] },
@@ -964,23 +952,23 @@ const CHUNK_DEFS = [
      ========================================================================== */
   /* --- 主役: 跳2・レーン3 の繰り返し（密度と比率を同時に作る） -------------- */
   { id: 's7_mix_a', zone: 'mirror', lengthM: 74, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, leap: 1,
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'ROVER' },
             { at: 25.7, lane: 0, type: 'PILLAR' }, { at: 30.6, lane: 1, type: 'LASER_V' },
             { at: 35.5, lane: -1, type: 'PILLAR' },
             { at: 40.4, lane: 0, type: 'ROVER' }, { at: 48.1, lane: 1, type: 'LASER_LOW' },
             { at: 58.1, lane: -1, type: 'PILLAR' }, { at: 63, lane: 0, type: 'LASER_V' },
             { at: 67.9, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: 0, type: 'LASER_LOW' },
-            { at: 40.4, lane: -1, type: 'ROVER' }, { at: 48.1, lane: 0, type: 'GAP' }], events: [] },
+            { at: 40.4, lane: -1, type: 'ROVER' }, { at: 48.1, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's7_mix_b', zone: 'mirror', lengthM: 74, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, leap: 1, net: 1, moving: 1,
     floor: [{ at: 8, lane: 1, type: 'LASER_LOW' }, { at: 15.7, lane: 0, type: 'ROVER' },
             { at: 25.7, lane: -1, type: 'LASER_V' },
             { at: 30.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 35.5, lane: 1, type: 'PILLAR' },
-            { at: 40.4, lane: -1, type: 'GAP' }, { at: 48.1, lane: 0, type: 'ROVER' },
+            { at: 40.4, lane: -1, type: 'ROVER' }, { at: 48.1, lane: 0, type: 'ROVER' },
             { at: 58.1, lane: 1, type: 'PILLAR' }, { at: 63, lane: -1, type: 'LASER_V' },
             { at: 67.9, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } }],
-    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.7, lane: 1, type: 'GAP' },
+    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.7, lane: 1, type: 'ROVER' },
             { at: 40.4, lane: 0, type: 'ROVER' }, { at: 48.1, lane: -1, type: 'LASER_LOW' }], events: [] },
   { id: 's7_mix_c', zone: 'mirror', lengthM: 74, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, leap: 1, net: 1,
     /* 横ビーム（床寄り＝LUMEN が跳ぶ／天井寄り＝UMBRA が跳ぶ）を跳の枠に混ぜる */
@@ -988,7 +976,7 @@ const CHUNK_DEFS = [
             { at: 15.7, lane: 0, type: 'ROVER' },
             { at: 25.7, lane: 1, type: 'PILLAR' }, { at: 30.6, lane: -1, type: 'LASER_V' },
             { at: 35.5, lane: 0, type: 'PILLAR' },
-            { at: 40.4, lane: 1, type: 'GAP' }, { at: 48.1, lane: 0, type: 'ROVER' },
+            { at: 40.4, lane: 1, type: 'ROVER' }, { at: 48.1, lane: 0, type: 'ROVER' },
             { at: 58.1, lane: -1, type: 'LASER_V' }, { at: 63, lane: 1, type: 'PILLAR' },
             { at: 67.9, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'LASER_LOW' },
@@ -1020,22 +1008,22 @@ const CHUNK_DEFS = [
 
   /* --- 跳び継ぎ（両者が 0.77秒おきに跳ぶ。§4.7 ジャンプ連続 0.70秒の下限） -- */
   { id: 's7_leap', zone: 'mirror', lengthM: 64, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, leap: 1,
-    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'GAP' },
+    floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'ROVER' },
             { at: 23.4, lane: 1, type: 'LASER_LOW' }, { at: 31.1, lane: 0, type: 'ROVER' },
-            { at: 38.8, lane: -1, type: 'GAP' }, { at: 46.5, lane: 1, type: 'ROVER' },
+            { at: 38.8, lane: -1, type: 'ROVER' }, { at: 46.5, lane: 1, type: 'ROVER' },
             { at: 54.2, lane: 0, type: 'LASER_LOW' }],
     ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: 0, type: 'LASER_LOW' },
-            { at: 23.4, lane: -1, type: 'GAP' }, { at: 31.1, lane: 1, type: 'ROVER' },
-            { at: 38.8, lane: 0, type: 'LASER_LOW' }, { at: 46.5, lane: -1, type: 'GAP' },
+            { at: 23.4, lane: -1, type: 'ROVER' }, { at: 31.1, lane: 1, type: 'ROVER' },
+            { at: 38.8, lane: 0, type: 'LASER_LOW' }, { at: 46.5, lane: -1, type: 'ROVER' },
             { at: 54.2, lane: 1, type: 'ROVER' }], events: [] },
   { id: 's7_leap_b', zone: 'mirror', lengthM: 64, difficulty: 5, minSpeed: 0, s7: 1, dense: 2, leap: 1, net: 1,
     floor: [{ at: 8, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
             { at: 15.7, lane: 0, type: 'ROVER' }, { at: 23.4, lane: 1, type: 'LASER_LOW' },
-            { at: 31.1, lane: -1, type: 'GAP' }, { at: 38.8, lane: 0, type: 'ROVER' },
+            { at: 31.1, lane: -1, type: 'ROVER' }, { at: 38.8, lane: 0, type: 'ROVER' },
             { at: 46.5, lane: 1, type: 'ROVER' }, { at: 54.2, lane: 0, type: 'ROVER' }],
-    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'GAP' },
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.7, lane: -1, type: 'ROVER' },
             { at: 23.4, lane: 0, type: 'ROVER' }, { at: 31.1, lane: 1, type: 'LASER_LOW' },
-            { at: 38.8, lane: -1, type: 'GAP' },
+            { at: 38.8, lane: -1, type: 'ROVER' },
             { at: 46.5, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_HIGH, y1: CFG.NET.Y_LOW, phase: 0 } } },
             { at: 54.2, lane: 1, type: 'ROVER' }], events: [] },
 
@@ -1076,7 +1064,7 @@ const CHUNK_DEFS = [
             { at: 19.8, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.5 } } },
             { at: 24.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 29.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: 1 } } },
-            { at: 34.5, lane: 1, type: 'ROVER' }, { at: 42.2, lane: -1, type: 'GAP' },
+            { at: 34.5, lane: 1, type: 'ROVER' }, { at: 42.2, lane: -1, type: 'ROVER' },
             { at: 52.2, lane: 0, type: 'PILLAR' }, { at: 57.1, lane: 1, type: 'LASER_V' },
             { at: 62, lane: -1, type: 'PILLAR' }, { at: 66.9, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 34.5, lane: -1, type: 'ROVER' }, { at: 42.2, lane: 0, type: 'LASER_LOW' }], events: [] },
@@ -1088,18 +1076,18 @@ const CHUNK_DEFS = [
   { id: 's7_mir_a', zone: 'mirror', lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
     /* 床側が反転する（下半分の左右が逆になる） */
     floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 5.2 } } },
-            { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: -1, type: 'GAP' },
+            { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: -1, type: 'ROVER' },
             { at: 34.7, lane: 0, type: 'PILLAR' }, { at: 39.6, lane: 1, type: 'LASER_V' },
             { at: 44.5, lane: -1, type: 'PILLAR' },
             { at: 49.4, lane: 0, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' },
             { at: 69, lane: -1, type: 'PILLAR' }, { at: 73.9, lane: 0, type: 'LASER_V' },
             { at: 78.8, lane: 1, type: 'PILLAR' }, { at: 83.7, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'LASER_LOW' },
-            { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'GAP' }], events: [] },
+            { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's7_mir_b', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, net: 1, leap: 1,
     /* 天井側が反転する（上半分の左右が逆になる）＋ 斜めビーム */
     floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 5.2 } } },
-            { at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'GAP' },
+            { at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
             { at: 39.6, lane: -1, type: 'PILLAR' },
             { at: 44.5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
@@ -1107,40 +1095,40 @@ const CHUNK_DEFS = [
             { at: 69, lane: 1, type: 'PILLAR' }, { at: 73.9, lane: -1, type: 'LASER_V' },
             { at: 78.8, lane: 0, type: 'PILLAR' }, { at: 83.7, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'LASER_LOW' },
-            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: -1, type: 'GAP' }], events: [] },
+            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: -1, type: 'ROVER' }], events: [] },
   { id: 's7_mir_c', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
     floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 5.2 } } },
             { at: 17, lane: -1, type: 'LASER_LOW' }, { at: 24.7, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 1, type: 'PILLAR' }, { at: 39.6, lane: -1, type: 'LASER_V' },
             { at: 44.5, lane: 0, type: 'PILLAR' },
-            { at: 49.4, lane: 1, type: 'GAP' }, { at: 57.1, lane: 0, type: 'ROVER' },
+            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'ROVER' },
             { at: 69, lane: 1, type: 'LASER_V' }, { at: 73.9, lane: -1, type: 'PILLAR' },
             { at: 78.8, lane: 0, type: 'LASER_V' }, { at: 83.7, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'GAP' },
+    ceil:  [{ at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'ROVER' },
             { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' }], events: [] },
 
   /* --- 入れ替えワープ（契約§4.5「担当が入れ替わる」＝上下の担当） -----------
      入れ替えは **両面**に効くので、ゲートの前後はどちらの面にも置けない。 */
   { id: 's7_swap_a', zone: 'mirror', lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, swap: 1, leap: 1,
     floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 5.2 } } },
-            { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'GAP' },
+            { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'ROVER' },
             { at: 34.7, lane: 0, type: 'PILLAR' }, { at: 39.6, lane: -1, type: 'LASER_V' },
             { at: 44.5, lane: 1, type: 'PILLAR' },
             { at: 49.4, lane: 0, type: 'ROVER' }, { at: 57.1, lane: -1, type: 'LASER_LOW' },
             { at: 69, lane: 1, type: 'PILLAR' }, { at: 73.9, lane: 0, type: 'LASER_V' },
             { at: 78.8, lane: -1, type: 'PILLAR' }, { at: 83.7, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'LASER_LOW' },
-            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'GAP' }], events: [] },
+            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's7_swap_b', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, swap: 1, net: 1, leap: 1,
     floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 5.2 } } },
             { at: 17, lane: 1, type: 'LASER_LOW' }, { at: 24.7, lane: -1, type: 'ROVER' },
             { at: 34.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 39.6, lane: 1, type: 'PILLAR' },
             { at: 44.5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
-            { at: 49.4, lane: 1, type: 'GAP' }, { at: 57.1, lane: 0, type: 'ROVER' },
+            { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'ROVER' },
             { at: 69, lane: -1, type: 'PILLAR' }, { at: 73.9, lane: 1, type: 'LASER_V' },
             { at: 78.8, lane: 0, type: 'PILLAR' }, { at: 83.7, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'GAP' },
+    ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'ROVER' },
             { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' }], events: [] },
 
   /* --- 重ね掛け（契約§6 P5a「S7後半＝脳の負荷の最高点」） -------------------
@@ -1154,7 +1142,7 @@ const CHUNK_DEFS = [
             { at: 22, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 3.4 } } },
             { at: 33, lane: 1, type: 'LASER_V' }, { at: 37.9, lane: -1, type: 'PILLAR' },
             { at: 42.8, lane: 0, type: 'LASER_V' }, { at: 47.7, lane: 1, type: 'PILLAR' },
-            { at: 52.6, lane: -1, type: 'ROVER' }, { at: 67, lane: 0, type: 'GAP' },
+            { at: 52.6, lane: -1, type: 'ROVER' }, { at: 67, lane: 0, type: 'ROVER' },
             { at: 85, lane: 1, type: 'PILLAR' }, { at: 89.9, lane: -1, type: 'LASER_V' },
             { at: 94.8, lane: 0, type: 'PILLAR' }],
     ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 52.6, lane: 0, type: 'ROVER' },
@@ -1167,7 +1155,7 @@ const CHUNK_DEFS = [
             { at: 37.9, lane: 1, type: 'PILLAR' },
             { at: 42.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 47.7, lane: -1, type: 'PILLAR' }, { at: 52.6, lane: 0, type: 'ROVER' },
-            { at: 67, lane: 1, type: 'GAP' },
+            { at: 67, lane: 1, type: 'ROVER' },
             { at: 85, lane: 0, type: 'PILLAR' }, { at: 89.9, lane: 1, type: 'LASER_V' },
             { at: 94.8, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 52.6, lane: 1, type: 'ROVER' },
@@ -1177,7 +1165,7 @@ const CHUNK_DEFS = [
   { id: 's7_wallhole', zone: 'mirror', lengthM: 68, difficulty: 4, minSpeed: 0, s7: 1, wallhole: 1, dense: 1,
     floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 20, lane: 0, type: 'PILLAR' },
             { at: 24.9, lane: -1, type: 'LASER_V' }, { at: 29.8, lane: 1, type: 'PILLAR' },
-            { at: 34.7, lane: 0, type: 'ROVER' }, { at: 42.4, lane: -1, type: 'GAP' },
+            { at: 34.7, lane: 0, type: 'ROVER' }, { at: 42.4, lane: -1, type: 'ROVER' },
             { at: 52.4, lane: 1, type: 'PILLAR' }, { at: 57.3, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 34.7, lane: 1, type: 'ROVER' },
             { at: 42.4, lane: 0, type: 'LASER_LOW' }], events: [] },
@@ -1222,7 +1210,7 @@ const CHUNK_DEFS = [
        span × 3.2〜4.4 実mに伸びるので、長い札だと1回の走行に 5本しか入らず
        「全部混在」が成立しない（P5b 実測）。 */
   { id: 's8_mix_a', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1,
-    floor: [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.7, lane: -1, type: 'GAP' },
+    floor: [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.7, lane: -1, type: 'ROVER' },
             { at: 23.7, lane: 0, type: 'PILLAR' }, { at: 28.6, lane: 1, type: 'LASER_V' },
             { at: 33.5, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'LASER_LOW' }], events: [] },
@@ -1231,7 +1219,7 @@ const CHUNK_DEFS = [
             { at: 23.7, lane: -1, type: 'LASER_V' },
             { at: 28.6, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 33.5, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 6, lane: -1, type: 'ROVER' }, { at: 13.7, lane: 1, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 6, lane: -1, type: 'ROVER' }, { at: 13.7, lane: 1, type: 'ROVER' }], events: [] },
   { id: 's8_mix_c', zone: 'core', lengthM: 40, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, moving: 1,
     /* 点滅（消えている方を走り抜ける）＋ ワイド梁（空いた1レーンへ）。
        天井の跳びは「床が both 型でない場所」に置き、次の天井要求まで 10.0 空ける。 */
@@ -1260,38 +1248,38 @@ const CHUNK_DEFS = [
     ceil: [], events: [] },
   /* --- 比率の工兵: 両面が 7.7 基準m おきに跳ぶ（§4.7 ジャンプ連続の下限） --- */
   { id: 's8_leap_a', zone: 'core', lengthM: 42, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1,
-    floor: [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.7, lane: -1, type: 'GAP' },
+    floor: [{ at: 6, lane: 0, type: 'ROVER' }, { at: 13.7, lane: -1, type: 'ROVER' },
             { at: 21.4, lane: 1, type: 'LASER_LOW' }, { at: 29.1, lane: 0, type: 'ROVER' },
-            { at: 36.8, lane: -1, type: 'GAP' }],
+            { at: 36.8, lane: -1, type: 'ROVER' }],
     ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'LASER_LOW' },
-            { at: 21.4, lane: -1, type: 'GAP' }, { at: 29.1, lane: 1, type: 'ROVER' },
+            { at: 21.4, lane: -1, type: 'ROVER' }, { at: 29.1, lane: 1, type: 'ROVER' },
             { at: 36.8, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_leap_b', zone: 'core', lengthM: 42, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, leap: 1, net: 1,
     floor: [{ at: 6, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } } },
-            { at: 13.7, lane: 0, type: 'ROVER' }, { at: 21.4, lane: 1, type: 'GAP' },
+            { at: 13.7, lane: 0, type: 'ROVER' }, { at: 21.4, lane: 1, type: 'ROVER' },
             { at: 29.1, lane: -1, type: 'ROVER' }, { at: 36.8, lane: 0, type: 'LASER_LOW' }],
-    ceil:  [{ at: 13.7, lane: 1, type: 'GAP' }, { at: 21.4, lane: -1, type: 'ROVER' },
+    ceil:  [{ at: 13.7, lane: 1, type: 'ROVER' }, { at: 21.4, lane: -1, type: 'ROVER' },
             { at: 29.1, lane: 0, type: 'LASER_LOW' }, { at: 36.8, lane: 1, type: 'ROVER' }], events: [] },
 
   /* --- 崩れる橋＋振り子の刃（S3 の顔ぶれ / 契約§4.4） ---------------------- */
   { id: 's8_bridge', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
     bridge: 1, pend: 1, moving: 1,
-    floor: [{ at: 6, lane: 0, type: 'BRIDGE' }, { at: 13.7, lane: -1, type: 'GAP' },
+    floor: [{ at: 6, lane: 0, type: 'BRIDGE' }, { at: 13.7, lane: -1, type: 'ROVER' },
             { at: 23.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
             { at: 28.6, lane: 1, type: 'PILLAR' }, { at: 33.5, lane: -1, type: 'LASER_V' },
             { at: 38.4, lane: 0, type: 'PILLAR' }, { at: 43.3, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_bridge_b', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
-    bridge: 1, lift: 1, leap: 1,
-    floor: [{ at: 6, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 13.7, lane: 0, type: 'BRIDGE' }, { at: 21.4, lane: -1, type: 'GAP' },
+    bridge: 1, leap: 1,
+    floor: [{ at: 6, lane: 1, type: 'LASER_LOW' },
+            { at: 13.7, lane: 0, type: 'BRIDGE' }, { at: 21.4, lane: -1, type: 'ROVER' },
             { at: 31.4, lane: 1, type: 'PILLAR' }, { at: 36.3, lane: -1, type: 'LASER_V' },
             { at: 41.2, lane: 0, type: 'PILLAR' }],
-    ceil:  [{ at: 6, lane: -1, type: 'ROVER' }, { at: 13.7, lane: 1, type: 'GAP' },
+    ceil:  [{ at: 6, lane: -1, type: 'ROVER' }, { at: 13.7, lane: 1, type: 'ROVER' },
             { at: 21.4, lane: 0, type: 'ROVER' }], events: [] },
   { id: 's8_pend', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
-    pend: 1, moving: 1, door: 1,
-    floor: [{ at: 6, lane: 1, type: 'DOOR' },
+    pend: 1, moving: 1,
+    floor: [{ at: 6, lane: -1, type: 'WIDEBAR' },
             { at: 12.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
             { at: 17.8, lane: -1, type: 'PILLAR' },
             { at: 22.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
@@ -1300,11 +1288,11 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 27.6, lane: -1, type: 'ROVER' }], events: [] },
 
   /* --- 同時スイッチ＋落ちる天井／無重力（S4・S6 の顔ぶれ） ----------------- */
-  { id: 's8_sync', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, sync: 1, drop: 1,
+  { id: 's8_sync', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, sync: 1,
     floor: [{ at: 6, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
-            { at: 25, lane: 0, type: 'DROPCEIL' }, { at: 34.9, lane: 1, type: 'PILLAR' },
+            { at: 34.9, lane: 1, type: 'PILLAR' },
             { at: 39.8, lane: -1, type: 'LASER_V' }, { at: 44.7, lane: 0, type: 'PILLAR' }],
-    ceil:  [], events: [] },
+    ceil:  [{ at: 25, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_sync_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, sync: 1, zero: 1,
     floor: [{ at: 3, lane: 0, type: 'ZEROG', params: { zero: { n: 3.4 } } },
             { at: 7, lane: 0, type: 'SYNCSW', params: { sync: { cl: 0, safe: 0, csafe: 0 } } },
@@ -1313,36 +1301,33 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 26, lane: -1, type: 'ROVER' }], events: [] },
 
   /* --- 落ちる天井の連鎖（床＝レーン移動／天井＝ジャンプ） ------------------- */
-  { id: 's8_drop', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, drop: 1,
-    floor: [{ at: 6, lane: 0, type: 'DROPCEIL' }, { at: 14, lane: 1, type: 'DROPCEIL' },
-            { at: 22, lane: -1, type: 'DROPCEIL' }, { at: 32.1, lane: 0, type: 'PILLAR' },
+  { id: 's8_drop', zone: 'core', lengthM: 48, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    floor: [{ at: 32.1, lane: 0, type: 'PILLAR' },
             { at: 37, lane: 1, type: 'LASER_V' }, { at: 41.9, lane: -1, type: 'PILLAR' }],
-    ceil:  [], events: [] },
-  { id: 's8_drop_door', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, drop: 1, door: 1,
-    floor: [{ at: 6, lane: 1, type: 'DOOR' }, { at: 10.9, lane: 0, type: 'PILLAR' },
-            { at: 20.9, lane: -1, type: 'DROPCEIL' }, { at: 30.9, lane: 1, type: 'LASER_V' },
+    ceil:  [{ at: 22, lane: -1, type: 'LASER_LOW' }, { at: 14, lane: 1, type: 'LASER_LOW' }, { at: 6, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_drop_door', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    floor: [{ at: 6, lane: -1, type: 'WIDEBAR' }, { at: 10.9, lane: 0, type: 'PILLAR' },
+            { at: 30.9, lane: 1, type: 'LASER_V' },
             { at: 35.8, lane: 0, type: 'PILLAR' }, { at: 40.7, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 10.9, lane: -1, type: 'ROVER' }], events: [] },
+    ceil:  [{ at: 20.9, lane: -1, type: 'LASER_LOW' }, { at: 10.9, lane: -1, type: 'ROVER' }], events: [] },
 
   /* --- 海流ベルト＋浮上足場／色の扉（S5 の顔ぶれ） ------------------------- */
-  { id: 's8_cur', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, cur: 1, lift: 1,
+  { id: 's8_cur', zone: 'core', lengthM: 50, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
     /* 押し出しは 9・19・29 基準m。ウォールはその 5.0 あとに置く（§4.7 の 0.45秒） */
-    floor: [{ at: 4, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
-            { at: 14, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+    floor: [{ at: 14, lane: 0, type: 'LASER_LOW' },
             { at: 24, lane: 1, type: 'PILLAR' }, { at: 34, lane: -1, type: 'LASER_V' },
             { at: 38.9, lane: 0, type: 'PILLAR' }, { at: 43.8, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 14, lane: 1, type: 'ROVER' }], events: [] },
-  { id: 's8_cur_door', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, cur: 1, door: 1,
-    floor: [{ at: 4, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: 1, n: 3 } } },
-            { at: 14, lane: 1, type: 'DOOR' }, { at: 24, lane: 0, type: 'PILLAR' },
+  { id: 's8_cur_door', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
+    floor: [{ at: 14, lane: -1, type: 'WIDEBAR' }, { at: 24, lane: 0, type: 'PILLAR' },
             { at: 34, lane: -1, type: 'LASER_V' }, { at: 44, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 44, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 's8_lift', zone: 'core', lengthM: 36, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, lift: 1, pend: 1, moving: 1,
-    floor: [{ at: 6, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 13.7, lane: -1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
+  { id: 's8_lift', zone: 'core', lengthM: 36, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, pend: 1, moving: 1,
+    floor: [{ at: 6, lane: 0, type: 'LASER_LOW' },
+            { at: 13.7, lane: -1, type: 'LASER_LOW' },
             { at: 23.7, lane: 0, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } },
             { at: 28.6, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'GAP' }], events: [] },
+    ceil:  [{ at: 6, lane: 1, type: 'ROVER' }, { at: 13.7, lane: 0, type: 'ROVER' }], events: [] },
 
   /* --- 重力反転ワープ／無重力（S6 の顔ぶれ） -------------------------------
      ゲートの前後 1.0秒（10.9 基準m）はウォールを置けないので、区間は短く取る。 */
@@ -1354,16 +1339,16 @@ const CHUNK_DEFS = [
             { at: 39.9, lane: -1, type: 'PILLAR' }, { at: 44.8, lane: 0, type: 'LASER_V' },
             { at: 49.7, lane: 1, type: 'PILLAR' }],
     ceil:  [], events: [] },
-  { id: 's8_warp_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, warp: 1, drop: 1,
+  { id: 's8_warp_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, warp: 1,
     floor: [{ at: 4, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.0 } } },
             { at: 15.2, lane: 1, type: 'PILLAR' }, { at: 20.1, lane: -1, type: 'LASER_V' },
-            { at: 35, lane: 0, type: 'DROPCEIL' }, { at: 45, lane: 1, type: 'PILLAR' },
+            { at: 45, lane: 1, type: 'PILLAR' },
             { at: 49.9, lane: -1, type: 'LASER_V' }],
-    ceil:  [], events: [] },
+    ceil:  [{ at: 35, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_zero', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, zero: 1, leap: 1, net: 1,
     /* 無重力の中は滞空が 1.5倍＝「跳→跳」9.8／「跳→横」12.2 基準m が要る */
     floor: [{ at: 3, lane: 0, type: 'ZEROG', params: { zero: { n: 3.6 } } },
-            { at: 6, lane: 0, type: 'ROVER' }, { at: 18.5, lane: -1, type: 'GAP' },
+            { at: 6, lane: 0, type: 'ROVER' }, { at: 18.5, lane: -1, type: 'ROVER' },
             { at: 31, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 35.9, lane: 1, type: 'PILLAR' }, { at: 40.8, lane: -1, type: 'LASER_V' },
             { at: 45.7, lane: 0, type: 'PILLAR' }],
@@ -1396,7 +1381,7 @@ const CHUNK_DEFS = [
   /* --- 鏡ゾーン／入れ替えワープ（S7 の顔ぶれ） ----------------------------- */
   { id: 's8_mir', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, mir: 1, bridge: 1,
     floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 2.2 } } },
-            { at: 15.2, lane: 0, type: 'BRIDGE' }, { at: 22.9, lane: 1, type: 'GAP' },
+            { at: 15.2, lane: 0, type: 'BRIDGE' }, { at: 22.9, lane: 1, type: 'ROVER' },
             { at: 37.9, lane: -1, type: 'PILLAR' }, { at: 42.8, lane: 0, type: 'LASER_V' },
             { at: 47.7, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 15.2, lane: -1, type: 'ROVER' }, { at: 22.9, lane: 0, type: 'LASER_LOW' }], events: [] },
@@ -1408,10 +1393,10 @@ const CHUNK_DEFS = [
             { at: 37.9, lane: 1, type: 'PILLAR' }, { at: 42.8, lane: -1, type: 'LASER_V' },
             { at: 47.7, lane: 0, type: 'PILLAR' }],
     ceil:  [], events: [] },
-  { id: 's8_swap', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, swap: 1, lift: 1,
+  { id: 's8_swap', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, swap: 1,
     floor: [{ at: 4, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.2 } } },
-            { at: 15.2, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 22.9, lane: 1, type: 'GAP' }, { at: 37.9, lane: 0, type: 'PILLAR' },
+            { at: 15.2, lane: 0, type: 'LASER_LOW' },
+            { at: 22.9, lane: 1, type: 'ROVER' }, { at: 37.9, lane: 0, type: 'PILLAR' },
             { at: 42.8, lane: -1, type: 'LASER_V' }, { at: 47.7, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 15.2, lane: -1, type: 'ROVER' }, { at: 22.9, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_swap_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
@@ -1444,49 +1429,44 @@ const CHUNK_DEFS = [
          ジャンプ → レーン移動（同じ面）   0.92秒 → 10.0
          無重力の中（滞空1.5倍）           跳→跳 10.5 ／ 跳→横 13.2
          各種ゲート → 次のウォール         1.00秒 → 10.9
-     ■ 密度の工兵は DROPCEIL（落ちる天井）: 1エントリで **床＝レーン移動 /
-       天井＝ジャンプ** の2要求が出る。7.7 おきに並べれば密度も §4.3 の比率も稼げる。
+     ■ 旧「落ちる天井」の位置は契約 v2 で縦レーザー（両面のレーン移動）に置き換えた。
      ========================================================================== */
 
   /* --- ネット＋扉＋浮上足場＋落ちる天井（ゲート無し＝いちばん濃い 7.1回/100m） */
   { id: 's8_cov_net_a', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
-    net: 1, door: 1, lift: 1, drop: 1, moving: 1, cover: 1, fam_net: 1,
+    net: 1, moving: 1, cover: 1, fam_net: 1,
     floor: [{ at: 1, lane: 0, type: 'NETGATE' },
             { at: 3, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 7.9, lane: 1, type: 'LASER_V' },
             { at: 12.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
-            { at: 17.7, lane: 1, type: 'DOOR' },
-            { at: 22.6, lane: 0, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 32.6, lane: -1, type: 'DROPCEIL' }, { at: 40.3, lane: 1, type: 'DROPCEIL' }],
-    ceil:  [{ at: 17.7, lane: -1, type: 'ROVER' }], events: [] },
+            { at: 17.7, lane: -1, type: 'WIDEBAR' },
+            { at: 22.6, lane: 0, type: 'LASER_LOW' }],
+    ceil:  [{ at: 40.3, lane: 1, type: 'LASER_LOW' }, { at: 32.6, lane: -1, type: 'LASER_LOW' }, { at: 17.7, lane: -1, type: 'ROVER' }], events: [] },
   { id: 's8_cov_net_b', zone: 'core', lengthM: 46, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
-    net: 1, door: 1, lift: 1, drop: 1, moving: 1, cover: 1, fam_net: 1,
+    net: 1, moving: 1, cover: 1, fam_net: 1,
     floor: [{ at: 1, lane: 0, type: 'NETGATE' },
             { at: 3, lane: -1, type: 'LASER_H', params: { hbeam: { y0: CFG.NET.Y_MID, y1: CFG.NET.Y_MID2, phase: 0 } } },
             { at: 3, lane: 1, type: 'PILLAR' },
             { at: 7.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
             { at: 12.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: 0 } } },
-            { at: 17.7, lane: -1, type: 'DOOR' },
-            { at: 22.6, lane: 1, type: 'LIFTPAD', params: { lift: { upAtArrival: true } } },
-            { at: 32.6, lane: 0, type: 'DROPCEIL' }, { at: 40.3, lane: -1, type: 'DROPCEIL' }],
-    ceil:  [{ at: 17.7, lane: 1, type: 'ROVER' }], events: [] },
+            { at: 17.7, lane: 0, type: 'WIDEBAR' },
+            { at: 22.6, lane: 1, type: 'LASER_LOW' }],
+    ceil:  [{ at: 40.3, lane: -1, type: 'LASER_LOW' }, { at: 32.6, lane: 0, type: 'LASER_LOW' }, { at: 17.7, lane: 1, type: 'ROVER' }], events: [] },
 
   /* --- 海流ベルト＋振り子の刃＋同時スイッチ（4.8回/100m・跳び4割） ---------
      押し出しは 9・19・29 基準m。ウォールはその 1.0 あと（押し出しの直前
      0.45秒には置けない＝ Fair が弾く）。**流されながら跳ぶ**のがこの札の主題。
      同時スイッチのパッド(35)と橋(48)の間にも 1枚だけ置ける（6 ／ 7 基準m）。 */
   { id: 's8_cov_cur_a', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
-    cur: 1, pend: 1, sync: 1, moving: 1, leap: 1, cover: 1, fam_cur: 1,
-    floor: [{ at: 0, lane: 0, type: 'CURRENT', params: { cur: { dir: 1, cdir: -1, n: 3 } } },
-            { at: 10, lane: 0, type: 'ROVER' }, { at: 20, lane: -1, type: 'GAP' },
+    pend: 1, sync: 1, moving: 1, leap: 1, cover: 1, fam_cur: 1,
+    floor: [{ at: 10, lane: 0, type: 'ROVER' }, { at: 20, lane: -1, type: 'ROVER' },
             { at: 30, lane: 1, type: 'PILLAR' },
             { at: 35, lane: 0, type: 'SYNCSW', params: { sync: { cl: 0, safe: 0, csafe: 0 } } },
             { at: 41, lane: -1, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } }],
     ceil:  [{ at: 10, lane: 1, type: 'ROVER' }, { at: 20, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_cov_cur_b', zone: 'core', lengthM: 52, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
-    cur: 1, pend: 1, sync: 1, moving: 1, leap: 1, cover: 1, fam_cur: 1,
-    floor: [{ at: 0, lane: 0, type: 'CURRENT', params: { cur: { dir: -1, cdir: 1, n: 3 } } },
-            { at: 10, lane: 1, type: 'GAP' }, { at: 20, lane: 0, type: 'ROVER' },
+    pend: 1, sync: 1, moving: 1, leap: 1, cover: 1, fam_cur: 1,
+    floor: [{ at: 10, lane: 1, type: 'ROVER' }, { at: 20, lane: 0, type: 'ROVER' },
             { at: 30, lane: -1, type: 'PILLAR' },
             { at: 35, lane: -1, type: 'SYNCSW', params: { sync: { cl: 1, safe: -1, csafe: 1 } } },
             { at: 41, lane: 1, type: 'LASER_SCAN', params: { scan: { from: 1, to: -1, phase: 0 } } }],
@@ -1499,10 +1479,10 @@ const CHUNK_DEFS = [
   { id: 's8_cov_zero_a', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
     zero: 1, mir: 1, bridge: 1, leap: 1, cover: 1, fam_zero: 1,
     floor: [{ at: 0, lane: 0, type: 'ZEROG', params: { zero: { n: 2.0 } } },
-            { at: 3, lane: 0, type: 'ROVER' }, { at: 13.5, lane: -1, type: 'GAP' },
+            { at: 3, lane: 0, type: 'ROVER' }, { at: 13.5, lane: -1, type: 'ROVER' },
             { at: 26.7, lane: 1, type: 'PILLAR' },
             { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 2.0 } } },
-            { at: 41, lane: 0, type: 'BRIDGE' }, { at: 48.7, lane: 1, type: 'GAP' }],
+            { at: 41, lane: 0, type: 'BRIDGE' }, { at: 48.7, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 3, lane: 1, type: 'ROVER' }, { at: 13.5, lane: 0, type: 'LASER_LOW' },
             { at: 41, lane: -1, type: 'ROVER' }, { at: 48.7, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_cov_zero_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 2,
@@ -1511,29 +1491,27 @@ const CHUNK_DEFS = [
             { at: 3, lane: 1, type: 'LASER_LOW' }, { at: 13.5, lane: 0, type: 'ROVER' },
             { at: 26.7, lane: -1, type: 'PILLAR' },
             { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 2.0 } } },
-            { at: 41, lane: 1, type: 'BRIDGE' }, { at: 48.7, lane: 0, type: 'GAP' }],
-    ceil:  [{ at: 3, lane: -1, type: 'GAP' }, { at: 13.5, lane: 1, type: 'ROVER' },
+            { at: 41, lane: 1, type: 'BRIDGE' }, { at: 48.7, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 3, lane: -1, type: 'ROVER' }, { at: 13.5, lane: 1, type: 'ROVER' },
             { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 48.7, lane: -1, type: 'ROVER' }], events: [] },
 
   /* --- 入れ替えワープ＋重力反転ワープ＋落ちる天井（ゲート2組＝いちばん薄い）
      ゲートの直後 1.0秒（10.9 基準m）は両面ともウォールを置けないので、
      **区間の中に詰めて置く**（区間の長さ backT を 2.6 に取って2枚ぶん稼ぐ）。 */
   { id: 's8_cov_warp_a', zone: 'core', lengthM: 56, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
-    swap: 1, warp: 1, drop: 1, cover: 1, fam_warp: 1,
+    swap: 1, warp: 1, cover: 1, fam_warp: 1,
     floor: [{ at: 0, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.6 } } },
-            { at: 11.2, lane: -1, type: 'DROPCEIL' }, { at: 18.9, lane: 1, type: 'DROPCEIL' },
             { at: 27, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.6 } } },
             { at: 38.2, lane: 0, type: 'PILLAR' }, { at: 43.1, lane: -1, type: 'LASER_V' },
             { at: 48, lane: 1, type: 'ROVER' }],
-    ceil:  [{ at: 48, lane: -1, type: 'ROVER' }], events: [] },
+    ceil:  [{ at: 18.9, lane: 1, type: 'LASER_LOW' }, { at: 11.2, lane: -1, type: 'LASER_LOW' }, { at: 48, lane: -1, type: 'ROVER' }], events: [] },
   { id: 's8_cov_warp_b', zone: 'core', lengthM: 56, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
-    swap: 1, warp: 1, drop: 1, cover: 1, fam_warp: 1,
+    swap: 1, warp: 1, cover: 1, fam_warp: 1,
     floor: [{ at: 0, lane: 0, type: 'GRAVWARP', params: { warp: { backT: 2.6 } } },
-            { at: 11.2, lane: 1, type: 'DROPCEIL' }, { at: 18.9, lane: -1, type: 'DROPCEIL' },
             { at: 27, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 2.6 } } },
             { at: 38.2, lane: 1, type: 'PILLAR' }, { at: 43.1, lane: 0, type: 'LASER_V' },
-            { at: 48, lane: -1, type: 'GAP' }],
-    ceil:  [{ at: 48, lane: 1, type: 'ROVER' }], events: [] },
+            { at: 48, lane: -1, type: 'ROVER' }],
+    ceil:  [{ at: 18.9, lane: -1, type: 'LASER_LOW' }, { at: 11.2, lane: 1, type: 'LASER_LOW' }, { at: 48, lane: 1, type: 'ROVER' }], events: [] },
 
   /* --- 合体区間（契約§4.4 S8「合体区間」/ §4.5）: S8 で必ず2回 ------------
      区間は 3.2秒 ＝ 速度 32〜44 で 102〜141m（契約「100〜150m」）。
@@ -1542,24 +1520,24 @@ const CHUNK_DEFS = [
      両面ともウォールを置けないので、入口と出口でさらに 21.8 が空く。
      そのぶん **区間の中は詰められるだけ詰め、出口の猶予明けに濃い尾を付ける**。 */
   { id: 's8_merge_a', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
-    merge: 1, leap: 1, drop: 1,
+    merge: 1, leap: 1,
     floor: [{ at: 0, lane: 0, type: 'PILLAR' },
             { at: 4, lane: 0, type: 'MERGE', params: { mrg: { n: 3.2 } } },
             /* --- ここから合体体（1体）: 跳ぶ→跳ぶ→横へ --- */
-            { at: 15, lane: 0, type: 'ROVER' }, { at: 22.7, lane: -1, type: 'GAP' },
+            { at: 15, lane: 0, type: 'ROVER' }, { at: 22.7, lane: -1, type: 'ROVER' },
             { at: 32.7, lane: 1, type: 'PILLAR' },
             /* --- 出口ゲートは at 36。猶予（10.9）の明けから2体ぶんの尾 --- */
             { at: 47, lane: 0, type: 'PILLAR' }, { at: 51.9, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 51.9, lane: -1, type: 'ROVER' }], events: [] },
   { id: 's8_merge_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1,
-    merge: 1, net: 1, moving: 1, drop: 1,
+    merge: 1, net: 1, moving: 1,
     floor: [{ at: 0, lane: 0, type: 'LASER_V' },
             { at: 4, lane: 0, type: 'MERGE', params: { mrg: { n: 3.2 } } },
             { at: 15, lane: 1, type: 'PILLAR' },
             { at: 19.9, lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } },
             { at: 24.8, lane: -1, type: 'LASER_V' }, { at: 29.7, lane: 1, type: 'PILLAR' },
             { at: 47, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
-            { at: 51.9, lane: 1, type: 'GAP' }],
+            { at: 51.9, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 51.9, lane: 0, type: 'LASER_LOW' }], events: [] },
   /* --- 壁の穴・つなぎ ------------------------------------------------------ */
   { id: 's8_wallhole', zone: 'core', lengthM: 34, difficulty: 5, minSpeed: 0, s8: 1, wallhole: 1, dense: 1,
@@ -1578,34 +1556,31 @@ const CHUNK_DEFS = [
   /* --- 落ちる天井の縫い（密度と §4.3 の比率を同時に作る主力の短い札） ------
      1エントリで 床＝レーン移動／天井＝ジャンプ。7.7 基準m おき（跳→跳の下限）に
      並べると 7.7 あたり2要求＝速度40で 約6.5回/100m・ジャンプ 50%。 */
-  { id: 's8_fill_c', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, drop: 1,
+  { id: 's8_fill_c', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1,
     floor: [{ at: 4, lane: 0, type: 'PILLAR' }, { at: 8.9, lane: 1, type: 'LASER_V' },
-            { at: 13.8, lane: -1, type: 'PILLAR' },
-            { at: 18.7, lane: 0, type: 'DROPCEIL' }, { at: 26.4, lane: 1, type: 'DROPCEIL' }],
-    ceil: [], events: [] },
-  { id: 's8_fill_d', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, drop: 1, net: 1,
+            { at: 13.8, lane: -1, type: 'PILLAR' }],
+    ceil: [{ at: 26.4, lane: 1, type: 'LASER_LOW' }, { at: 18.7, lane: 0, type: 'LASER_LOW' }], events: [] },
+  { id: 's8_fill_d', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, net: 1,
     floor: [{ at: 4, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
-            { at: 8.9, lane: -1, type: 'PILLAR' }, { at: 13.8, lane: 1, type: 'LASER_V' },
-            { at: 18.7, lane: -1, type: 'DROPCEIL' }, { at: 26.4, lane: 0, type: 'DROPCEIL' }],
-    ceil: [], events: [] },
+            { at: 8.9, lane: -1, type: 'PILLAR' }, { at: 13.8, lane: 1, type: 'LASER_V' }],
+    ceil: [{ at: 26.4, lane: 0, type: 'LASER_LOW' }, { at: 18.7, lane: -1, type: 'LASER_LOW' }], events: [] },
   /* --- 両面が跳ぶ短い札（ジャンプ比率の工兵） ------------------------------ */
   { id: 's8_fill_e', zone: 'core', lengthM: 32, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1, leap: 1,
-    floor: [{ at: 4, lane: 0, type: 'ROVER' }, { at: 11.7, lane: -1, type: 'GAP' },
+    floor: [{ at: 4, lane: 0, type: 'ROVER' }, { at: 11.7, lane: -1, type: 'ROVER' },
             { at: 19.4, lane: 1, type: 'LASER_LOW' }, { at: 27.1, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 4, lane: 1, type: 'ROVER' }, { at: 11.7, lane: 0, type: 'LASER_LOW' },
-            { at: 19.4, lane: -1, type: 'GAP' }, { at: 27.1, lane: 1, type: 'ROVER' }], events: [] }
+            { at: 19.4, lane: -1, type: 'ROVER' }, { at: 27.1, lane: 1, type: 'ROVER' }], events: [] }
 ];
 
 /* ---------------------------------------------------------------- 導入区間（S1）
    契約 §4.4「基本障害物を1種ずつ順に紹介」/ §4.8 チュートリアル。
    ・位置は**実寸 m**（速度で伸縮させない）。1つずつ 33m 間隔で出す＝16m/s で約2秒おき。
    ・tip は障害物の 30m 手前（約1.9秒前）に出す DOM オーバーレイの合図。
-   ・まず片側だけ（床→天井）→ 横に避ける → 穴 → 光線 → ワイド梁 → 最後に両側同時。 */
+   ・まず片側だけ（床→天井）→ 横に避ける → 光線 → ワイド梁 → 最後に両側同時（穴は契約 v2 で失効）。 */
 const INTRO_S1 = [
   { at: 60,  tip: 'jump_l', floor: [{ lane: 0, type: 'ROVER' }] },
   { at: 93,  tip: 'jump_r', ceil:  [{ lane: 0, type: 'ROVER' }] },
   { at: 126, tip: 'lane',   floor: [{ lane: 1, type: 'PILLAR' }] },          // both（2体ともレーン移動）
-  { at: 159, tip: 'gap',    floor: [{ lane: -1, type: 'GAP' }] },
   { at: 192, tip: 'laser',  ceil:  [{ lane: 0, type: 'LASER_LOW' }] },
   { at: 225, tip: 'wide',   floor: [{ lane: -1, type: 'WIDEBAR' }] },
   { at: 262, tip: 'both',   floor: [{ lane: 0, type: 'ROVER' }], ceil: [{ lane: 1, type: 'ROVER' }] }
@@ -1614,16 +1589,15 @@ const INTRO_S1 = [
 /* ---------------------------------------------------------------- tip の対象（契約§4.8）
    新ギミックの初出 tip が「何を」説明するか。チャンクの中で、この型のエントリの
    **最初の1つ**を対象にする（型は並び順が優先順位。見つかった最初の型を使う）。
-   ・ゲートで始まる区間（海流・無重力・重力反転・鏡・入れ替え・合体）は **入口の通過** が
+   ・ゲートで始まる区間（無重力・重力反転・鏡・入れ替え・合体）は **入口の通過** が
      「対象の通過」（区間の全長を窓にすると区間の中身が全部消えてしまうため）。
    ・レーザー網は枠（NETGATE）ではなく最初のビームを対象にする（跳ぶ／よけるのが本題）。 */
 const TIP_TARGET = {
-  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'], drop: ['DROPCEIL'],
-  cur: ['CURRENT'], lift: ['LIFTPAD'], door: ['DOOR'],
+  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'],
   warp: ['GRAVWARP'], zero: ['ZEROG'], net: ['LASER_H', 'LASER_DIAG', 'NETGATE'],
   mir: ['MIRRORZ'], swap: ['HANDSWAP'], dual: ['HANDSWAP'], merge: ['MERGE']
 };
-const TIP_ENTRY_ONLY = { CURRENT: 1, ZEROG: 1, GRAVWARP: 1, MIRRORZ: 1, HANDSWAP: 1, MERGE: 1 };
+const TIP_ENTRY_ONLY = { ZEROG: 1, GRAVWARP: 1, MIRRORZ: 1, HANDSWAP: 1, MERGE: 1 };
 
 const CHUNK_BY_ID = {};
 CHUNK_DEFS.forEach((c) => { CHUNK_BY_ID[c.id] = c; });
@@ -1717,14 +1691,13 @@ const STAGE_DEFS = {
     speedFrom: 24, speedTo: 28, minRank: 3, maxRank: 4, setpiece: 'templefall',
     density: [6, 10],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
-    tipOnce: { sync: 'sync', drop: 'dropceil' },
+    tipOnce: { sync: 'sync' },
     /* 顔ぶれ: S4 の新チャンクを主役に、S3 で覚えた遺跡の形（崩れる橋・振り子・列柱）を混ぜる */
     chunkPool: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id)
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.drop).map((c) => c.id))
       .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
                'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole'])
   },
@@ -1736,21 +1709,13 @@ const STAGE_DEFS = {
     speedFrom: 26, speedTo: 30, minRank: 3, maxRank: 4, setpiece: 'megafish',
     density: [8, 12],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
-    tipOnce: { cur: 'current', lift: 'liftpad', door: 'colordoor' },
-    /* P5c（契約§4.8 tip の猶予規則）: 初出が tip の窓ぶん場所を取るので、
-       まだ出していないギミックの札を少し重くして顔出しの率を保つ */
-    tipBoost: true,
-    tipMul: 2,
+    /* 海流ベルト・浮上足場・色の扉は契約 v2（2026-09-24）で失効。新ギミック（サメ・泡）は P7b */
     /* 顔ぶれ: S5 の新チャンクが主役。基本形（柱・光線・跳び継ぎ）は深海スキンで顔が変わる。
        他ゾーン専用のギミック（崩れる橋・同時スイッチ・落ちる天井）は混ぜない（契約§4.4）。 */
     /* 跳び継ぎ（leap）を厚く入れて §4.3 の比率（レーン50%前後／ジャンプ35%前後）に寄せる。
        深海の顔ぶれは both 型（岩柱・放電柱・触手）が主役でレーン移動に偏るため。 */
     chunkPool: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id)
       .concat(CHUNK_DEFS.filter((c) => c.s5 && c.dense === 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.cur).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.cur).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.door).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.lift).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
       .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
@@ -1897,8 +1862,7 @@ const STAGE_DEFS = {
     /* 「全部混在」（契約§4.4 S8）: まだ出していないギミックを持つ札を強く引く。
        網羅札（cov_*）は1本で3〜4種を持つので、この重みで4本が互いを選び合う。
        合体は forcePlan が受け持つのでここには入れない。 */
-    coverFlags: ['bridge', 'pend', 'sync', 'drop', 'cur', 'lift', 'door',
-                 'warp', 'zero', 'net', 'mir', 'swap'],
+    coverFlags: ['bridge', 'pend', 'sync', 'warp', 'zero', 'net', 'mir', 'swap'],
     coverMul: 6,
     /* 顔ぶれ: S8 の新チャンク（網羅札＋短い工兵札）＋
        先行ステージの rank4〜5 のチャンク（ゾーン依存のスキンはコアの混在スキンが
@@ -1927,8 +1891,8 @@ const ENDLESS_UNLOCK = {
   S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
   S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id),
   S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id),       // 崩れる橋・振り子の刃
-  S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id),       // 同時スイッチ・落ちる天井
-  S5: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),       // 海流ベルト・浮上足場・色の扉
+  S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id),       // 同時スイッチ（落ちる天井は失効）
+  S5: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),       // 深海の顔ぶれ（旧 海流・浮上足場・色の扉は失効）
   S6: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id),       // 重力反転・無重力・レーザーネット
   S7: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id),       // 鏡ゾーン・入れ替えワープ
   /* S8 の顔ぶれ（全部混在）。合体区間は S8 専用の演出なのでエンドレスには持ち込まない
@@ -2001,7 +1965,7 @@ const Fair = {
      demand が付かないので walls() から落ちる。それを検査するためにここを分けている。 */
   wallsAll(list, speedAt, opt) {
     /* **当たり判定を持たない実体（ghost）はウォールに数えない**。
-       海流の帯・色の扉（同色）・ワープのゲート・無重力の粒子・ネットの枠は
+       ワープのゲート・無重力の粒子・ネットの枠は
        通り抜けるだけなので、これが混ざるとウォールの位置（at / atEnd）が
        実際の危険より前後に広がり、ありもしない「間隔違反」を作ってしまう
        （2026-09-22 P4b: 無重力の粒子がウォールに吸い込まれていた）。 */
@@ -2129,21 +2093,6 @@ const Fair = {
       });
     });
 
-    /* 海流ベルト（契約§4.5 / S5）: **押し出しの直前にウォールを置かない**。
-       流されてから避けるまでに、少なくとも反応窓ぶんの余白が要る。 */
-    if (opt.currents && opt.currents.length) {
-      Fair.SIDES.forEach((side) => {
-        walls.forEach((w) => {
-          if (!w.demand[side]) return;
-          const sp = speedAt(w.at);
-          if (Current.pushNear(opt.currents, side, w.at, sp * CFG.CURRENT.SAFE_T)) {
-            errs.push('海流の押し出しがウォール直前(' + side + ') @' + w.at.toFixed(1) +
-                      '（' + CFG.CURRENT.SAFE_T + '秒の余白が要る）');
-          }
-        });
-      });
-    }
-
     /* 重力反転ワープ（契約§4.5 / S6）: **ゲートの直後 1.0秒は障害物を置かない**。
        面が入れ替わって相手のレーンから走り始めるので、立て直す時間が要る。 */
     if (opt.warps && opt.warps.length) {
@@ -2216,13 +2165,6 @@ const Fair = {
         const passM = Fair.maxDepth() + Math.max(CFG.BODY_D, CFG.SLIDE_D);
         const usable = Math.max(0, (w.at - prevAt) - passM);
         const steps = Math.floor(usable / (sp * CFG.LANE_T));
-        /* 海流で流された分を織り込む（契約§4.5「ボット・Fair は流れ込みで評価」）。
-           押し出しは決定論的なので、前のウォールの生存レーンから
-           **押された先** を起点にして、そこから steps 回だけ動ける、と数える。
-           逆らう横入力で戻すのも同じ「1回の移動」なので steps を分け合う。 */
-        const drift = opt.currents
-          ? Current.driftBetween(opt.currents, side, prevAt, w.at) : 0;
-        if (drift) reach = reach.map((l) => U.clamp(l + drift, -1, 1));
         const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps));
         const ok = cand.filter((l) => Fair.laneSurvivable(w, side, l));
         const anySafe = CFG.LANES.filter((l) => Fair.laneSurvivable(w, side, l));
@@ -2395,19 +2337,16 @@ const MOTION_SCALE = {
   rot:    { key: 'periodM', def() { return CFG.LASER.ROT_PERIOD; } },
   blink:  { key: 'periodM', def() { return CFG.LASER.BLINK_PERIOD; } },
   bridge: { key: 'leadM',   def() { return CFG.REF_SPEED * CFG.BRIDGE.LEAD_T; } },
-  /* 浮上足場（S5）も同じ仕組みに乗せる＝「浮上→沈むの1周期の秒数」が速度によらず一定 */
-  lift:   { key: 'periodM', def() { return CFG.LIFT.PERIOD; } },
   /* レーザーネット（S6）の横ビーム・斜めビームも同じ（1往復の秒数が一定） */
   hbeam:  { key: 'periodM', def() { return CFG.NET.PERIOD; } },
   diag:   { key: 'periodM', def() { return CFG.NET.PERIOD; } },
   /* 割れた鏡の床（S7）の足場の揺れも同じ（1往復の秒数が速度によらず一定） */
   shard:  { key: 'periodM', def() { return CFG.SHARD.PERIOD; } }
 };
-/* 崩れる橋は必ず bridge パラメータを、浮上足場は必ず lift パラメータを持つ。
+/* 崩れる橋は必ず bridge パラメータを持つ。
    書き忘れても生成時に既定値が入るようにしておく（＝位相の規則が常に効く）。 */
 function normParams(type, p) {
   if (type === 'BRIDGE') return (p && p.bridge) ? p : Object.assign({}, p || {}, { bridge: {} });
-  if (type === 'LIFTPAD') return (p && p.lift) ? p : Object.assign({}, p || {}, { lift: {} });
   return p;
 }
 function scaleParams(p, scale) {
@@ -2440,19 +2379,6 @@ function expandEntry(items, e, surface, at, nowDist, scale, sink) {
     });
     return;
   }
-  /* 色の扉（契約§4.5 / S5）: lane に書いたレーンだけが **同色＝通れる扉**、
-     残りの2レーンは異色の扉になる（＝そのレーンへ移らないと抜けられない）。
-     壁の穴と同じ「1エントリ＝全幅に展開」の流儀。 */
-  if (e.type === 'DOOR') {
-    CFG.LANES.forEach((l) => {
-      items.push(Obstacles.make(l === e.lane ? 'DOOR' : 'DOORX', surface, l, at, nowDist, params));
-    });
-    return;
-  }
-  if (e.type === 'CURRENT') {
-    Current.expand(items, e, surface, at, nowDist, scale, sink && sink.currents);
-    return;
-  }
   if (e.type === 'SYNCSW') { Sync.expand(items, e, surface, at, nowDist, scale, sink && sink.syncs); return; }
   /* 無重力区間（契約§4.5 / S6）: 区間の中で踏み切ったジャンプの滞空が 1.5倍になる */
   if (e.type === 'ZEROG') { Zero.expand(items, e, surface, at, nowDist, scale, sink && sink.zeros); return; }
@@ -2464,13 +2390,6 @@ function expandEntry(items, e, surface, at, nowDist, scale, sink) {
   if (e.type === 'HANDSWAP') { Swap.expand(items, e, surface, at, nowDist, scale, sink && sink.swaps); return; }
   /* 合体区間（契約§4.5 / S8）: 専用ゲート2枚。区間の中は2体が1体になって床を走る */
   if (e.type === 'MERGE') { Merge.expand(items, e, surface, at, nowDist, scale, sink && sink.merges); return; }
-  if (e.type === 'DROPCEIL') {
-    /* 落ちる天井の時刻規則（予告→落下→着地）は「その地点の1秒ぶんの距離」で持つ */
-    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
-    items.push(Obstacles.make(e.type, surface, e.lane, at, nowDist,
-                              Object.assign({}, params || {}, { drop: { unitM: unit } })));
-    return;
-  }
   items.push(Obstacles.make(e.type, surface, e.lane, at, nowDist, params));
 }
 
@@ -2560,13 +2479,12 @@ function createGenerator(stage, seed) {
   } : stage.reactBoth;
   const out = [];               // 生成済み障害物（at 昇順）
   const syncs = [];             // 同時スイッチのグループ（Sync が 0.3秒窓を判定する / P3b）
-  const currents = [];          // 海流ベルトの区間（Current が押し出しを判定する / P4a）
   const zeros = [];             // 無重力の区間（Zero が滞空倍率を出す / P4b）
   const warps = [];             // 重力反転ワープの組（Warp が面の入れ替えを判定する / P4b）
   const mirrors = [];           // 鏡ゾーンの組（Mirror が左右反転を判定する / P5a）
   const swaps = [];             // 入れ替えワープの組（Swap が担当の入れ替えを判定する / P5a）
   const merges = [];            // 合体区間（Merge が合体／分離を判定する / P5b）
-  const sink = { syncs: syncs, currents: currents, zeros: zeros, warps: warps,
+  const sink = { syncs: syncs, zeros: zeros, warps: warps,
                  mirrors: mirrors, swaps: swaps, merges: merges };
   const events = [];            // チャンクの events（P2以降のフック）
   const log = [];               // {id, startM, lengthM}
@@ -2628,10 +2546,19 @@ function createGenerator(stage, seed) {
   const got = { lane: 0, jump: 0, slide: 0, total: 0 };
   /* 大演出の頭の障害物（大演出の手前に置くチャンクとの間隔を §4.7 で検査するのに使う / P5c） */
   let spHead = [];
+  let spPillars = 0, spWides = 0;
   const placed = { total: 0 };          // ランダム区間だけの実測（密度の制御に使う）
   if (stage.setpiece && Setpieces.DEFS[stage.setpiece]) {
     const sp0 = Setpieces.build(stage.setpiece, spStart, 0, stage.speedAt(spStart) / CFG.REF_SPEED, null);
     if (sp0) spHead = sp0.items.filter((o) => o.at < spStart + 80);
+    /* ワイド梁の比（§4.3 v2）: 大演出の柱は置き換えないので、最初から数に入れておく
+       （gates は下で宣言＝ここでは数だけ控えて、宣言のあとで足す） */
+    if (sp0) {
+      spPillars = sp0.items.filter((o) => o.type === 'PILLAR').length;
+      const ws = {};
+      sp0.items.forEach((o) => { if (o.type === 'WIDEBAR') ws[o.at.toFixed(2) + '|' + o.lane] = 1; });
+      spWides = Object.keys(ws).length;
+    }
     if (sp0) { seedMix = Fair.countDemands(sp0.items, stage.speedAt);
                got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total; }
   }
@@ -2725,19 +2652,26 @@ function createGenerator(stage, seed) {
   function put(items, e, surface, at, nowDist, scale, dst) {
     expandEntry(items, e, surface, at, nowDist, scale, dst || sink);
   }
-  /* 置けるかどうか分からないうちは、同時スイッチ・海流ベルトの「区間」を
+  /* 置けるかどうか分からないうちは、同時スイッチ・ゲート型ギミックの「区間」を
      本物の入れ物へ入れない（試し置きの残骸が走行中に効いてしまう）。
      ＝ 各試行はその場限りの local に積み、§4.7 を満たした時だけ移す。 */
-  function instantiate(def, startM, nowDist, drop) {
+  function instantiate(def, startM, nowDist, drop, wide) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
     const items = [];
     const keyOf = new Map();      // 障害物 → 由来のエントリ（'f3' / 'c1'）。tip の窓の検査に使う
-    const local = { syncs: [], currents: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
+    const local = { syncs: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
     const putAll = (list, surface, pre) => (list || []).forEach((e, i) => {
       const key = pre + i;
       if (drop && drop[key]) return;
       const n0 = items.length;
-      put(items, e, surface, startM + e.at * scale, nowDist, scale, local);
+      if (wide && wide[key] !== undefined && e.type === 'PILLAR') {
+        /* ワイド梁の通常出現（契約§4.3 v2）: 柱を「2レーン封鎖のゲート（床＋天井の対＝全高）」に */
+        const at = startM + e.at * scale, we = { at: e.at, lane: wide[key], type: 'WIDEBAR' };
+        put(items, we, 'floor', at, nowDist, scale, local);
+        put(items, we, 'ceil', at, nowDist, scale, local);
+      } else {
+        put(items, e, surface, startM + e.at * scale, nowDist, scale, local);
+      }
       for (let k = n0; k < items.length; k++) keyOf.set(items[k], key);
     });
     putAll(def.floor, 'floor', 'f');
@@ -2775,48 +2709,52 @@ function createGenerator(stage, seed) {
     /* 対象の位置 T を「leadAt(T) ≥ base」になる最小へ（速度は位置で変わるので2回回す） */
     let T = base + stage.speedAt(base) * CFG.TIP.LEAD_T;
     T = Math.max(base + stage.speedAt(T) * CFG.TIP.LEAD_T, noDemandUntil + 0.5);
-    for (let pad = 0; pad <= 30; pad += 3) {
-      const startM = Math.max(cursor, T + pad - tOff);
-      let drop = {}, inst = null, win = null;
-      for (let it = 0; it < 4; it++) {
-        inst = instantiate(def, startM, nowDist, drop);
-        const tItems = inst.items.filter((o) => inst.keyOf.get(o) === tgt.key);
-        if (!tItems.length) { inst = null; break; }
-        const tFirst = Math.min.apply(null, tItems.map((o) => o.at));
-        const tLast = TIP_ENTRY_ONLY[tgt.e.type] ? tFirst : Math.max.apply(null, tItems.map((o) => o.at));
-        win = { tipAt: leadAt(tFirst), tFirst: tFirst, tLast: tLast,
-                end: tLast + stage.speedAt(tLast) * CFG.TIP.AFTER_T,
-                uids: tItems.map((o) => o.uid) };
-        /* 窓に入る（または対象より手前の）「対象以外の必須動作」を持つエントリを外す */
-        let added = false;
-        Fair.walls(inst.items, stage.speedAt, { merges: merges.concat(inst.local.merges) }).forEach((w) => {
-          /* 窓の中だけでなく **対象より手前** も外す（前のチャンクとの間に割り込ませない） */
-          if (w.at > win.end + 0.5) return;
-          w.items.forEach((o) => {
-            const k = inst.keyOf.get(o);
-            if (k === tgt.key || drop[k]) return;
-            if (Obstacles.demand(o, 'floor') === 'none' && Obstacles.demand(o, 'ceil') === 'none') return;
-            drop[k] = true; added = true;
+    /* ワイド梁の通常出現（契約§4.3 v2）: tip つきの初出チャンクも柱をゲートへ置き換えて試す */
+    const variants = wideVariants(def);
+    for (let vi = 0; vi < variants.length; vi++) {
+      const wide = variants[vi];
+      for (let pad = 0; pad <= 30; pad += 3) {
+        const startM = Math.max(cursor, T + pad - tOff);
+        let drop = {}, inst = null, win = null;
+        for (let it = 0; it < 4; it++) {
+          inst = instantiate(def, startM, nowDist, drop, wide);
+          const tItems = inst.items.filter((o) => inst.keyOf.get(o) === tgt.key);
+          if (!tItems.length) { inst = null; break; }
+          const tFirst = Math.min.apply(null, tItems.map((o) => o.at));
+          const tLast = TIP_ENTRY_ONLY[tgt.e.type] ? tFirst : Math.max.apply(null, tItems.map((o) => o.at));
+          win = { tipAt: leadAt(tFirst), tFirst: tFirst, tLast: tLast,
+                  end: tLast + stage.speedAt(tLast) * CFG.TIP.AFTER_T,
+                  uids: tItems.map((o) => o.uid) };
+          /* 窓に入る（または対象より手前の）「対象以外の必須動作」を持つエントリを外す */
+          let added = false;
+          Fair.walls(inst.items, stage.speedAt, { merges: merges.concat(inst.local.merges) }).forEach((w) => {
+            /* 窓の中だけでなく **対象より手前** も外す（前のチャンクとの間に割り込ませない） */
+            if (w.at > win.end + 0.5) return;
+            w.items.forEach((o) => {
+              const k = inst.keyOf.get(o);
+              if (k === tgt.key || drop[k]) return;
+              if (Obstacles.demand(o, 'floor') === 'none' && Obstacles.demand(o, 'ceil') === 'none') return;
+              drop[k] = true; added = true;
+            });
           });
-        });
-        if (!added) break;
+          if (!added) break;
+        }
+        if (!inst || !win) return null;
+        if (win.tipAt < base - 1e-6) continue;
+        /* 大演出にはみ出すなら置かない（起点を後ろへずらした分を含めて見る） */
+        if (!setpieceDone && isFinite(spStart) && startM + chunkStats(def).lastAt * scale > spStart) return null;
+        /* 大演出の手前に窓がはみ出すなら置かない */
+        if (!setpieceDone && isFinite(spStart) && win.end > spStart - 1) return null;
+        const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
+                                   { startLanes: 'any', reactBoth: RB,
+                                     zeros: zeros.concat(inst.local.zeros),
+                                     warps: warps.concat(inst.local.warps),
+                                     mirrors: mirrors.concat(inst.local.mirrors),
+                                     swaps: swaps.concat(inst.local.swaps),
+                                     merges: merges.concat(inst.local.merges) });
+        if (errs.length) continue;
+        return { inst: inst, win: win, dropped: Object.keys(drop).length };
       }
-      if (!inst || !win) return null;
-      if (win.tipAt < base - 1e-6) continue;
-      /* 大演出にはみ出すなら置かない（起点を後ろへずらした分を含めて見る） */
-      if (!setpieceDone && isFinite(spStart) && startM + chunkStats(def).lastAt * scale > spStart) return null;
-      /* 大演出の手前に窓がはみ出すなら置かない */
-      if (!setpieceDone && isFinite(spStart) && win.end > spStart - 1) return null;
-      const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
-                                 { startLanes: 'any', reactBoth: RB,
-                                   currents: currents.concat(inst.local.currents),
-                                   zeros: zeros.concat(inst.local.zeros),
-                                   warps: warps.concat(inst.local.warps),
-                                   mirrors: mirrors.concat(inst.local.mirrors),
-                                   swaps: swaps.concat(inst.local.swaps),
-                                   merges: merges.concat(inst.local.merges) });
-      if (errs.length) continue;
-      return { inst: inst, win: win, dropped: Object.keys(drop).length };
     }
     return null;
   }
@@ -2824,7 +2762,6 @@ function createGenerator(stage, seed) {
   function commit(inst) {
     if (!inst.local) return;
     inst.local.syncs.forEach((g) => syncs.push(g));
-    inst.local.currents.forEach((c) => currents.push(c));
     inst.local.zeros.forEach((z) => zeros.push(z));
     inst.local.warps.forEach((wp) => warps.push(wp));
     inst.local.mirrors.forEach((mr) => mirrors.push(mr));
@@ -2836,7 +2773,49 @@ function createGenerator(stage, seed) {
   /* 直近に置いた障害物の位置（継ぎ目＝この後ろに speed*0.6秒 以内で次を置く） */
   let lastItemAt = -1e9;
   function noteItems(items) {
-    for (let i = 0; i < items.length; i++) if (items[i].at > lastItemAt) lastItemAt = items[i].at;
+    for (let i = 0; i < items.length; i++) {
+      const o = items[i];
+      if (o.at > lastItemAt) lastItemAt = o.at;
+      if (o.type === 'PILLAR') gates.pillar++;
+      else if (o.type === 'WIDEBAR') {
+        const k = o.at.toFixed(2) + '|' + o.lane;
+        if (!gates.seen[k]) { gates.seen[k] = 1; gates.wide++; }
+      }
+    }
+  }
+  /* ---- ワイド梁の通常出現（契約§4.3 v2「ピラーとの出現比 6:4」） -----------------
+     譜面の柱（PILLAR）を、これまでの出現数を見ながら「2レーン封鎖のゲート」へ置き換える。
+     ワイド梁の割合が CFG.WIDE_SHARE に届くまで置き換える（貪欲＝走行のどこでも比が揃う）。
+     置き換えた形で §4.7 を満たせなければ、同じ起点で元の柱のまま試す（空白を作らない）。
+     空くレーン: 左の柱→左2レーン封鎖（右が空く）／右の柱→右2レーン／中央→左右どちらかをシードで。 */
+  const gates = { pillar: spPillars, wide: spWides, seen: {} };
+  function wideVariants(def) {
+    const map = {}, keys = [];
+    let p = gates.pillar, w = gates.wide;
+    (def.floor || []).forEach((e, i) => {
+      if (e.type !== 'PILLAR') return;
+      if ((w + 1) / (p + w + 1) <= CFG.WIDE_SHARE + 0.04) {
+        map['f' + i] = (e.lane < 0) ? -1 : (e.lane > 0) ? 0 : ((rng() < 0.5) ? -1 : 0);
+        keys.push('f' + i);
+        w++;
+      } else p++;
+    });
+    if (!keys.length) return [null];
+    /* 試す順: 全部置き換え → 空く側を逆に → 1本ずつ（両側）→ 置き換えなし。
+       ゲートは柱のレーンを含まなくてよい（新しい障害物＝どちらの端を空けても §4.7 は Fair が見る） */
+    const other = (l) => (l === -1 ? 0 : -1);
+    const flip = {};
+    keys.forEach((k) => { flip[k] = other(map[k]); });
+    const out = [map, flip];
+    if (keys.length > 1) {
+      keys.forEach((k) => {
+        const a = {}, b = {};
+        a[k] = map[k]; b[k] = other(map[k]);
+        out.push(a, b);
+      });
+    }
+    out.push(null);
+    return out;
   }
 
   /* 導入区間（実寸・固定） */
@@ -2881,7 +2860,7 @@ function createGenerator(stage, seed) {
     if (!inst) { setpieceDone = true; return false; }
     const tail = out.slice(-8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
-                               { startLanes: 'any', reactBoth: RB, currents: currents,
+                               { startLanes: 'any', reactBoth: RB,
                                  zeros: zeros, warps: warps, mirrors: mirrors, swaps: swaps,
                                  merges: merges });
     if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
@@ -2938,7 +2917,7 @@ function createGenerator(stage, seed) {
   }
   function regionEnd() {
     let e = -1e9;
-    [currents, zeros, warps, mirrors, swaps, merges].forEach((l) => l.forEach((r) => {
+    [zeros, warps, mirrors, swaps, merges].forEach((l) => l.forEach((r) => {
       if (typeof r.to === 'number') e = Math.max(e, r.to);
     }));
     syncs.forEach((g) => { e = Math.max(e, g.gapAt || 0); });
@@ -2986,7 +2965,7 @@ function createGenerator(stage, seed) {
     for (let pad = 0; pad <= 60; pad += 4) {
       inst = Setpieces.buildMini(id, base + pad, nowDist, stage.speedAt);
       errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
-                           { startLanes: 'any', reactBoth: RB, currents: currents, zeros: zeros,
+                           { startLanes: 'any', reactBoth: RB, zeros: zeros,
                              warps: warps, mirrors: mirrors, swaps: swaps, merges: merges });
       if (!errs.length) break;
     }
@@ -3100,6 +3079,7 @@ function createGenerator(stage, seed) {
       const gap = U.clamp(need, stage.speedAt(cursor) * 0.18, seam);
       const wantFirst = (lastItemAt > -1e9) ? (lastItemAt + gap) : (cursor + st.firstAt * scale);
       let tooLong = false;
+      const variants = wideVariants(def);
       for (let pad = 0; pad <= 40; pad += 3) {
         /* tip の窓（契約§4.8）が明けるまでは次のチャンクを始めない */
         const startM = Math.max(cursor - st.firstAt * scale, wantFirst + pad - st.firstAt * scale,
@@ -3112,29 +3092,30 @@ function createGenerator(stage, seed) {
           cursor = spStart;
           return appendSetpiece(nowDist);
         }
-        const inst = instantiate(def, startM, nowDist);
-        /* 大演出の頭との間隔も §4.7 で見る（起点が後ろへずれると大演出に詰まる / P5c） */
-        const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
-                                   { startLanes: 'any', reactBoth: RB,
-                                     currents: currents.concat(inst.local.currents),
-                                     zeros: zeros.concat(inst.local.zeros),
-                                     warps: warps.concat(inst.local.warps),
-                                     mirrors: mirrors.concat(inst.local.mirrors),
-                                     swaps: swaps.concat(inst.local.swaps),
-                                     merges: merges.concat(inst.local.merges) });
-        if (!errs.length) {
-          commit(inst);
-          inst.items.forEach((o) => out.push(o));
-          noteItems(inst.items);
-          noteDemands(inst.items);
-          inst.events.forEach((e) => events.push(e));
-          if (forced && def[forced]) forcePtr++;
-          if (stage.coverFlags) stage.coverFlags.forEach((f) => { if (def[f]) covered[f] = true; });
-          log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM,
-                     firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
-          cursor = Math.max(cursor, inst.startM + st.lastAt * scale);
-          lastWallhole = !!def.wallhole;
-          return true;
+        for (let vi = 0; vi < variants.length; vi++) {
+          const inst = instantiate(def, startM, nowDist, null, variants[vi]);
+          /* 大演出の頭との間隔も §4.7 で見る（起点が後ろへずれると大演出に詰まる / P5c） */
+          const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
+                                     { startLanes: 'any', reactBoth: RB,
+                                       zeros: zeros.concat(inst.local.zeros),
+                                       warps: warps.concat(inst.local.warps),
+                                       mirrors: mirrors.concat(inst.local.mirrors),
+                                       swaps: swaps.concat(inst.local.swaps),
+                                       merges: merges.concat(inst.local.merges) });
+          if (!errs.length) {
+            commit(inst);
+            inst.items.forEach((o) => out.push(o));
+            noteItems(inst.items);
+            noteDemands(inst.items);
+            inst.events.forEach((e) => events.push(e));
+            if (forced && def[forced]) forcePtr++;
+            if (stage.coverFlags) stage.coverFlags.forEach((f) => { if (def[f]) covered[f] = true; });
+            log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM,
+                       firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
+            cursor = Math.max(cursor, inst.startM + st.lastAt * scale);
+            lastWallhole = !!def.wallhole;
+            return true;
+          }
         }
       }
       if (tooLong) {
@@ -3174,7 +3155,6 @@ function createGenerator(stage, seed) {
     reactBoth: RB,
     obstacles: out,
     syncs: syncs,
-    currents: currents,
     zeros: zeros,
     warps: warps,
     mirrors: mirrors,

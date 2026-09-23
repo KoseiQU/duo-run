@@ -16,6 +16,10 @@ const Bot = {
     for (let i = 0; i < game.active.length; i++) {
       const o = game.active[i];
       if (!Obstacles.affects(o, surface)) continue;
+      /* 当たり判定を持たない目印（ゲート・粒子）はウォールではない（Fair.wallsAll と同じ扱い）。
+         混ぜると「目印のウォール＝何もしなくてよい」を先に見て、その奥の2レーン封鎖
+         （ワイド梁 / 契約§4.3 v2）への横移動が遅れる（P7a で実測: 無重力の粒子の直後の梁） */
+      if (OBS[o.type].ghost) continue;
       const rel = o.at - game.dist;
       if (rel <= 0.2 || rel > CFG.BOT.LOOKAHEAD) continue;
       mine.push(o);

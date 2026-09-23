@@ -20,8 +20,6 @@ const OBS = {
   ROVER:     { span: 1, depth: 0.50, y0: 0.00, y1: 0.60,   both: false, safe: ['jump'],  label: 'ローバー' },
   /* ピラー（柱）: 1レーン全高。床・天井の両方に効く → レーン移動のみ */
   PILLAR:    { span: 1, depth: 0.50, y0: 0.00, y1: CFG.H,  both: true,  safe: [],        label: 'ピラー' },
-  /* ギャップ（穴）: 面が抜けている。足が面に着いていると落ちる → ジャンプ */
-  GAP:       { span: 1, depth: 1.60, y0: -1.60, y1: 0.04,  both: false, safe: ['jump'],  label: 'ギャップ' },
   /* ワイド梁: 2レーンを塞ぐ。高さ2.2でジャンプでは越えられない → 空いた1レーンへ */
   WIDEBAR:   { span: 2, depth: 0.60, y0: 0.00, y1: 2.20,   both: false, safe: [],        label: 'ワイド梁' },
   /* ローレーザー: 面の近くを走る水平光線（0〜0.6を塞ぐ） → ジャンプ */
@@ -88,14 +86,6 @@ const OBS = {
      （Obstacles.occ が grp を外して測る）ので、迂回路まで含めて §4.7 が担保される。 */
   SYNCGAP:  { span: 1, depth: 1.60, y0: -1.60, y1: 1.60, both: false, safe: [],
               motion: 'sync', label: '同時スイッチの橋' },
-  /* 落ちる天井: **1つの事象が床と天井で別の要求になる**（契約§6 P3b）。
-       床側 … 落ちてきた石のブロック（0〜1.60 ＝ 跳んでも越えられない）→ レーン移動
-       天井側 … 抜けた穴（GAP と同じ寸法）→ ジャンプ
-     bands() が絶対 y で2枚返す both 型。ブロックの高さ 1.60 は
-     「床側は跳んでも届かない（跳躍の足元 1.30 < 1.60）」かつ
-     「天井側で跳んだ体の下端 H-1.30-0.90 = 1.80 には触れない」ぎりぎりの値。 */
-  DROPCEIL: { span: 1, depth: 0.70, y0: 0.00, y1: 1.60, both: true, safe: [],
-              motion: 'drop', label: '落ちる天井' },
   /* 倒れた柱（神殿崩壊）: 3レーンを横断する低い梁（高さ0.62）→ ジャンプ */
   COLUMN:   { span: 3, depth: 0.62, y0: 0.00, y1: 0.62, both: false, safe: ['jump'],
               label: '倒れた柱' },
@@ -103,25 +93,6 @@ const OBS = {
   /* ------------------------------------------------------------------------
      S5「深海」の新ギミック（契約§4.4 / §4.5 / P4a）
      ------------------------------------------------------------------------ */
-  /* 海流ベルトの帯（見た目だけ・当たり判定なし）。流される規則は Current が唯一の出所。
-     ghost:true ＝ bands が常に空＝完全に無害（占有もしない）。 */
-  CURRENT:  { span: 3, depth: 1.0, y0: 0.00, y1: 0.02, both: false, safe: [],
-              ghost: true, harmless: true, belt: true, label: '海流ベルト' },
-  /* 海流ベルトの入口ゲート（予告）。同じく当たり判定なし */
-  CURGATE:  { span: 3, depth: 0.5, y0: 0.00, y1: 0.02, both: false, safe: [],
-              ghost: true, harmless: true, belt: true, label: '海流の入口' },
-  /* 色の扉（契約§4.5）: 扉に色があり、**同色のキャラしか通れない**。
-       DOOR  … そのキャラと同じ色の扉＝通れる（当たり判定なし）
-       DOORX … 異色の扉＝通れない。跳んでも潜っても抜けられない（0〜2.30）＝レーン移動
-     床側は琥珀＝LUMEN が通れる色、天井側は藍＝UMBRA が通れる色（スキンが surface で塗り分ける）。 */
-  DOOR:     { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
-              ghost: true, harmless: true, door: true, label: '色の扉（同色）' },
-  DOORX:    { span: 1, depth: 0.55, y0: 0.00, y1: 2.30, both: false, safe: [],
-              door: true, label: '色の扉（異色）' },
-  /* 浮上足場（契約§4.5）: 周期的に浮き上がって高さ0.60（ローバー相当）になり、
-     沈むと通れる。天井側は逆に垂れ下がる。到達時刻の高さで判定する。 */
-  LIFTPAD:  { span: 1, depth: 0.55, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],
-              motion: 'lift', label: '浮上足場' },
   /* 巨大魚の部位（契約§4.4 S5 の大演出）。判定は既存の型と同じ寸法で、
      見た目は全ゾーン共通の障害物（牙＝ハードル／ヒレ・尾＝ピラー / 契約§4.3 v2）。 */
   FISH_TOOTH: { span: 1, depth: 0.50, y0: 0.00, y1: 0.60, both: false, safe: ['jump'],
@@ -243,50 +214,6 @@ const MOT = {
   bridgeFall(o, dist) {
     const f = MOT.bridgeFallAt(o);
     return (dist <= f) ? 0 : Math.min(1, (dist - f) / 3.2);
-  },
-
-  /* ------------------------------------------------------------------------
-     落ちる天井（契約§4.4 S4）の時刻規則。**ここが唯一の出所**。
-     すべて「到達（dist = o.at）の何秒手前か」で書き、生成時に実寸へ伸縮した
-     unitM（＝その地点の速度×1秒）を掛けて距離にする。崩れる橋と同じ流儀。
-       warnAt  … ひび・砂が落ち始める（予告）
-       fallAt  … 天井から外れて落ち始める。**ここから bands が最終形を返す**
-       landAt  … 床に着く（= 到達の CFG.DROP.LAND_T 秒手前 ≥ 視認距離）
-     ------------------------------------------------------------------------ */
-  dropUnit(o) { return (o.params && o.params.drop && o.params.drop.unitM) || CFG.REF_SPEED; },
-  dropLandAt(o) { return o.at - CFG.DROP.LAND_T * MOT.dropUnit(o); },
-  dropFallAt(o) { return MOT.dropLandAt(o) - CFG.DROP.FALL_T * MOT.dropUnit(o); },
-  dropWarnAt(o) { return MOT.dropFallAt(o) - CFG.DROP.WARN_T * MOT.dropUnit(o); },
-  /* 落下の進み具合 0..1（0 = 天井にある / 1 = 着地）。見た目も判定もこの1本から引く */
-  dropFall(o, dist) {
-    const a = MOT.dropFallAt(o), b = MOT.dropLandAt(o);
-    return U.clamp((dist - a) / Math.max(1e-6, b - a), 0, 1);
-  },
-  /* 予告（ひび・砂）の強さ 0..1 */
-  dropWarn(o, dist) {
-    const a = MOT.dropWarnAt(o), b = MOT.dropFallAt(o);
-    return U.clamp((dist - a) / Math.max(1e-6, b - a), 0, 1);
-  },
-
-  /* ------------------------------------------------------------------------
-     浮上足場（契約§4.5 / §4.4 S5）の時刻規則。**ここが唯一の出所**。
-     点滅レーザー（blinkOn）と同じ「到達した瞬間（dist = at）が枠の中央」という作り。
-       liftK(o, dist) … 0（沈みきって通れる）〜 1（浮ききってローバー相当）
-     枠の終わりの RISE だけを使って次の姿へ移る＝到達の前後は平ら（“溜め”）なので、
-     通過窓（±0.6m 程度）の中で高さが変わらない＝判定が譜面どおりになる。
-     ------------------------------------------------------------------------ */
-  liftK(o, dist) {
-    const p = o.params && o.params.lift;
-    if (!p) return 1;                                     // params 無しは「浮いたまま」
-    const P = p.periodM || CFG.LIFT.PERIOD;
-    const x = (dist - o.at) / P + 0.5;
-    const k = Math.floor(x), f = x - k;
-    const even = ((k % 2) + 2) % 2 === 0;
-    const upNow = even ? (p.upAtArrival !== false) : !(p.upAtArrival !== false);
-    const a = upNow ? 1 : 0, b = upNow ? 0 : 1;
-    const TR = CFG.LIFT.RISE;
-    if (f > 1 - TR) return U.lerp(a, b, U.smooth((f - (1 - TR)) / TR));
-    return a;
   },
 
   /* ------------------------------------------------------------------------
@@ -463,138 +390,6 @@ const Sync = {
              .map((g) => ({ padAt: +g.padAt.toFixed(1), gapAt: +g.gapAt.toFixed(1), ok: g.ok,
                             dt: (g.floor !== null && g.ceil !== null)
                                 ? +(Math.abs(g.floor - g.ceil) / g.unit).toFixed(3) : null }));
-  }
-};
-
-/* ============================================================================
-   Current — 海流ベルト（契約§4.5 / §4.4 S5）の**時刻規則の唯一の出所**
-
-   ■ 形
-     区間 [from, to] に入ると、床側と天井側がそれぞれ決まった向きへ流される。
-     流れは「PUSH_T 秒ごとに1レーンぶん押し出す」という離散の押し出しで表す
-     （1スワイプ＝1レーンという操作の粒度にそろえる / §4.2）。
-     押し出す距離は生成時に決まった unit（＝その地点の速度×1秒）で測るので、
-     速度が変わっても「1レーンぶんを1.0秒で」が一定になる。
-   ■ 規則
-     ・押し出しは **走行距離が pushes[i] を跨いだ瞬間** に1回だけ起きる。
-       距離の関数なので、フレームレート・スロー演出・中断復元に左右されない。
-     ・跳んでいても押される（水に流されるので当然）＝ 予測が常に成り立つ。
-     ・流れに逆らう横入力で相殺できる（押し戻すのは普通のレーン移動）。
-   ■ 誰が読むか
-     判定（Game.step → Current.update）・ボット（押された結果の laneTo を見て戻す）・
-     不変条件（Fair.validate が driftBetween / pushNear を読む）が同じここを読む。
-   ============================================================================ */
-const Current = {
-  /* 譜面の1エントリ（type:'CURRENT'）を実体へ展開する。
-     params.cur = { dir: 床の向き(+1=右/-1=左), cdir: 天井の向き（省略時は -dir）,
-                    n: 押し出しの回数（＝区間の長さ 秒） } */
-  expand(items, e, surface, at, nowDist, scale, sink) {
-    const p = (e.params && e.params.cur) || {};
-    const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
-    const dir = (p.dir === undefined) ? 1 : p.dir;
-    const cdir = (p.cdir === undefined) ? -dir : p.cdir;
-    const n = (p.n === undefined) ? 3 : p.n;
-    const pushM = unit * CFG.CURRENT.PUSH_T;
-    const from = at, to = at + n * pushM;
-    const pushes = [];
-    for (let i = 0; i < n; i++) pushes.push(from + (i + 0.5) * pushM);
-    const reg = { from: from, to: to, unit: unit, n: n,
-                  dir: { floor: dir, ceil: cdir }, pushes: pushes, done: [], dead: false };
-    /* 入口ゲート（予告）＋ 矢印の帯（1秒ぶんずつ）。どちらも当たり判定を持たない */
-    const gate = Obstacles.make('CURGATE', 'floor', 0, from, nowDist, { cur: { unitM: unit, dir: dir, cdir: cdir } });
-    gate.reg = reg;
-    items.push(gate);
-    for (let i = 0; i < n; i++) {
-      ['floor', 'ceil'].forEach((side) => {
-        const o = Obstacles.make('CURRENT', side, 0, from + (i + 0.5) * pushM, nowDist,
-                                 { cur: { unitM: unit, dir: (side === 'floor') ? dir : cdir } });
-        o.reg = reg;
-        items.push(o);
-      });
-    }
-    if (sink) sink.push(reg);
-    return reg;
-  },
-
-  /* a < 押し出し ≤ b の回数 × 向き（符号つきレーン数）。Fair とボットの共通の窓口 */
-  driftBetween(list, side, a, b) {
-    if (!list || !list.length) return 0;
-    let d = 0;
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      if (r.dead || r.to < a || r.from > b) continue;
-      for (let k = 0; k < r.pushes.length; k++) {
-        if (r.pushes[k] > a && r.pushes[k] <= b) d += r.dir[side];
-      }
-    }
-    return d;
-  },
-  /* atM の直前 windowM 以内に押し出しがあるか（＝避ける余裕がないか） */
-  pushNear(list, side, atM, windowM) {
-    if (!list || !list.length) return false;
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      if (r.dead || !r.dir[side]) continue;
-      for (let k = 0; k < r.pushes.length; k++) {
-        if (r.pushes[k] > atM - windowM && r.pushes[k] <= atM) return true;
-      }
-    }
-    return false;
-  },
-  /* 今この距離が海流の中か（HUD・見た目・ボットの参考に） */
-  inBelt(list, side, m) {
-    if (!list) return 0;
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      if (!r.dead && m >= r.from && m <= r.to) return r.dir[side];
-    }
-    return 0;
-  },
-
-  /* 毎フレーム1回（Game.step から）。prevDist → dist の間に跨いだ押し出しを実行する */
-  update(game) {
-    const list = (game.gen && game.gen.currents) ? game.gen.currents : null;
-    if (!list || !list.length) { Current.hud(game, 0); return; }
-    const a = game.prevDist, b = game.dist;
-    for (let i = 0; i < list.length; i++) {
-      const r = list[i];
-      if (r.dead) continue;
-      for (let k = 0; k < r.pushes.length; k++) {
-        const p = r.pushes[k];
-        if (p <= a || p > b) continue;
-        for (let j = 0; j < game.runners.length; j++) {
-          const rn = game.runners[j];
-          const d = r.dir[rn.surface];
-          if (d) Runners.push(rn, d);
-        }
-      }
-    }
-    Current.hud(game, Current.inBelt(list, 'floor', b));
-  },
-
-  /* HUD の「CURRENT」表示（流れの向きを出す） */
-  hud(game, dir) {
-    if (typeof HUD === 'undefined' || !HUD.currentCue) return;
-    const list = (game.gen && game.gen.currents) ? game.gen.currents : null;
-    const c = Current.inBelt(list, 'ceil', game.dist);
-    HUD.currentCue(dir, c);
-  },
-
-  /* 中断・チェックポイント再開で「入口は通り過ぎたのに流れだけ残る」を作らない */
-  dropOrphans(list, cutM) {
-    return list.filter((o) => !(o.reg && o.reg.from < cutM));
-  },
-  killBefore(regs, cutM) {
-    if (!regs) return;
-    for (let i = 0; i < regs.length; i++) if (regs[i].from < cutM) regs[i].dead = true;
-  },
-
-  /* テスト・監査の窓口 */
-  snapshot(game) {
-    const list = (game.gen && game.gen.currents) ? game.gen.currents : [];
-    return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
-               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1), n: r.n,
-                              dir: r.dir.floor, cdir: r.dir.ceil }));
   }
 };
 
@@ -1062,17 +857,7 @@ const Obstacles = {
                     : { x0: x0, x1: x1, y0: y0, y1: y1 });
     };
 
-    if (t.pad || t.ghost) return out;                      // 踏み板・海流の帯・同色の扉は当たらない
-
-    if (t.motion === 'lift') {
-      /* 浮上足場（契約§4.5）: 到達時刻の高さがそのまま判定になる。
-         沈みきっている間は帯を返さない＝通れることが判定でも見た目でも同じ。 */
-      const k = MOT.liftK(o, dist);
-      if (k <= CFG.LIFT.EPS) return out;
-      put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET,
-          t.y0, t.y0 + (t.y1 - t.y0) * k);
-      return out;
-    }
+    if (t.pad || t.ghost) return out;                      // 踏み板・ゲート・粒子は当たらない
 
     if (t.motion === 'sync') {
       /* 同時スイッチの橋（契約§4.5）: 成功していれば橋が架かっている＝完全に無害。
@@ -1080,17 +865,6 @@ const Obstacles = {
          ＝ 成否の規則は Sync の1か所だけで、ここはその結果を読むだけ。 */
       if (o.grp && o.grp.ok === true) return out;
       put((o.lane - 0.5) * CFG.LANE_W + OBS_INSET, (o.lane + 0.5) * CFG.LANE_W - OBS_INSET, t.y0, t.y1);
-      return out;
-    }
-
-    if (t.motion === 'drop') {
-      /* 落ちる天井（契約§4.4 S4）: 天井から外れる（dropFallAt）より手前では
-         まだ天井にはまっているので無害。外れた後は **床のブロック** と
-         **天井の穴** の2枚を絶対 y で返す＝床と天井で別の要求になる。 */
-      if (dist < MOT.dropFallAt(o) - 1e-9) return out;
-      const x0 = (o.lane - 0.5) * CFG.LANE_W + OBS_INSET, x1 = (o.lane + 0.5) * CFG.LANE_W - OBS_INSET;
-      out.push({ x0: x0, x1: x1, y0: t.y0, y1: t.y1 });                             // 落ちたブロック（床側）
-      out.push({ x0: x0, x1: x1, y0: CFG.H - OBS.GAP.y1, y1: CFG.H - OBS.GAP.y0 }); // 抜けた天井（天井側）
       return out;
     }
 
@@ -1219,7 +993,6 @@ const Obstacles = {
   /* 路面タイルを消す区間（穴の下は空洞・崩れる橋の下は谷）。World.syncCorridor が読む。
      null なら路面はそのまま。区間は **距離 m** で返す。 */
   holeSpan(o, dist) {
-    if (o.type === 'GAP') return { from: o.at - OBS.GAP.depth / 2, to: o.at + OBS.GAP.depth / 2 };
     if (o.type === 'BRIDGE') {
       return { from: MOT.bridgeEntry(o) - 0.7, to: o.at + OBS.BRIDGE.depth / 2 + 0.7 };
     }
@@ -1233,11 +1006,6 @@ const Obstacles = {
     if (o.type === 'SHARDGAP') {
       return { from: o.at - OBS.SHARDGAP.depth / 2, to: o.at + OBS.SHARDGAP.depth / 2,
                side: o.surface, lanes: CFG.LANES };
-    }
-    /* 落ちる天井: 天井から外れたら、その**天井側**の路面が抜ける（床側は抜けない） */
-    if (o.type === 'DROPCEIL') {
-      if (dist !== undefined && dist < MOT.dropFallAt(o)) return null;
-      return { from: o.at - OBS.DROPCEIL.depth / 2, to: o.at + OBS.DROPCEIL.depth / 2, side: 'ceil' };
     }
     return null;
   },
@@ -1582,224 +1350,6 @@ const Obstacles = {
       g.userData.sync = { span: span, ghost: ghost, wreck: wreck, ghostMat: gm };
       g.userData.syncMats = own;
     };
-    /* 落ちる天井: 予告のひび → 落ちるブロック → 天井に開いた穴 */
-    const dropKit = (mats) => {
-      mats = mats || {};
-      const stone = mats.stone || Obstacles._material('dcStone', C.body);
-      const TOP = t.y1;                              // 1.60（判定どおり）
-      /* ブロック（下端 y=0 で作る。place() が天井から床まで動かす） */
-      const block = new THREE.Group();
-      block.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, TOP - 0.26, D * 0.9), p: [0, (TOP - 0.26) / 2, 0] },
-        { g: ZoneKit.box(w, 0.20, D), p: [0, TOP - 0.10, 0] },
-        { g: ZoneKit.box(w * 0.92, 0.14, D * 0.96), p: [0, 0.07, 0] },
-        { g: ZoneKit.box(w * 0.30, 0.30, 0.30), p: [-(w * 0.26), TOP * 0.42, D * 0.32], r: [0.4, 0.2, 0.3] },
-        { g: ZoneKit.box(w * 0.24, 0.24, 0.24), p: [w * 0.28, TOP * 0.70, -D * 0.30], r: [0.2, 0.5, 0.1] }
-      ]), stone));
-      const bm = mats.warn || Obstacles._emissive('dcWarn', C.warn);
-      block.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, 0.10, D + 0.04), p: [0, TOP - 0.24, 0] },
-        { g: ZoneKit.box(w * 0.86, 0.07, D * 0.4), p: [0, 0.16, 0] }
-      ]), bm));
-      g.add(block);
-      /* 天井の穴（抜けた先の闇）＋欠けた縁 */
-      const own = [];
-      const hm = new THREE.MeshBasicMaterial({ color: C.pit, transparent: true, opacity: 0,
-                                               depthWrite: false, side: THREE.DoubleSide, fog: true });
-      own.push(hm);
-      const hole = new THREE.Mesh(new THREE.PlaneGeometry(w, D), hm);
-      hole.rotation.x = Math.PI / 2;
-      hole.position.y = CFG.H - 0.02;
-      hole.renderOrder = 2;
-      g.add(hole);
-      const rim = new THREE.Group();
-      rim.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, 0.14, 0.12), p: [0, CFG.H - 0.07, -(D / 2)] },
-        { g: ZoneKit.box(w, 0.14, 0.12), p: [0, CFG.H - 0.07, D / 2] },
-        { g: ZoneKit.box(0.10, 0.14, D), p: [-(w / 2 - 0.05), CFG.H - 0.07, 0] },
-        { g: ZoneKit.box(0.10, 0.14, D), p: [w / 2 - 0.05, CFG.H - 0.07, 0] }
-      ]), stone));
-      /* 穴の縁を光らせる（天井側は「ここが抜けている＝跳べ」の合図） */
-      rim.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, 0.06, 0.06), p: [0, CFG.H - 0.17, -(D / 2)] },
-        { g: ZoneKit.box(w, 0.06, 0.06), p: [0, CFG.H - 0.17, D / 2] },
-        { g: ZoneKit.box(0.06, 0.06, D), p: [-(w / 2 - 0.04), CFG.H - 0.17, 0] },
-        { g: ZoneKit.box(0.06, 0.06, D), p: [w / 2 - 0.04, CFG.H - 0.17, 0] }
-      ]), mats.warn || Obstacles._emissive('dcRim', C.warn)));
-      g.add(rim);
-      /* 予告のひび（落ちる前の天井）と、落ちる砂／着地後の土煙の筋。
-         どちらも1メッシュずつに抑える（ドローコール / 契約§3 の300以下） */
-      const cm = new THREE.MeshBasicMaterial({ color: C.warn, transparent: true, opacity: 0.85,
-                                               depthWrite: false, side: THREE.DoubleSide, fog: true });
-      own.push(cm);
-      const crack = new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w * 0.9, 0.02, 0.05), p: [0, 0, 0] },
-        { g: ZoneKit.box(0.05, 0.02, D * 0.7), p: [-w * 0.2, 0, 0.1] },
-        { g: ZoneKit.box(0.05, 0.02, D * 0.6), p: [w * 0.24, 0, -0.1] }
-      ]), cm);
-      crack.position.y = CFG.H - 0.05;
-      g.add(crack);
-      const sm2 = new THREE.MeshBasicMaterial({ color: mats.dust || C.warn, transparent: true, opacity: 0,
-                                                depthWrite: false, fog: true });
-      own.push(sm2);
-      const sand = new THREE.Mesh(new THREE.BoxGeometry(w * 0.86, 1.4, D * 0.62), sm2);
-      sand.renderOrder = 3;
-      g.add(sand);
-      g.userData.drop = { block: block, hole: hole, rim: rim, crack: crack, sand: sand };
-      g.userData.dropMats = own;
-    };
-
-    /* ------------------------------------------------------------------------
-       S5 の新ギミックの骨組み（ゾーン共通・2026-09-22 P4a）
-       同時スイッチ・落ちる天井と同じ考え方。スキンは色（mats）を渡すだけでよく、
-       スキンが知らないゾーンへ混ざっても見た目と判定がずれない。
-       ------------------------------------------------------------------------ */
-    /* 海流ベルト: 流れの向きを示す矢印の帯。長さ1で作り、place() が「1秒ぶん」へ伸ばす。
-       床と天井の両方に敷く（帯そのものは当たり判定を持たない）。 */
-    const beltKit = (mats) => {
-      mats = mats || {};
-      const own = [];
-      const emis = (col, op) => {
-        const m = new THREE.MeshBasicMaterial({ color: col, fog: true, transparent: true,
-                                                opacity: op, depthWrite: false });
-        own.push(m);
-        return m;
-      };
-      const grp = new THREE.Group();
-      const isGate = (type === 'CURGATE');
-      /* 矢印の色は place() が面から決める（床＝琥珀＝LUMEN／天井＝藍＝UMBRA）。
-         ゾーンの青緑から確実に浮く色で、HUD の矢印とも意味が揃う。 */
-      const arrowMat = emis(mats.arrow || C.cyan, 0.95);
-      g.userData.beltArrowMat = arrowMat;
-      if (isGate) {
-        /* 入口ゲート: コリドーを跨ぐ門と、大きな矢印。「ここから流される」の予告 */
-        const frame = mats.frame || Obstacles._material('cgFrame', C.dark);
-        grp.add(new THREE.Mesh(ZoneKit.merge([
-          { g: ZoneKit.box(0.22, CFG.H + 0.5, 0.22), p: [-(CFG.HALF_W + 0.12), CFG.H / 2, 0] },
-          { g: ZoneKit.box(0.22, CFG.H + 0.5, 0.22), p: [CFG.HALF_W + 0.12, CFG.H / 2, 0] },
-          { g: ZoneKit.box(CFG.HALF_W * 2 + 0.5, 0.22, 0.22), p: [0, CFG.H + 0.12, 0] },
-          { g: ZoneKit.box(CFG.HALF_W * 2 + 0.5, 0.22, 0.22), p: [0, -0.12, 0] }
-        ]), frame));
-        const big = [];
-        [0.55, CFG.H - 0.55].forEach((y) => {
-          big.push({ g: ZoneKit.box(0.9, 0.16, 0.16), p: [0, y, 0] });
-          big.push({ g: ZoneKit.box(0.30, 0.30, 0.16), p: [0.45, y, 0], r: [0, 0, Math.PI / 4] });
-        });
-        const arrows = new THREE.Mesh(ZoneKit.merge(big), arrowMat);
-        grp.add(arrows);
-        g.userData.beltArrows = arrows;
-      } else {
-        /* 矢印の帯（粒）: 面に並ぶ小さな矢羽根。流れの向きへ animated に流れる */
-        const parts = [];
-        for (let i = 0; i < 4; i++) {
-          const z = -0.36 + i * 0.24;
-          /* 矢羽根（軸＋斜めの羽）。遠くからでも向きが読めるよう太めに彫る */
-          parts.push({ g: ZoneKit.box(0.60, 0.05, 0.14), p: [0, 0.035, z] });
-          parts.push({ g: ZoneKit.box(0.26, 0.05, 0.14), p: [0.22, 0.035, z - 0.13], r: [0, -0.7, 0] });
-          parts.push({ g: ZoneKit.box(0.26, 0.05, 0.14), p: [0.22, 0.035, z + 0.13], r: [0, 0.7, 0] });
-        }
-        const lanes = new THREE.Group();
-        CFG.LANES.forEach((l) => {
-          const m = new THREE.Mesh(ZoneKit.merge(parts), arrowMat);
-          m.position.x = l * CFG.LANE_W;
-          m.renderOrder = 4;
-          lanes.add(m);
-        });
-        grp.add(lanes);
-        g.userData.beltArrows = lanes;
-        /* 流れの筋（面のすぐ上を走る光） */
-        const lineMat = emis(mats.line || C.cyan, 0.34);
-        const line = new THREE.Mesh(new THREE.BoxGeometry(CFG.HALF_W * 2 - 0.1, 0.02, 1), lineMat);
-        line.position.y = 0.05;
-        grp.add(line);
-      }
-      g.add(grp);
-      g.userData.belt = grp;
-      g.userData.beltLen = 1;
-      g.userData.beltMats = own;
-    };
-    /* 色の扉（契約§4.5）: 琥珀＝LUMEN／藍＝UMBRA。同色は枠だけ（通れる）、
-       異色は 0〜2.30 を塞ぐ板（跳んでも潜っても抜けられない＝レーン移動）。
-       色は place() が o.surface と型から決めるので、ここでは形だけ作る。 */
-    const doorKit = (mats) => {
-      mats = mats || {};
-      const own = [];
-      const pane = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true, transparent: true,
-                                                 opacity: 0.55, depthWrite: false });
-      own.push(pane);
-      const edge = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true });
-      own.push(edge);
-      const TOP = (type === 'DOORX') ? OBS.DOORX.y1 : 2.30;
-      const frameMat = mats.frame || Obstacles._material('drFrame', C.dark);
-      /* 枠（同色・異色とも同じ形。どちらの扉かは色で見せる） */
-      g.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(0.10, TOP, D * 0.9), p: [-(w / 2 - 0.05), TOP / 2, 0] },
-        { g: ZoneKit.box(0.10, TOP, D * 0.9), p: [w / 2 - 0.05, TOP / 2, 0] },
-        { g: ZoneKit.box(w, 0.16, D * 0.9), p: [0, TOP - 0.08, 0] },
-        { g: ZoneKit.box(w, 0.12, D * 0.9), p: [0, 0.06, 0] }
-      ]), frameMat));
-      /* 枠の内側を走る色の光（遠くから色が読める） */
-      const rim = new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(0.07, TOP, D * 0.95), p: [-(w / 2 - 0.035), TOP / 2, 0] },
-        { g: ZoneKit.box(0.07, TOP, D * 0.95), p: [w / 2 - 0.035, TOP / 2, 0] },
-        { g: ZoneKit.box(w, 0.07, D * 0.95), p: [0, TOP - 0.03, 0] }
-      ]), edge);
-      g.add(rim);
-      if (type === 'DOORX') {
-        /* 異色の扉は「膜」で塞がっている（通れないことが一目で分かる） */
-        const mem = new THREE.Mesh(new THREE.BoxGeometry(w, TOP - 0.1, D * 0.35), pane);
-        mem.position.y = TOP / 2;
-        mem.renderOrder = 3;
-        g.add(mem);
-        const barsMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: true, transparent: true,
-                                                      opacity: 0.9, depthWrite: false });
-        own.push(barsMat);
-        const bars = [];
-        for (let i = 0; i < 4; i++) bars.push({ g: ZoneKit.box(w * 0.94, 0.05, D * 0.4), p: [0, 0.4 + i * 0.55, 0] });
-        const bm = new THREE.Mesh(ZoneKit.merge(bars), barsMat);
-        bm.renderOrder = 3;
-        g.add(bm);
-        g.userData.doorBars = bm;
-      }
-      g.userData.door = { rim: rim, mats: own };
-      g.userData.doorMats = own;
-    };
-    /* 浮上足場（契約§4.5）: 沈んだ土台（判定の外）と、浮き上がる天板。
-       天板の高さは place() が MOT.liftK から引く＝ **見た目＝判定**。 */
-    const liftKit = (mats) => {
-      mats = mats || {};
-      const own = [];
-      const TOP = OBS.LIFTPAD.y1;                      // 0.60（判定どおり）
-      const base = mats.base || Obstacles._material('lpBase', C.dark);
-      /* 土台（面に埋まっている部分＝判定の外。沈んだときはここだけが見える） */
-      g.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, 0.06, D + 0.12), p: [0, 0.03, 0] },
-        { g: ZoneKit.box(w, 0.04, 0.10), p: [0, 0.02, -(D / 2 + 0.06)] },
-        { g: ZoneKit.box(w, 0.04, 0.10), p: [0, 0.02, D / 2 + 0.06] }
-      ]), base));
-      const warnMat = new THREE.MeshBasicMaterial({ color: C.warn, fog: true });
-      own.push(warnMat);
-      g.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, 0.03, 0.07), p: [0, 0.055, -(D / 2 - 0.03)] },
-        { g: ZoneKit.box(w, 0.03, 0.07), p: [0, 0.055, D / 2 - 0.03] }
-      ]), warnMat));
-      /* 天板（**浮ききった姿＝判定どおりの 0〜0.60** で作り、place() が liftK で縦に潰す）。
-         ＝ 見た目と判定が同じ寸法から出る（ズレ検査もそのまま通る）。 */
-      const top = new THREE.Group();
-      top.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, TOP * 0.86, D * 0.92), p: [0, TOP * 0.43, 0] },
-        { g: ZoneKit.box(w, TOP * 0.14, D), p: [0, TOP * 0.93, 0] }
-      ]), mats.body || Obstacles._material('lpBody', C.body)));
-      const hotMat = new THREE.MeshBasicMaterial({ color: C.red, fog: true });
-      own.push(hotMat);
-      top.add(new THREE.Mesh(ZoneKit.merge([
-        { g: ZoneKit.box(w, TOP * 0.07, D), p: [0, TOP * 0.985, 0] },
-        { g: ZoneKit.box(w * 0.9, TOP * 0.05, D * 0.5), p: [0, TOP * 0.55, 0] }
-      ]), hotMat));
-      g.add(top);
-      g.userData.lift = { top: top, mats: own };
-      g.userData.liftMats = own;
-    };
     /* ------------------------------------------------------------------------
        S6 の新ギミックの骨組み（ゾーン共通・2026-09-22 P4b）
        ここまでと同じ考え方。スキンは色（mats）を渡すだけでよく、
@@ -2010,8 +1560,7 @@ const Obstacles = {
 
     const x = { t: t, C: C, g: g, w: w, D: D, box: box, solid: solid, bridge: bridge,
                 lamp: lamp, stripes: stripes, beamMat: beamMat, parts: parts,
-                padKit: padKit, syncKit: syncKit, dropKit: dropKit,
-                beltKit: beltKit, doorKit: doorKit, liftKit: liftKit,
+                padKit: padKit, syncKit: syncKit,
                 deco: (m) => { if (decoMats.indexOf(m) < 0) decoMats.push(m); return m; },
                 gateKit: gateKit, zeroFieldKit: zeroFieldKit, netKit: netKit,
                 shardKit: shardKit, variant: variant || '' };
@@ -2237,53 +1786,7 @@ const Obstacles = {
       });
     }
 
-    /* 海流ベルト（契約§4.5 / S5）: 矢印の帯は「1秒ぶん」の長さに伸ばし、
-       流れの向きへ滑らせる。帯そのものは当たり判定を持たない。 */
-    if (OBS[o.type].belt && ud.belt) {
-      const cur = (o.params && o.params.cur) || {};
-      const unit = cur.unitM || CFG.REF_SPEED;
-      /* 天井側のビューは Z軸まわりに180度回っているので、ローカルの +x は世界の -x。
-         画面上の流れの向きと矢印の向きを一致させるため、天井側は符号を返す。 */
-      const dir = (cur.dir || 1) * ((o.surface === 'ceil') ? -1 : 1);
-      if (o.type === 'CURRENT') {
-        ud.belt.scale.z = (unit * CFG.CURRENT.SEG_T) / (ud.beltLen || 1);
-        const a = ud.beltArrows;
-        if (a) {
-          /* 流れの向きへ矢羽根を向け、距離に比例して横へ送る */
-          a.rotation.y = (dir > 0) ? 0 : Math.PI;
-          const slide = ((dist * 0.35) % CFG.LANE_W) * (dir > 0 ? 1 : -1);
-          a.position.x = slide - (dir > 0 ? CFG.LANE_W / 2 : -CFG.LANE_W / 2);
-        }
-      } else if (ud.beltArrows) {
-        ud.beltArrows.rotation.y = (dir > 0) ? 0 : Math.PI;
-      }
-      if (ud.beltMats) {
-        const fl = 0.72 + 0.28 * Math.sin(dist * 0.9 + (t || 0) * 5);
-        ud.beltMats.forEach((m) => { m.opacity = (m.__base || (m.__base = m.opacity)) * fl; });
-      }
-      if (ud.beltArrowMat) {
-        ud.beltArrowMat.color.setHex((o.surface === 'ceil') ? 0x8b9bff : 0xffb347);
-      }
-
-    } else if (OBS[o.type].door && ud.door) {
-      /* 色の扉（契約§4.5）: 床＝琥珀が自分の色（LUMEN）／天井＝藍が自分の色（UMBRA）。
-         同色の扉（DOOR）は自分の色、異色の扉（DOORX）は相手の色で光る。 */
-      const mine = (o.surface === 'ceil') ? 0x8b9bff : 0xffb347;
-      const other = (o.surface === 'ceil') ? 0xffb347 : 0x8b9bff;
-      const col = (o.type === 'DOOR') ? mine : other;
-      if (ud.doorMats) ud.doorMats.forEach((m) => { m.color.setHex(col); });
-      if (ud.doorBars) ud.doorBars.position.z = Math.sin(dist * 0.6 + (t || 0) * 2) * 0.03;
-
-    } else if (mot === 'lift' && ud.lift) {
-      /* 浮上足場（契約§4.5）: 天板の高さは **判定と同じ MOT.liftK** から引く。
-         沈みきったら天板を消す＝「今は通れる」が目で分かる。 */
-      const k = MOT.liftK(o, dist);
-      const s = ud.lift.top;
-      s.scale.y = Math.max(0.0001, k);
-      s.visible = (k > CFG.LIFT.EPS);
-      if (ud.liftMats) ud.liftMats.forEach((m) => { m.color.setHex(k > 0.5 ? 0xff5540 : 0xffd15a); });
-
-    } else if (mot === 'sync' && ud.sync) {
+    if (mot === 'sync' && ud.sync) {
       /* 同時スイッチの橋: 成否が決まると「橋が架かる／崩れ落ちる」。
          見た目の進み具合も **距離の関数**（成否が決まった距離 okM から SHOW_T 秒） */
       const gp = o.grp, unit = Sync.unitOf(o);
@@ -2303,31 +1806,6 @@ const Obstacles = {
           ? 0.16 + 0.14 * (Math.sin(dist * 0.55) > 0 ? 1 : 0)
           : 0.26 * (1 - k);
         s.ghostMat.color.setHex((gp && gp.ok === false) ? 0xff4a14 : 0x8fe6c8);
-      }
-
-    } else if (mot === 'drop' && ud.drop) {
-      /* 落ちる天井: 予告（ひび・砂）→ 落下(0.5秒) → 着地。すべて MOT の距離規則から引く */
-      const f = MOT.dropFall(o, dist), wr = MOT.dropWarn(o, dist);
-      const d = ud.drop;
-      const topY = CFG.H - OBS.DROPCEIL.y1;              // 天井にはまっているときのブロック下端
-      const e = f * f;                                    // 落下は加速する
-      d.block.position.y = U.lerp(topY, 0, e);
-      d.block.position.x = (f > 0 && f < 1) ? Math.sin(f * 9) * 0.05 : 0;
-      d.block.rotation.z = (f >= 1) ? 0.012 : (f * 0.06);
-      d.hole.visible = (f > 0);                           // 抜けた天井（穴）
-      d.hole.material.opacity = 0.9 * U.clamp(f * 3, 0, 1);
-      if (d.crack) { d.crack.visible = (f <= 0 && wr > 0); d.crack.scale.setScalar(0.4 + 0.6 * wr); }
-      if (d.rim) d.rim.visible = (f > 0);
-      if (d.sand) {
-        /* 落ちる砂＝**天井の穴から落ちたブロックまでを結ぶ土煙の筋**。
-           落下中は濃く、着地後も薄く残る。40m 先でも「天井が落ちた」と分かる合図。 */
-        d.sand.visible = (wr > 0);
-        const top = CFG.H - 0.05;
-        const bot = (f < 1) ? (d.block.position.y + OBS.DROPCEIL.y1) : OBS.DROPCEIL.y1;
-        const hh = Math.max(0.25, top - bot);
-        d.sand.position.y = (top + bot) / 2;
-        d.sand.scale.y = hh / 1.4;
-        d.sand.material.opacity = (f <= 0) ? 0.30 * wr : (f < 1 ? 0.55 : 0.18);
       }
 
     } else if (mot === 'bridge' && ud.bridge) {
