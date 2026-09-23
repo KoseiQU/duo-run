@@ -653,3 +653,112 @@
     }
   });
 })();
+
+/* ============================================================================
+   【P7b-4】鏡ゾーンの表示（契約§4.5【表示改訂】）
+     ・発動中: 画面上部の中央に大きな「MIRROR」／反転している側の半分の枠が縞模様＋「←→ 逆」／
+       該当キャラに銀の粒（鏡の光）。出口で全部消える
+     ・「どちらの半分が反転しているか」は Game.runnerForZone から引く＝入れ替えワープと重なっても
+       画面の位置で分かる（その半分の横フリックが実際に逆に効くことまで確かめる）
+   ============================================================================ */
+(function () {
+  const I = () => DUO.__internal;
+  /* 可視性（computed style）: 自分と祖先が display:none / visibility:hidden でなく、自分の不透明度が 0 でない。
+     祖先の opacity は画面遷移のフェード（#hud の 0.2秒）で途中値になるので見ない */
+  const vis = (el) => {
+    if (!el) return false;
+    if (+getComputedStyle(el).opacity === 0) return false;
+    let e = el;
+    while (e && e !== document.body) {
+      const cs = getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      e = e.parentElement;
+    }
+    return true;
+  };
+  const frame = (z) => document.querySelector('[data-ui="mirror-' + z + '"]');
+  const sparkle = (id) => I().World.runnerViews[id] && I().World.runnerViews[id].sparkle.visible;
+
+  DUO.__suites.push({
+    name: 'P7b-4: 鏡ゾーンの表示（MIRROR 大・反転側の縞枠と「←→ 逆」・銀の粒・出口で消える・入れ替えとの重ね掛け）',
+    quick: true,
+    run(t) {
+      const In = I(), Game = In.Game;
+      /* 1) 実走: S7 の鏡ゾーン（床側）の入口〜出口をボットで跨ぐ */
+      let m = null, seed = 0;
+      for (let s = 1; s <= 20 && !m; s++) {
+        const g = In.createGenerator(In.makeStage('S7'), s);
+        g.ensure(1500, 0);
+        const f = g.mirrors.filter((r) => r.side === 'floor')[0];
+        if (f) { m = f; seed = s; }
+      }
+      t.ok(!!m, 'S7 に床側の鏡ゾーンがある（seed ' + seed + '）');
+      if (!m) return;
+      DUO.reset(); DUO.start('S7', seed); DUO.skipTo(Math.max(0, m.from - 60)); DUO.bot('perfect');
+      let g = 0;
+      while (Game.dist < m.from - 2 && g++ < 900 && Game.status === 'playing') DUO.pump(1 / 60);
+      const flag = document.getElementById('flag-mirror');
+      t.eq(vis(flag), false, '入口の手前では MIRROR は出ていない');
+      t.eq(vis(frame('bottom')) || vis(frame('top')), false, '入口の手前では縞枠は出ていない');
+      while (Game.dist < m.from + 6 && g++ < 900 && Game.status === 'playing') DUO.pump(1 / 60);
+      t.eq(Game.runners[0].mirrored, true, '入口を跨ぐと LUMEN（床）の左右が反転');
+      t.eq(vis(flag), true, '画面上部に MIRROR が見える');
+      const fr = flag.getBoundingClientRect();
+      t.ok(parseFloat(getComputedStyle(flag).fontSize) >= 22, 'MIRROR は大きい（' + getComputedStyle(flag).fontSize + '）');
+      t.ok(Math.abs((fr.left + fr.right) / 2 - window.innerWidth / 2) < 4, 'MIRROR は中央（' + ((fr.left + fr.right) / 2).toFixed(0) + ' / ' + window.innerWidth / 2 + '）');
+      t.ok(fr.top < window.innerHeight * 0.3, 'MIRROR は画面の上部（top ' + fr.top.toFixed(0) + 'px）');
+      t.eq(vis(frame('bottom')), true, '反転している側（下半分＝LUMEN を動かす半分）の枠が縞模様');
+      t.eq(vis(frame('top')), false, '反転していない側（上半分）の枠は出ない');
+      t.ok(/repeating-linear-gradient/.test(getComputedStyle(frame('bottom')).borderImageSource), '枠は縞模様（border-image）');
+      const tags = frame('bottom').querySelectorAll('.mir-tag');
+      t.eq(tags.length >= 1 && Array.prototype.every.call(tags, (e) => e.textContent === '←→ 逆' && vis(e)), true, '枠の中に「←→ 逆」');
+      const bb = frame('bottom').getBoundingClientRect();
+      t.ok(bb.top >= window.innerHeight * 0.45 && bb.bottom <= window.innerHeight + 1, '縞枠は下半分に収まる');
+      t.eq(sparkle('lumen'), true, 'LUMEN に銀の粒（鏡の光）');
+      t.eq(sparkle('umbra'), false, 'UMBRA には出ない');
+      /* 出口で全部消える */
+      while (Game.dist < m.to + 6 && g++ < 2000 && Game.status === 'playing') DUO.pump(1 / 60);
+      t.eq(Game.status, 'playing', '鏡ゾーンをボットが抜ける');
+      t.eq(Game.runners[0].mirrored, false, '出口で反転が戻る');
+      t.eq(vis(flag), false, '出口で MIRROR が消える');
+      t.eq(vis(frame('bottom')) || vis(frame('top')), false, '出口で縞枠が消える');
+      t.eq(sparkle('lumen'), false, '出口で銀の粒が消える');
+
+      /* 2) 入れ替えワープとの重ね掛け: LUMEN（床）が反転 × 担当が入れ替わる →
+            LUMEN を動かすのは上半分 ＝ 縞枠は上半分に出る（画面の位置で分かる） */
+      DUO.reset(); DUO.start('S7', seed); DUO.skipTo(200);
+      In.clearObstacles();
+      Game.runners[0].mirrored = true;
+      DUO.pump(1 / 60);
+      t.eq(vis(frame('bottom')) && !vis(frame('top')), true, '入れ替え前: LUMEN の反転は下半分の枠');
+      Game.setHandSwap(true);
+      DUO.pump(1 / 60);
+      t.eq(Game.runnerForZone('top').id, 'lumen', '入れ替え中は上半分が LUMEN を動かす');
+      t.eq(vis(frame('top')), true, '重ね掛け: 縞枠は上半分へ移る');
+      t.eq(vis(frame('bottom')), false, '重ね掛け: 下半分の枠は消える');
+      t.eq(vis(document.getElementById('flag-swap')) && vis(document.getElementById('flag-mirror')), true,
+           'MIRROR と SWAP が同時に見える');
+      /* 縞枠の出ている半分の横フリックが、実際に逆に効く（表示と操作が一致する） */
+      const r0 = Game.runners[0];
+      r0.laneFrom = r0.laneTo = r0.laneVal = 0; r0.laneT = In.CFG.LANE_T;
+      DUO.touch('top', 'right'); DUO.pump(1 / 60);
+      t.eq(r0.laneTo, -1, '縞枠の半分（上）で右フリック → LUMEN は左へ（反転している）');
+      const r1 = Game.runners[1];
+      r1.laneFrom = r1.laneTo = r1.laneVal = 0; r1.laneT = In.CFG.LANE_T;
+      DUO.touch('bottom', 'right'); DUO.pump(1 / 60);
+      t.eq(r1.laneTo, 1, '縞枠の無い半分（下）で右フリック → UMBRA は右へ（通常）');
+      /* UMBRA（天井）も反転すると両方の半分に出る */
+      r1.mirrored = true; DUO.pump(1 / 60);
+      t.eq(vis(frame('top')) && vis(frame('bottom')), true, '両方反転なら両方の半分に縞枠');
+      t.eq(sparkle('umbra'), true, '天井の UMBRA にも銀の粒');
+      Game.setHandSwap(false); r0.mirrored = false; r1.mirrored = false;
+      DUO.pump(1 / 60);
+      t.eq(vis(frame('top')) || vis(frame('bottom')) || vis(document.getElementById('flag-mirror')), false, '解除で全部消える');
+      /* リトライ・タイトルでも残らない */
+      Game.runners[0].mirrored = true; DUO.pump(1 / 60);
+      DUO.reset(); DUO.pump(1 / 60);
+      t.eq(vis(frame('bottom')), false, 'タイトルへ戻ると縞枠は消える');
+      t.eq(sparkle('lumen'), false, 'タイトルへ戻ると銀の粒は消える');
+    }
+  });
+})();

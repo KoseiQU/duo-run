@@ -43,7 +43,14 @@
   #hud-speed{font-size:13px; opacity:.75;}
   #hud-stage{font-size:13px; opacity:.55;}
   .flag{font-size:11px; padding:2px 7px; border:1px solid currentColor; border-radius:99px; opacity:.9;}
-  #flag-mirror{color:#cfd6ff;} #flag-swap{color:#ffd0a0;}
+  #flag-swap{color:#ffd0a0;}
+  /* 鏡ゾーン（契約§4.5【表示改訂】/ P7b）: 画面上部の中央に大きな「MIRROR」 */
+  #flag-mirror{position:absolute; left:50%; top:calc(env(safe-area-inset-top,0px) + 44px); transform:translateX(-50%);
+    font-size:clamp(22px,min(6.4vw,7vh),42px); font-weight:900; letter-spacing:.32em; line-height:1.1;
+    padding:3px 8px 3px 18px; border:2px solid rgba(223,232,255,.9); border-radius:10px; color:#eef2ff; opacity:1;
+    background:linear-gradient(180deg,rgba(40,48,78,.30),rgba(16,20,36,.30)); pointer-events:none;
+    text-shadow:0 0 12px rgba(200,215,255,.95),0 0 30px rgba(160,180,255,.55);
+    box-shadow:0 0 18px rgba(200,215,255,.35), inset 0 0 12px rgba(200,215,255,.18);}
   /* S6（宇宙ステーション）の状態表示: 重力反転中 / 無重力区間（契約§4.5） */
   #flag-grav{color:#ffd45e; border-color:rgba(255,212,94,.85); box-shadow:0 0 12px rgba(255,200,60,.35);}
   #flag-zero{color:#8fe4ff; border-color:rgba(143,228,255,.85); box-shadow:0 0 12px rgba(120,210,255,.35);}
@@ -72,6 +79,17 @@
   #touchzones .tz.bottom{background:linear-gradient(to top,rgba(255,179,71,.13),rgba(255,179,71,0) 46%);
     box-shadow:inset 0 -2px 0 rgba(255,179,71,.30), inset 2px 0 0 rgba(255,179,71,.14), inset -2px 0 0 rgba(255,179,71,.14);}
   /* チュートリアルの吹き出しは分割線の上に出るので、その間はラベルを伏せる */
+  /* 鏡ゾーン（契約§4.5【表示改訂】/ P7b）: 左右が反転している側の半分の枠を縞模様にし、
+     その枠の中の左右の端に「←→ 逆」。どちらの半分かは Game.runnerForZone（入れ替えワープ込み）から引く */
+  #touchzones .mir-frame{position:absolute; inset:2px; display:none; pointer-events:none;
+    border:7px solid transparent;
+    border-image:repeating-linear-gradient(45deg,rgba(236,241,255,.95) 0 9px,rgba(70,82,126,.6) 9px 18px) 7;}
+  #touchzones.mir-top .tz.top .mir-frame, #touchzones.mir-bottom .tz.bottom .mir-frame{display:block;}
+  #touchzones .mir-tag{position:absolute; top:50%; transform:translateY(-50%);
+    font-size:clamp(16px,min(4.4vw,5.5vh),28px); font-weight:900; letter-spacing:.06em; white-space:nowrap;
+    color:#f4f6ff; background:rgba(18,22,40,.62); border:2px solid rgba(225,232,255,.85); border-radius:9px;
+    padding:3px 8px; text-shadow:0 0 10px rgba(190,205,255,.95); box-shadow:0 0 14px rgba(190,205,255,.35);}
+  #touchzones .mir-tag.l{left:12px;} #touchzones .mir-tag.r{right:12px;}
   /* 中央の分割線 */
   #touch-split{position:absolute; left:3%; right:3%; top:50%; height:3px; transform:translateY(-1.5px);
     background:linear-gradient(90deg,rgba(255,179,71,0),rgba(255,190,90,1) 14%,#ffffff 50%,rgba(140,155,255,1) 86%,rgba(125,140,255,0));
@@ -286,8 +304,8 @@
   </div>
 
   <div id="touchzones" data-ui="touchzones">
-    <div class="tz top" data-zone="top"></div>
-    <div class="tz bottom" data-zone="bottom"></div>
+    <div class="tz top" data-zone="top"><div class="mir-frame" data-ui="mirror-top"><span class="mir-tag l">←→ 逆</span><span class="mir-tag r">←→ 逆</span></div></div>
+    <div class="tz bottom" data-zone="bottom"><div class="mir-frame" data-ui="mirror-bottom"><span class="mir-tag l">←→ 逆</span><span class="mir-tag r">←→ 逆</span></div></div>
     <div id="touch-split"></div>
     <div class="thumb tl"></div><div class="thumb tr"></div>
     <div class="thumb bl"></div><div class="thumb br"></div>

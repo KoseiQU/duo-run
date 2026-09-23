@@ -105,6 +105,28 @@ const HUD = {
     return true;
   },
 
+  /* 鏡ゾーン（契約§4.5【表示改訂】/ P7b）: 左右が反転しているキャラを **いま動かしている半分**
+     （上/下）の枠を縞模様にし「←→ 逆」を出す。入れ替えワープ中でも Game.runnerForZone が
+     唯一の出所なので、画面の位置と反転している手が必ず一致する。出口（mirrored が戻る）で消える。 */
+  mirrorState: '',
+  mirrorZones(g) {
+    let st = '';
+    if (g && !g.merged && g.runnerForZone && g.status !== 'allclear') {
+      ['top', 'bottom'].forEach((z) => {
+        const r = g.runnerForZone(z);
+        if (r && r.mirrored) st += (st ? ' ' : '') + z;
+      });
+    }
+    if (st === HUD.mirrorState) return st;
+    HUD.mirrorState = st;
+    const tz = document.getElementById('touchzones');
+    if (tz) {
+      tz.classList.toggle('mir-top', st.indexOf('top') >= 0);
+      tz.classList.toggle('mir-bottom', st.indexOf('bottom') >= 0);
+    }
+    return st;
+  },
+
   /* 合体区間（契約§4.5 / S8）: 1体になっている間だけ表示する。
      チップの案内も「両手で1体を動かす」割当に差し替える（§4.5 を上下タッチで読んだ形）。 */
   mergeCue(on) {
@@ -148,6 +170,7 @@ const HUD = {
         const e = HUD.el[id];
         if (e) e.style.display = 'none';
       });
+      HUD.mirrorZones(null);
       return;
     }
     /* 担当アイコン: 画面の下半分＝床のキャラ／上半分＝天井のキャラ（§4.2 改訂）。
@@ -181,6 +204,7 @@ const HUD = {
     }
     const anyMirror = g.runners.some((r) => r.mirrored);
     if (HUD.el['flag-mirror']) HUD.el['flag-mirror'].style.display = anyMirror ? '' : 'none';
+    HUD.mirrorZones(g);
     if (HUD.el['flag-swap']) HUD.el['flag-swap'].style.display = (g.handSwap && !g.merged) ? '' : 'none';
     if (HUD.el['flag-merge']) HUD.el['flag-merge'].style.display = g.merged ? '' : 'none';
   }

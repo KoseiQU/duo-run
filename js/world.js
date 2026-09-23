@@ -247,7 +247,18 @@ const World = {
     g.add(light);
     World.scene.add(g);
     World.scene.add(glow);
-    return { group: g, body: body, parts: parts, glow: glow, light: light };
+    /* 鏡ゾーン（契約§4.5【表示改訂】/ P7b）: 左右が反転している間、体のまわりを銀の粒が舞う（鏡の光）。
+       体の外接箱（見た目と判定の検査）に混ざらないよう、体のグループとは別にシーンへ置いて追従させる。 */
+    const SN = 16;
+    const sparkle = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.055, 0),
+                                            ZoneKit.add(0xe6ecff, 0.95), SN);
+    sparkle.frustumCulled = false;
+    sparkle.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    sparkle.renderOrder = 6;
+    sparkle.visible = false;
+    World.scene.add(sparkle);
+    return { group: g, body: body, parts: parts, glow: glow, light: light,
+             sparkle: sparkle, sparkN: SN, sparkDummy: new THREE.Object3D() };
   },
 
   /* ==========================================================================
@@ -634,6 +645,27 @@ const World = {
       v.glow.scale.setScalar(U.clamp(1 - off * 0.45, 0.35, 1));
       v.glow.visible = r.alive && duoK < 0.02;
       v.light.position.set(0, (r.act === 'slide') ? 0.3 : 0.55, 0);
+
+      /* 鏡の光（銀の粒）: 反転している間だけ、体のまわりを螺旋に舞う（体の上下の向きに従う） */
+      const mir = !!r.mirrored && r.alive && duoK < 0.02;
+      v.sparkle.visible = mir;
+      if (mir) {
+        const dm = v.sparkDummy;
+        const cy = Math.cos(rz), sy = Math.sin(rz);
+        for (let i = 0; i < v.sparkN; i++) {
+          const h = ZoneKit.hash(i, 91), h2 = ZoneKit.hash(i, 97);
+          const ph = ((t * (0.45 + h * 0.4)) + h2) % 1;
+          const a = h * Math.PI * 2 + t * (2.2 + h2 * 1.6);
+          const rad = 0.40 + 0.12 * Math.sin(t * 3 + i);
+          const lx0 = Math.cos(a) * rad, ly0 = 0.05 + ph * 1.05;
+          dm.position.set(px + lx0 * cy - ly0 * sy, py + lx0 * sy + ly0 * cy, Math.sin(a) * rad);
+          dm.rotation.set(t * 3 + i, t * 2 + h * 5, 0);
+          dm.scale.setScalar((0.55 + h2 * 0.9) * (0.35 + 0.65 * Math.abs(Math.sin(t * 7 + i * 1.9))));
+          dm.updateMatrix();
+          v.sparkle.setMatrixAt(i, dm.matrix);
+        }
+        v.sparkle.instanceMatrix.needsUpdate = true;
+      }
     });
   },
 
