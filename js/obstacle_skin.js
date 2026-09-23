@@ -212,6 +212,58 @@ const ObstacleSkin = {
         dust: G('rockDust', 0xecebe9, 0.55)
       });
 
+    } else if (type === 'SHARK') {
+      /* サメの横断（契約§4.5 新・深海）: 正面から迫る巨大な影。2レーン幅×全高の判定を体で埋める。
+         白×赤の縞（胴の輪）・腹側が白・目は赤（白目の中に赤い瞳）・口に白い歯。
+         胴の後ろへ伸びる尾は判定の外（deco）。見た目は横スキャン光柱と同じく丸ごと横へ滑る。 */
+      const red = G('red', C.red), wht = G('white', C.white), blk = G('black', C.black);
+      const eye = G('sharkEye', 0xff2a14);
+      const hw = w / 2, hd = D / 2, yc = 2.0, ry = 1.78, rx = hw * 0.98;
+      x.solid(new THREE.SphereGeometry(1, 20, 14), red, 0, yc, 0, null, [rx, ry, hd]);
+      /* 腹（下 40%）は白 */
+      x.solid(new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, Math.PI * 0.60, Math.PI * 0.40), wht,
+              0, yc, 0, null, [rx * 1.02, ry * 1.02, hd * 1.05]);
+      /* 白の縞（胴の上半分を巻く輪） */
+      [0.30, 0.56, 0.80].forEach((u) => {
+        const yy = yc + ry * u;
+        const k = Math.sqrt(Math.max(0, 1 - u * u));
+        x.solid(new THREE.TorusGeometry(1, 0.07, 5, 30), wht, 0, yy, 0, [Math.PI / 2, 0, 0],
+                [rx * k * 1.01, hd * k * 1.03, 1]);
+      });
+      const zf = (ex, ey) => hd * Math.sqrt(Math.max(0.04, 1 - Math.pow(ex / rx, 2) - Math.pow((ey - yc) / ry, 2)));
+      /* 目: 白目＋赤い瞳（胴の縞の間・左右の高い所） */
+      [-1, 1].forEach((s) => {
+        const ex = s * rx * 0.50, ey = yc + ry * 0.43;
+        const ez = zf(ex, ey);
+        x.solid(new THREE.SphereGeometry(0.27, 12, 8), wht, ex, ey, ez - 0.06, null, [1, 1, 0.45]);
+        x.solid(new THREE.SphereGeometry(0.16, 12, 8), eye, ex, ey, ez + 0.02, null, [1, 1, 0.45]);
+      });
+      /* 大きく開いた口（暗い裂け目）に上下の白い歯 */
+      const my = yc - ry * 0.10, mh = 0.46, mz = zf(0, my);
+      x.box(rx * 1.30, mh, 0.08, blk, 0, my, mz - 0.01);
+      for (let i = 0; i < 9; i++) {
+        const tx = -rx * 0.60 + rx * 1.20 * i / 8;
+        x.solid(new THREE.ConeGeometry(0.075, 0.20, 4), wht, tx, my + mh / 2 - 0.09, mz + 0.03, [Math.PI, 0, 0]);
+        if (i % 2 === 0) x.solid(new THREE.ConeGeometry(0.07, 0.17, 4), wht, tx + rx * 0.07, my - mh / 2 + 0.08, mz + 0.03);
+      }
+      /* 胸びれ（2レーンの端まで・下向き）と背びれ（天井まで） */
+      [-1, 1].forEach((s) => {
+        x.box(hw * 0.70, 0.14, hd * 1.3, red, s * (hw - hw * 0.35), yc - ry * 0.55, -0.02, [0, 0, s * -0.38]);
+      });
+      x.solid(new THREE.ConeGeometry(0.40, CFG.H - (yc + ry) + 0.45, 4), red, 0, (CFG.H + yc + ry - 0.45) / 2, -0.08,
+              null, [0.35, 1, 1]);
+      /* 尾（判定の外＝後ろへ伸びる影） */
+      const tr = x.deco(G('sharkTail', C.red)), tw = x.deco(G('sharkTailW', C.white));
+      x.solid(new THREE.ConeGeometry(1, 2.6, 10), tr, 0, yc, -hd - 1.25, [-Math.PI / 2, 0, 0], [rx * 0.7, 1, ry * 0.55]);
+      x.box(0.10, ry * 1.5, 0.5, tw, 0, yc + 0.1, -hd - 2.6);
+
+    } else if (type === 'VENT') {
+      /* 泡の噴出口（契約§4.5 新・深海）: 床の白い円＋立ちのぼる泡の粒。踏むと跳ばされる（死なない） */
+      const wht = G('white', C.white);
+      x.solid(new THREE.TorusGeometry(0.42, 0.06, 6, 24), wht, 0, 0.03, 0, [Math.PI / 2, 0, 0]);
+      x.solid(new THREE.CylinderGeometry(0.40, 0.44, 0.04, 20), G('dev', C.dev), 0, 0.02, 0);
+      x.solid(new THREE.TorusGeometry(0.22, 0.035, 5, 18), wht, 0, 0.045, 0, [Math.PI / 2, 0, 0]);
+
     } else if (OBS[type].gate) {
       x.gateKit({ col: S.GATE_COL[type] || 0xd8e4f2, frame: G('dev', C.dev) });
     } else if (type === 'ZEROFIELD') {
@@ -230,16 +282,17 @@ const ObstacleSkin = {
   /* 動く部品（マージしない。place() が bands()/MOT から毎フレーム置く） */
   buildMoving(type, g, w, t, x) {
     const C = ObstacleSkin.COL, G = Obstacles._glow;
-    if (type === 'LASER_SCAN') {
-      /* 到達位置の予告（白）＋掃引範囲の薄い白帯 */
+    if (type === 'LASER_SCAN' || type === 'SHARK') {
+      /* 到達位置の予告（白）＋掃引範囲の薄い白帯（サメは2レーン幅） */
+      const MW = OBS[type].span * CFG.LANE_W - 0.16;
       const mark = new THREE.Group();
       [[0.02, 1], [CFG.H - 0.02, -1]].forEach((e) => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(CFG.LANE_W - 0.16, 3.4), G('scanMark', C.white, 0.26));
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(MW, 3.4), G('scanMark', C.white, 0.26));
         m.rotation.x = -Math.PI / 2 * e[1];
         m.position.set(0, e[0], 0);
         m.renderOrder = 4;
         mark.add(m);
-        const b = new THREE.Mesh(new THREE.BoxGeometry(CFG.LANE_W - 0.16, 0.05, 0.10), G('white', C.white));
+        const b = new THREE.Mesh(new THREE.BoxGeometry(MW, 0.05, 0.10), G('white', C.white));
         b.position.set(0, e[0] + e[1] * 0.03, -1.55);
         mark.add(b);
       });
@@ -249,8 +302,22 @@ const ObstacleSkin = {
       range.rotation.x = -Math.PI / 2;
       range.position.y = 0.012;
       range.renderOrder = 3;
+      /* 予告は判定の外（見た目と判定のズレ検査から外す） */
+      mark.traverse((q) => { if (q.isMesh) q.userData.deco = true; });
+      range.userData.deco = true;
       g.add(range);
       g.userData.range = range;
+
+    } else if (type === 'VENT') {
+      /* 泡の粒（判定の外）。place() が噴出口の上に立ちのぼらせ、跳ばされた直後は噴き上げる */
+      const N = 16;
+      const im = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 6, 4), G('bubble', 0xf4f4f4, 0.62), N);
+      im.frustumCulled = false;
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.userData.deco = true;
+      im.renderOrder = 4;
+      g.add(im);
+      g.userData.vent = { bubbles: im, n: N, dummy: new THREE.Object3D() };
 
     } else if (type === 'LASER_V' || type === 'LASER_LOW') {
       /* 点滅レーザーが消えている間の「待機表示」（暗い白の筋＝装置はそこにある） */

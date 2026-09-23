@@ -400,3 +400,256 @@
     }
   });
 })();
+
+/* ============================================================================
+   【P7b-3】サメの横断・泡の噴出口（契約§4.5【新・深海】）
+     ・サメ: 2レーン幅×全高の壁が横スキャン（到達の瞬間＝端で溜まる）／occ⇔hits 総当り一致／
+       抜けたレーンは生存・残ったレーンは死（実経路）／見た目は白×赤の縞・腹が白・目が赤
+     ・泡: 踏むと強制ジャンプ（0.55秒・死なない・天井には無い）／自分で跳べば跳ばされない／
+       強制ジャンプ中に越えられない物を置くと Fair 違反／跳ばされる瞬間に泡が噴き上がる
+     ・S5 の札（rank3〜4・10本以上）・50シードで §4.7・tip 違反0・出現・ボット完走
+   ============================================================================ */
+(function () {
+  const I = () => DUO.__internal;
+  const stepN = (sec) => { let n = Math.round(sec * 60); while (n-- > 0 && Game.status === 'playing') DUO.__step(1 / 60); };
+  function warnColor(hex) {
+    const c = new THREE.Color(hex), hsl = {};
+    c.getHSL(hsl);
+    if (hsl.s < 0.2 || hsl.l > 0.93 || hsl.l < 0.08) return true;
+    return (hsl.h * 360 <= 32 || hsl.h * 360 >= 350);
+  }
+  function scene(lane) {
+    const In = I();
+    DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300);
+    In.clearObstacles();
+    Game.runners.forEach((r) => { r.laneFrom = r.laneTo = r.laneVal = lane; r.laneT = In.CFG.LANE_T; });
+  }
+
+  DUO.__suites.push({
+    name: 'P7b-3: サメの横断（2レーン幅の横スキャン・到達時刻の判定・occ⇔hits 一致・抜けたレーンへ）',
+    quick: true,
+    run(t) {
+      const In = I(), Ob = In.Obstacles, CFG = In.CFG, R = In.Runners, MOT = In.MOT, OBS = In.OBS;
+      t.eq(OBS.SHARK.span, 2, 'サメは2レーン幅');
+      t.eq(OBS.SHARK.both, true, '床と天井の両方に効く（全高の壁）');
+      const mk = (from, to, ph) => Ob.make('SHARK', 'floor', from, 500, 0, { scan: { from: from, to: to, phase: ph, periodM: 60 } });
+      t.near(MOT.scanLane(mk(-1, 0, 0), 500), -1, 1e-9, 'phase 0 の到達位置は from');
+      t.near(MOT.scanLane(mk(-1, 0, 0.5), 500), 0, 1e-9, 'phase 0.5 の到達位置は to');
+      t.ok(Math.abs(MOT.scanLane(mk(-1, 0, 0), 470) - (-1)) > 0.5, '手前では横へ動いている（迫りながら横切る）');
+      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
+      let mS = 0, mD = 0, checked = 0;
+      [[-1, 0, 0], [-1, 0, 0.5], [0, -1, 0], [0, -1, 0.5]].forEach((c) => {
+        const o = mk(c[0], c[1], c[2]);
+        const occ = Ob.occ(o);
+        const W = (OBS.SHARK.depth + CFG.SLIDE_D) / 2 + 0.2;
+        ['floor', 'ceil'].forEach((side) => {
+          const free = CFG.LANES.filter((l) => occ[side].lanes[l].run);
+          const at = MOT.scanLane(o, o.at);
+          const want = (at < -0.5) ? 1 : -1;
+          t.eq(free.join(','), String(want), 'from ' + c[0] + '→' + c[1] + ' ph ' + c[2] + '（' + side + '）: 空くのはサメが抜けた1レーン（' + want + '）');
+          t.eq(Ob.demand(o, side), 'lane', '要求はレーン移動（跳んでも潜っても抜けない）');
+          CFG.LANES.forEach((lane) => {
+            ['run', 'jump', 'slide'].forEach((act) => {
+              const w = occ[side].lanes[lane][act];
+              let hit = false;
+              for (let d = -W; d <= W; d += 0.01) {
+                if (Ob.hits(o, R.boxOf(side, lane, act, probe[act]), o.at + d)) { hit = true; break; }
+              }
+              checked++;
+              if (w && hit) mS++;
+              if (!w && !hit) mD++;
+            });
+          });
+        });
+      });
+      t.eq(mS, 0, '「安全」と判定した ' + checked + ' 通りは1つも当たらない');
+      t.eq(mD, 0, '「危険」と判定した通りは必ず当たる');
+      /* 実経路: 抜けたレーンは生存・残ったレーンは死 */
+      const trial = (lane) => {
+        scene(lane);
+        const sp = Game.speed;
+        const o = Ob.make('SHARK', 'floor', -1, Game.dist + 60, Game.dist,
+                          { scan: { from: -1, to: 0, phase: 0, periodM: CFG.SEA.SHARK_PERIOD * sp / CFG.REF_SPEED } });
+        Game.active.push(o);
+        let g = 0;
+        while (Game.dist < o.at + 3 && g++ < 900 && Game.status === 'playing') DUO.__step(1 / 60);
+        return { alive: Game.status === 'playing', killer: Game.killer };
+      };
+      t.eq(trial(1).alive, true, 'サメが抜けたレーン（右）は生存');
+      const d0 = trial(0);
+      t.eq(d0.alive, false, 'サメの残るレーン（中央）は死');
+      t.eq(d0.killer && d0.killer.obstacle, 'SHARK', '死因はサメ');
+      t.eq(trial(-1).alive, false, '左も死（2レーン幅）');
+      DUO.reset();
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P7b-3: 泡の噴出口（踏むと強制ジャンプ0.55秒・死なない・天井には無い・自分で跳べば跳ばされない・Fair）',
+    quick: true,
+    run(t) {
+      const In = I(), Ob = In.Obstacles, CFG = In.CFG, OBS = In.OBS;
+      t.eq(OBS.VENT.harmless, true, '噴出口は死なない');
+      /* 1) 何もせず踏む → 強制ジャンプ */
+      scene(0);
+      let v = In.spawnOne('VENT', 'floor', 0, 40);
+      let g = 0;
+      while (typeof v.ventM !== 'number' && g++ < 300 && Game.status === 'playing') DUO.__step(1 / 60);
+      const r0 = Game.runners[0];
+      t.eq(v.ventBy, 'lumen', '踏んだ LUMEN が跳ばされる');
+      t.eq(r0.act, 'jump', '強制ジャンプが発動する（Runners の jump）');
+      t.near(r0.jumpT, CFG.JUMP_T, 1e-9, '滞空は 0.55秒（通常のジャンプと同じ）');
+      t.ok(v.ventM >= v.at - (OBS.VENT.depth + CFG.BODY_D) / 2 - 0.5 && v.ventM <= v.at, '噴出口に触れた瞬間に跳ぶ');
+      t.eq(Game.runners[1].act, 'run', '天井の UMBRA は影響を受けない（天井側には無い）');
+      stepN(0.50);
+      t.eq(r0.act, 'jump', '0.50秒後はまだ宙');
+      stepN(0.10);
+      t.eq(r0.act, 'run', '0.55秒で着地');
+      t.eq(Game.status, 'playing', '噴出口では死なない');
+      /* 2) 自分で先に跳べば跳ばされない（踏まない） */
+      scene(0);
+      v = In.spawnOne('VENT', 'floor', 0, 40);
+      g = 0;
+      while (Game.dist < v.at - Game.speed * CFG.BOT.JUMP_LEAD && g++ < 300) DUO.__step(1 / 60);
+      DUO.key('KeyW', true); DUO.__step(1 / 60); DUO.key('KeyW', false);
+      while (Game.dist < v.at + 3 && g++ < 400) DUO.__step(1 / 60);
+      t.eq(typeof v.ventM === 'number', false, '跳んで越えれば噴出口を踏まない');
+      /* 3) 隣のレーンは素通り・スライド中でも跳ばされる */
+      scene(1);
+      v = In.spawnOne('VENT', 'floor', 0, 40);
+      g = 0;
+      while (Game.dist < v.at + 3 && g++ < 400) DUO.__step(1 / 60);
+      t.eq(typeof v.ventM === 'number', false, '隣のレーンは素通り（踏まずに避けてもよい）');
+      scene(0);
+      v = In.spawnOne('VENT', 'floor', 0, 30);
+      g = 0;
+      while (Game.dist < v.at - Game.speed * 0.3 && g++ < 300) DUO.__step(1 / 60);
+      DUO.key('KeyS', true); DUO.__step(1 / 60); DUO.key('KeyS', false);
+      while (typeof v.ventM !== 'number' && g++ < 400) DUO.__step(1 / 60);
+      t.eq(Game.runners[0].act, 'jump', 'スライド中に踏んでも跳ばされる（スライドをキャンセル）');
+      /* 4) occ・要求 */
+      const o = Ob.make('VENT', 'floor', 0, 500, 0);
+      const a = Ob.occ(o).floor.lanes[0];
+      t.eq(a.run, false, '噴出口のレーンを走る＝跳ばされる（走ったままではいられない）');
+      t.eq(a.jump, true, '跳んでいれば踏まない');
+      t.eq(Ob.demand(o, 'floor'), 'jump', '要求はジャンプ（床側だけ）');
+      t.eq(Ob.demand(o, 'ceil'), 'none', '天井には要求しない');
+      /* 5) Fair: 強制ジャンプ中に越えられない物（柱）は置けない／ハードルは越えられるので置ける */
+      const sp = () => 10;
+      const mk = (type, lane, at) => Ob.make(type, 'floor', lane, at, 0);
+      let errs = In.Fair.validate([mk('VENT', 0, 100), mk('PILLAR', 0, 103)], sp, { startLanes: 'any' });
+      t.ok(errs.some((e) => e.indexOf('噴出口') >= 0), '強制ジャンプ中に柱（越えられない）は違反: ' + errs[0]);
+      errs = In.Fair.validate([mk('VENT', 0, 100), mk('ROVER', 0, 101)], sp, { startLanes: 'any' });
+      t.eq(errs.filter((e) => e.indexOf('噴出口') >= 0).length, 0, '強制ジャンプで越えられるハードルは置ける');
+      errs = In.Fair.validate([mk('VENT', 0, 100), mk('PILLAR', 1, 103)], sp, { startLanes: 'any' });
+      t.eq(errs.filter((e) => e.indexOf('噴出口') >= 0).length, 0, '別のレーンの柱は強制ジャンプに関係しない');
+      /* 天井の要求を噴出口の直後 speed×0.6秒 に置いてよい（契約§4.5） */
+      errs = In.Fair.validate([mk('VENT', 0, 100), Ob.make('ROVER', 'ceil', 0, 106, 0)], sp,
+                              { startLanes: 'any', reactBoth: 0.45 });
+      t.eq(errs.length, 0, '噴出口の 0.6秒後の天井の要求は置ける: ' + errs.join(' | '));
+      DUO.reset();
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P7b-3: 深海の見た目（サメ=白×赤の縞・腹が白・目が赤／噴出口=白い円＋泡・跳ばされると噴き上げ）・S5 の札（50シード）',
+    quick: true,
+    run(t) {
+      const In = I(), Ob = In.Obstacles, CFG = In.CFG;
+      DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300); DUO.pump(1 / 60);
+      ['SHARK', 'VENT'].forEach((ty) => {
+        const v = Ob.acquire(ty);
+        const bad = [];
+        v.traverse((q) => {
+          if (!q.isMesh || !q.material || !q.material.color) return;
+          const hx = q.material.color.getHex();
+          if (!warnColor(hx) || hx === CFG.COL.LUMEN || hx === CFG.COL.UMBRA) bad.push('#' + hx.toString(16));
+        });
+        t.eq(bad.length, 0, ty + ' の色は赤・橙・白（＋無彩色）だけ ' + bad.join(' '));
+        Ob.release(ty, v);
+      });
+      /* サメ: 下（腹）が白・上に赤・赤い目 */
+      const sv = Ob.acquire('SHARK');
+      sv.position.set(0, 0, 0); sv.rotation.set(0, 0, 0); sv.updateMatrixWorld(true);
+      let lowWhite = 0, hiRed = 0, eyeRed = 0;
+      sv.traverse((q) => {
+        if (!q.isMesh || q.userData.deco) return;
+        const b = new THREE.Box3().setFromObject(q), hx = q.material.color.getHex();
+        if (hx === 0xffffff && b.min.y < 1.0) lowWhite++;
+        if (hx === ObstacleSkin.COL.red && b.max.y > 3.0) hiRed++;
+        if (hx === 0xff2a14) eyeRed++;
+      });
+      t.ok(lowWhite > 0 && hiRed > 0, 'サメの腹側（下）が白・上が赤');
+      t.ok(eyeRed > 0, 'サメの目は赤');
+      Ob.release('SHARK', sv);
+      /* 噴出口: 跳ばされた直後は泡が高く噴き上がる */
+      In.clearObstacles();
+      Game.runners.forEach((r) => { r.laneFrom = r.laneTo = r.laneVal = 0; r.laneT = CFG.LANE_T; });
+      const vo = In.spawnOne('VENT', 'floor', 0, 30);
+      const top = () => {
+        In.World.syncObstacles(Game.active, Game.dist);
+        const im = vo.view.userData.vent.bubbles, m = new THREE.Matrix4(), p = new THREE.Vector3();
+        let mx = 0;
+        for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, m); p.setFromMatrixPosition(m); mx = Math.max(mx, p.y); }
+        return mx;
+      };
+      In.World._t = 0.37;
+      const calm = top();
+      let g = 0;
+      while (typeof vo.ventM !== 'number' && g++ < 300) DUO.__step(1 / 60);
+      DUO.__step(1 / 60);
+      In.World._t = 0.37;
+      const burst = top();
+      t.ok(burst > calm + 0.3, '跳ばされた瞬間に泡が噴き上がる（最高 ' + calm.toFixed(2) + ' → ' + burst.toFixed(2) + 'm）');
+      DUO.reset();
+
+      /* 札: S5 に rank3〜4 で 10本以上 */
+      const defs = In.CHUNK_DEFS.filter((c) => c.shark || c.vent);
+      t.ok(defs.length >= 10, 'サメ・泡の札は ' + defs.length + ' 本（10本以上）');
+      t.eq(defs.filter((c) => c.difficulty < 3 || c.difficulty > 4 || !c.s5).length, 0, 'S5 の rank3〜4');
+      t.eq(defs.filter((c) => (c.ceil || []).some((e) => e.type === 'VENT')).length, 0, '噴出口は床だけ（天井側には無い）');
+      let bad = 0, tipBad = 0, sk = 0, vt = 0, tipped = 0, nPlayed = 0;
+      for (let seed = 1; seed <= 50; seed++) {
+        const st = In.makeStage('S5');
+        const g2 = In.createGenerator(st, seed);
+        for (let d = 0; d < st.lengthM; d += 20) g2.ensure(d + CFG.SPAWN_AHEAD, d);
+        const list = g2.obstacles.filter((o) => o.at <= st.lengthM);
+        if (In.Fair.validate(list, st.speedAt, { startLanes: [0], reactBoth: st.reactBoth }).length) bad++;
+        if (In.Fair.tipCheck(list, g2.events, st.speedAt).length) tipBad++;
+        const played = list.filter((o) => o.at < st.lengthM - 2);
+        if (played.some((o) => o.type === 'SHARK')) sk++;
+        if (played.some((o) => o.type === 'VENT')) vt++;
+        ['SHARK', 'VENT'].forEach((ty) => {
+          const os = played.filter((o) => o.type === ty);
+          if (!os.length) return;
+          nPlayed++;
+          const tip = g2.events.filter((e) => e.type === 'tip' && e.params.id === ty.toLowerCase())[0];
+          if (tip && tip.params.targetAt <= Math.min.apply(null, os.map((o) => o.at)) + 1e-6) tipped++;
+        });
+      }
+      t.eq(bad, 0, 'S5 50シードで §4.7 違反なし（サメ・噴出口の強制ジャンプ込み）');
+      t.eq(tipBad, 0, 'S5 50シードで tip の猶予規則の違反なし');
+      t.ok(sk >= 45, 'サメが出る（' + sk + '/50 シード）');
+      t.ok(vt >= 45, '噴出口が出る（' + vt + '/50 シード）');
+      t.eq(tipped, nPlayed, '初出は tip つき（' + tipped + '/' + nPlayed + '）');
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P7b-3: S5 ボット完走（perfect / delay250・サメと噴出口）',
+    quick: false,
+    run(t) {
+      [21, 22, 23].forEach((seed) => {
+        ['perfect', 'delay250'].forEach((mode) => {
+          DUO.reset(); DUO.start('S5', seed); DUO.bot(mode);
+          let g = 0;
+          while (Game.status === 'playing' && g++ < 60 * 200) DUO.__step(1 / 60);
+          t.ok(Game.status === 'goal' || Game.status === 'clear',
+               'S5 seed' + seed + ' ' + mode + ' 完走（' + Game.status + ' @' + Game.dist.toFixed(0) + 'm' +
+               (Game.killer ? ' 死因 ' + Game.killer.obstacle : '') + '）');
+        });
+      });
+      DUO.reset();
+    }
+  });
+})();

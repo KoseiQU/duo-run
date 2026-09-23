@@ -714,6 +714,54 @@ const CHUNK_DEFS = [
             { at: 26, lane: -1, type: 'LASER_V' }, { at: 36, lane: 1, type: 'ROVER' },
             { at: 46, lane: 0, type: 'PILLAR' }, { at: 52, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
+  /* --- サメの横断・泡の噴出口（契約§4.5【新・深海】/ P7b） ------------------
+     SHARK: 2レーン幅の壁（全高・両者に効く）が横スキャンしながら迫る。到達の瞬間は端で溜まる
+            （phase 0＝from／0.5＝to）＝ **サメが抜けた（空いた）1レーン** へ入る。
+            from/to は2レーンの左端（-1＝左2レーン／0＝右2レーン）。
+     VENT:  床の噴出口。踏むと強制ジャンプ（0.55秒）。死なない・踏まずに避けてもよい。
+            天井側には無い＝床側だけタイミングがずれる。直後 0.6秒に天井側の要求を置く（頭の負荷）。
+            強制ジャンプ中に越えられない物は置かない（Fair が跳躍の姿勢で検査）。 */
+  { id: 's5_shark_a', zone: 'sea', lengthM: 44, difficulty: 3, minSpeed: 0, s5: 1, shark: 1, dense: 1,
+    floor: [{ at: 10, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0, periodM: 30 } } }, { at: 18, lane: 1, type: 'PILLAR' },
+            { at: 28, lane: 0, type: 'SHARK', params: { scan: { from: 0, to: -1, phase: 0, periodM: 30 } } }, { at: 36, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 36, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's5_shark_b', zone: 'sea', lengthM: 40, difficulty: 3, minSpeed: 0, s5: 1, shark: 1, dense: 1,
+    floor: [{ at: 10, lane: 0, type: 'SHARK', params: { scan: { from: 0, to: -1, phase: 0.5, periodM: 30 } } }, { at: 16, lane: 1, type: 'LASER_V' },
+            { at: 24, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0.5, periodM: 30 } } }, { at: 32, lane: -1, type: 'ROVER' }],
+    ceil:  [{ at: 32, lane: -1, type: 'LASER_LOW' }], events: [] },
+  { id: 's5_shark_c', zone: 'sea', lengthM: 40, difficulty: 4, minSpeed: 0, s5: 1, shark: 1, dense: 2,
+    /* サメ → 柱 → サメ → 光柱 → サメ（0.6秒おきに空くレーンが左右へ振れる） */
+    floor: [{ at: 8, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0, periodM: 30 } } }, { at: 14, lane: 0, type: 'PILLAR' }, { at: 20, lane: 0, type: 'SHARK', params: { scan: { from: 0, to: -1, phase: 0, periodM: 30 } } },
+            { at: 26, lane: -1, type: 'LASER_V' }, { at: 32, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0.5, periodM: 30 } } }],
+    ceil: [], events: [] },
+  { id: 's5_shark_d', zone: 'sea', lengthM: 36, difficulty: 3, minSpeed: 0, s5: 1, shark: 1, dense: 1,
+    floor: [{ at: 10, lane: 0, type: 'SHARK', params: { scan: { from: 0, to: -1, phase: 0.5, periodM: 30 } } }, { at: 18, lane: 1, type: 'ROVER' }, { at: 28, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0.5, periodM: 30 } } }],
+    ceil:  [{ at: 18, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's5_shark_leap', zone: 'sea', lengthM: 42, difficulty: 4, minSpeed: 0, s5: 1, shark: 1, dense: 2, leap: 1,
+    floor: [{ at: 8, lane: 0, type: 'SHARK', params: { scan: { from: 0, to: -1, phase: 0, periodM: 30 } } }, { at: 16, lane: -1, type: 'ROVER' }, { at: 23.2, lane: 0, type: 'ROVER' },
+            { at: 33, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0, periodM: 30 } } }],
+    ceil:  [{ at: 16, lane: -1, type: 'LASER_LOW' }, { at: 23.2, lane: -1, type: 'ROVER' }], events: [] },
+  { id: 's5_vent_a', zone: 'sea', lengthM: 56, difficulty: 3, minSpeed: 0, s5: 1, vent: 1, dense: 1,
+    floor: [{ at: 10, lane: 0, type: 'VENT' }, { at: 26, lane: 1, type: 'PILLAR' }, { at: 34, lane: -1, type: 'VENT' },
+            { at: 50, lane: 0, type: 'LASER_V' }],
+    ceil:  [{ at: 16, lane: -1, type: 'ROVER' }, { at: 40, lane: 0, type: 'ROVER' }], events: [] },
+  { id: 's5_vent_b', zone: 'sea', lengthM: 42, difficulty: 3, minSpeed: 0, s5: 1, vent: 1, dense: 1,
+    /* ワイド梁で右へ寄せられた先に噴出口（跳ばされる／横へ逃げる）→ 0.6秒後に天井のハードル */
+    floor: [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 14, lane: 1, type: 'VENT' }, { at: 25, lane: 0, type: 'ROVER' },
+            { at: 35, lane: 0, type: 'PILLAR' }],
+    ceil:  [{ at: 20, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's5_vent_c', zone: 'sea', lengthM: 44, difficulty: 4, minSpeed: 0, s5: 1, vent: 1, dense: 1,
+    floor: [{ at: 8, lane: -1, type: 'VENT' }, { at: 8, lane: 1, type: 'VENT' }, { at: 20, lane: 0, type: 'VENT' }, { at: 36, lane: -1, type: 'PILLAR' }],
+    ceil:  [{ at: 14, lane: 0, type: 'ROVER' }, { at: 26, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's5_vent_leap', zone: 'sea', lengthM: 40, difficulty: 3, minSpeed: 0, s5: 1, vent: 1, dense: 2, leap: 1,
+    floor: [{ at: 8, lane: 0, type: 'VENT' }, { at: 15.2, lane: -1, type: 'ROVER' }, { at: 22.4, lane: 1, type: 'VENT' },
+            { at: 29.6, lane: 0, type: 'ROVER' }],
+    ceil:  [{ at: 8, lane: 1, type: 'ROVER' }, { at: 15.2, lane: 0, type: 'LASER_LOW' },
+            { at: 22.4, lane: -1, type: 'ROVER' }, { at: 29.6, lane: 1, type: 'ROVER' }], events: [] },
+  { id: 's5_vent_shark', zone: 'sea', lengthM: 38, difficulty: 4, minSpeed: 0, s5: 1, vent: 1, shark: 1, dense: 1,
+    /* サメが空けた右のレーンに噴出口 → 跳ばされた直後に天井のハードル → 次のサメ */
+    floor: [{ at: 8, lane: -1, type: 'SHARK', params: { scan: { from: -1, to: 0, phase: 0, periodM: 30 } } }, { at: 14, lane: 1, type: 'VENT' }, { at: 30, lane: 0, type: 'SHARK', params: { scan: { from: 0, to: -1, phase: 0, periodM: 30 } } }],
+    ceil:  [{ at: 20, lane: 1, type: 'ROVER' }], events: [] },
   { id: 's5_fill_a', zone: 'sea', lengthM: 26, difficulty: 3, minSpeed: 0, s5: 1, dense: 2, fill: 1,
     floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 11, lane: 1, type: 'LASER_V' },
             { at: 17, lane: -1, type: 'PILLAR' }],
@@ -1664,7 +1712,7 @@ const INTRO_S1 = [
      「対象の通過」（区間の全長を窓にすると区間の中身が全部消えてしまうため）。
    ・レーザー網は枠（NETGATE）ではなく最初のビームを対象にする（跳ぶ／よけるのが本題）。 */
 const TIP_TARGET = {
-  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'], rock: ['ROCK'],
+  bridge: ['BRIDGE'], pend: ['LASER_SCAN'], sync: ['SYNCSW'], rock: ['ROCK'], shark: ['SHARK'], vent: ['VENT'],
   warp: ['GRAVWARP'], zero: ['ZEROG'], net: ['LASER_H', 'LASER_DIAG', 'NETGATE'],
   mir: ['MIRRORZ'], swap: ['HANDSWAP'], dual: ['HANDSWAP'], merge: ['MERGE']
 };
@@ -1788,6 +1836,10 @@ const STAGE_DEFS = {
     speedFrom: 26, speedTo: 30, minRank: 3, maxRank: 4, setpiece: 'megafish',
     density: [8, 12],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
+    /* P7b: 新ギミック（サメの横断・泡の噴出口）の初出は tip つき。1回の走行で必ず顔を出させる */
+    tipOnce: { shark: 'shark', vent: 'vent' },
+    tipBoost: true,
+    tipMul: 6,
     /* 海流ベルト・浮上足場・色の扉は契約 v2（2026-09-24）で失効。新ギミック（サメ・泡）は P7b */
     /* 顔ぶれ: S5 の新チャンクが主役。基本形（柱・光線・跳び継ぎ）は深海スキンで顔が変わる。
        他ゾーン専用のギミック（崩れる橋・同時スイッチ・落ちる天井）は混ぜない（契約§4.4）。 */
@@ -2164,6 +2216,33 @@ const Fair = {
         errs.push('跳躍帯を塞ぐ(' + side + ') @' + w.at.toFixed(1) +
                   '（走れば通れるのに跳ぶと当たる帯は置けない）');
       });
+    });
+
+    /* 泡の噴出口（契約§4.5 新・深海 / §4.7）: 踏んだ体は強制ジャンプで 0.55秒 宙にいる。
+       その間に「そのジャンプで越えられない物」を同じ面・同じレーンに置かない（ハードルへ突っ込ませない）。
+       踏んだ瞬間（体の先端が噴出口に触れる距離）からの実際の跳躍の姿勢で、当たり判定そのもので確かめる。 */
+    list.forEach((v) => {
+      if (!OBS[v.type].vent) return;
+      const sp = speedAt(v.at);
+      const t0 = v.at - (OBS[v.type].depth + CFG.BODY_D) / 2;
+      const plan0 = Obstacles._plan;
+      Obstacles._plan = true;
+      try {
+        list.forEach((o) => {
+          if (o === v || OBS[o.type].ghost || OBS[o.type].vent || !Obstacles.affects(o, v.surface)) return;
+          const W = (OBS[o.type].depth + CFG.BODY_D) / 2 + 0.05;
+          if (o.at + W < t0 || o.at - W > t0 + sp * CFG.JUMP_T) return;
+          for (let d = -W; d <= W; d += 0.05) {
+            const aT = (o.at + d - t0) / sp;
+            if (aT < 0 || aT >= CFG.JUMP_T) continue;
+            if (Obstacles.hits(o, Runners.boxOf(v.surface, v.lane, 'jump', aT), o.at + d)) {
+              errs.push('噴出口の強制ジャンプ中に越えられない障害物 ' + o.type + ' @' + o.at.toFixed(1) +
+                        '（噴出口 @' + v.at.toFixed(1) + '）');
+              break;
+            }
+          }
+        });
+      } finally { Obstacles._plan = plan0; }
     });
 
     for (let i = 1; i < walls.length; i++) {

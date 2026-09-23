@@ -33,6 +33,9 @@ const Tutorial = {
     bridge: { ph: ['<span class="finger">👉</span>崩れる橋は', '乗ると<b>2秒で落ちる</b>', '<b>横のレーンへ</b>逃げろ'] },
     /* 転がる丸岩（契約§4.5 新・遺跡 / P7b） */
     rock: { ph: ['<span class="finger">👆</span>転がる岩は', '<b>跳び越す</b>か', '<b>通り過ぎたレーン</b>へ'] },
+    /* S5 深海の新ギミック（契約§4.5 新・深海 / P7b） */
+    shark: { ph: ['<span class="finger">👈</span>サメが横切る', '<b>サメが抜けたレーン</b>へ'] },
+    vent: { ph: ['<span class="finger">👆</span>泡の噴出口を踏むと', '<b class="k">下のキャラ</b>が<b>勝手に跳ぶ</b>', '（よけてもいい）'] },
     pendulum: { ph: ['<span class="finger">👈</span>振り子の刃は', '<b>空いたレーン</b>へ'] },
     /* S4 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     sync: { ph: ['<span class="finger">👆</span>光る踏み板を', '<b class="k">下</b>と<b class="k2">上</b>で<b>同時に</b>',

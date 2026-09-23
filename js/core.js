@@ -437,6 +437,8 @@ const Game = {
         if (!Obstacles.affects(o, r.surface)) continue;
         /* 当たり判定は Obstacles.hits だけを通す（動く／点滅する障害物も同じ道） */
         if (!Obstacles.hits(o, Runners.box(r), Game.dist)) continue;
+        /* 泡の噴出口（契約§4.5 新・深海）: 踏んだら強制ジャンプ（死なない） */
+        if (OBS[o.type].vent) { Game.onVent(r, o); continue; }
         /* 無害な障害物（減速帯）は死なせず、速度だけ落とす（1個につき1回） */
         if (OBS[o.type].harmless) { Game.onSlow(r, o); continue; }
         Game.onHit(r, o);
@@ -450,6 +452,19 @@ const Game = {
     if (o._slowed) return false;
     o._slowed = true;
     Game.slowT = CFG.SLOW.T;
+    return true;
+  },
+  /* 泡の噴出口を踏んだ（契約§4.5 新・深海 / P7b）: その体のジャンプを強制発動する
+     （滞空 0.55秒＝人間のジャンプと同じ Runners.input の1か所。スライド中ならキャンセルして跳ぶ）。
+     噴き上げの見た目は o.ventM（跳ばされた距離）から。同じ噴出口では1体につき1回 */
+  onVent(runner, o) {
+    const k = '_vent_' + runner.id;
+    if (o[k]) return false;
+    if (!Runners.input(runner, 'jump')) return false;
+    o[k] = true;
+    o.ventM = Game.dist;
+    o.ventBy = runner.id;
+    Game.sfxAct(runner, 'jump');
     return true;
   },
   /* 巨岩に追いつかれた（§4.4 S3）。通常の死と同じ扱い */

@@ -212,7 +212,10 @@
         if (g.log.some((c) => c.setpiece)) spFound++;
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         blanks += g.log.filter((c) => c.id === '(blank)').length;
-        tips += g.events.filter((e) => e.type === 'tip').length;
+        /* P7b: S5 の tip はサメの横断・泡の噴出口の初出だけ（各1回まで） */
+        const tp = g.events.filter((e) => e.type === 'tip');
+        if (tp.some((e) => ['shark', 'vent'].indexOf(e.params.id) < 0) ||
+            tp.filter((e) => e.params.id === 'shark').length > 1 || tp.filter((e) => e.params.id === 'vent').length > 1) tips++;
         const c = In.Fair.countDemands(l, st.speedAt);
         agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
@@ -229,7 +232,7 @@
       t.eq(bad, 0, 'S5 50シードで §4.7 違反なし（大演出区間を含む）');
       t.eq(spFound, 50, '50シードすべてに巨大魚の通過が入る');
       t.eq(blanks, 0, '空白チャンク（生成の詰まり）は0回');
-      t.eq(tips, 0, 'S5 の新ギミック（海流・浮上足場・色の扉）は失効＝初出の tip はない（サメ・泡は P7b）');
+      t.eq(tips, 0, 'S5 の tip はサメ・泡の初出だけ（各1回まで。海流・浮上足場・色の扉は失効）');
       /* 密度（契約§4.7 S5 は 8→12回/100m・±25%） */
       const dens = In.STAGE_DEFS.S5.density;
       t.eq(dens[0] + '-' + dens[1], '8-12', '密度の目安は 8→12回/100m');

@@ -114,6 +114,18 @@ const OBS = {
   FISH_TAIL:  { span: 1, depth: 0.40, y0: 0.00, y1: CFG.H, both: true, safe: [],
                 motion: 'scan', fish: true, label: '巨大魚の尾' },
 
+  /* サメの横断（契約§4.5【新・深海】/ P7b）: 2レーン幅の壁（全高・両者に効く）が
+     横スキャンしながら迫る。位置は MOT.scanLane（到達の瞬間＝ phase。from/to は左端のレーン）。
+     見た目は白×赤の縞の巨大な影（腹側が白・目は赤）。 */
+  SHARK:    { span: 2, depth: 1.20, y0: 0.00, y1: CFG.H, both: true, safe: [], motion: 'scan',
+              label: 'サメの横断' },
+  /* 泡の噴出口（契約§4.5【新・深海】/ P7b）: 床の噴出口。**踏むと強制ジャンプ**（死なない）。
+     判定は噴出口の上面の薄い帯（0〜0.08）＝足を着けて踏んだ体だけが触れる（跳んでいれば素通り）。
+     触れたら Game.onVent が Runners の jump を強制発動する（harmless＝死なない）。
+     占有（occ）は「そのレーンを走る＝跳ばされる」なので要求はジャンプ（踏まずに避けてもよい）。 */
+  VENT:     { span: 1, depth: 1.00, y0: 0.00, y1: 0.08, both: false, safe: ['jump'],
+              harmless: true, vent: true, label: '泡の噴出口' },
+
   /* ------------------------------------------------------------------------
      S6「宇宙ステーション」の新ギミック（契約§4.4 / §4.5 / P4b）
      ------------------------------------------------------------------------ */
@@ -1066,7 +1078,7 @@ const Obstacles = {
 
     /* 1枚もの（静止 / 横スキャン） */
     let lo, hi;
-    if (t.motion === 'scan') { const c = MOT.scanLane(o, dist); lo = c; hi = c; }
+    if (t.motion === 'scan') { const c = MOT.scanLane(o, dist); lo = c; hi = c + t.span - 1; }   // サメは2レーン幅
     else { lo = Obstacles.laneLo(o); hi = Obstacles.laneHi(o); }
     put((lo - 0.5) * CFG.LANE_W + OBS_INSET, (hi + 0.5) * CFG.LANE_W - OBS_INSET, t.y0, t.y1);
     return out;
@@ -2066,6 +2078,24 @@ const Obstacles = {
       }
       for (let k = 0; k < b.ims.length; k++) b.ims[k].instanceMatrix.needsUpdate = true;
 
+    } else if (ud.vent) {
+      /* 泡の噴出口: 泡が立ちのぼる。跳ばされた直後（o.ventM から VENT_BURST_T 秒）は高く速く噴き上げる */
+      const vt = ud.vent, dm = vt.dummy;
+      const sp = Math.max(4, (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN);
+      const burst = (typeof o.ventM === 'number')
+        ? U.clamp(1 - (dist - o.ventM) / (sp * CFG.SEA.VENT_BURST_T), 0, 1) : 0;
+      for (let i = 0; i < vt.n; i++) {
+        const h1 = ZoneKit.hash(i, 81), h2 = ZoneKit.hash(i, 83), h3 = ZoneKit.hash(i, 87);
+        const ph = ((t || 0) * (0.8 + h1 * 0.6 + burst * 2.2) + h2) % 1;
+        const rr = 0.08 + h3 * 0.26 + burst * ph * 0.3;
+        const a = h1 * Math.PI * 2 + ph * 2.5;
+        dm.position.set(Math.cos(a) * rr, 0.05 + ph * (1.3 + burst * 1.6), Math.sin(a) * rr);
+        dm.scale.setScalar((0.6 + h2 * 0.9) * (1 - ph * 0.3) * (1 + burst * 0.8));
+        dm.updateMatrix();
+        vt.bubbles.setMatrixAt(i, dm.matrix);
+      }
+      vt.bubbles.instanceMatrix.needsUpdate = true;
+
     } else if (mot === 'roll' && ud.rock) {
       /* 転がる丸岩: 球は判定と同じ MOT.rollLane の位置へ。転がった距離ぶん回す（滑らない転がり）。
          壁の外（|x| > 半幅＋2.6）に居る間は球を伏せ、影の筋（通り道）だけを見せる＝予告。 */
@@ -2098,13 +2128,14 @@ const Obstacles = {
 
     } else if (mot === 'scan' && ud.mark) {
       /* 予告: 到達した瞬間の位置に床/天井のマーカーを出す */
-      const mx = MOT.scanLane(o, o.at) * CFG.LANE_W;
+      const half = (OBS[o.type].span - 1) / 2;         // サメは2レーン幅（帯の中心は左端＋0.5レーン）
+      const mx = (MOT.scanLane(o, o.at) + half) * CFG.LANE_W;
       ud.mark.position.x = lx(mx);
-      if (ud.range) {
+      if (ud.range && o.params && o.params.scan) {
         const p = o.params.scan;
-        const a = Math.min(p.from, p.to) * CFG.LANE_W, b = Math.max(p.from, p.to) * CFG.LANE_W;
+        const a = (Math.min(p.from, p.to) + half) * CFG.LANE_W, b = (Math.max(p.from, p.to) + half) * CFG.LANE_W;
         ud.range.position.x = lx((a + b) / 2);
-        ud.range.scale.x = (b - a) + CFG.LANE_W;
+        ud.range.scale.x = (b - a) + CFG.LANE_W * OBS[o.type].span;
       }
     } else if (mot === 'rot' && ud.arm) {
       const R = ud.armR;
