@@ -56,6 +56,21 @@ const Tutorial = {
                      '<b class="k">下半分</b>で<b>横へ移動</b>',
                      '<b class="k2">上半分</b>で<b>↑跳ぶ ↓潜る</b>'] }
   },
+  /* ---- 初回のみ（§6 P6）: S1 冒頭の操作チュートリアルは、最後の「同時に来る！」を
+     通り抜けたら済み（localStorage duorun.tutorialDone）。以後の S1 では出さない。
+     設定の「チュートリアルをもう一度」で戻せる。障害物の並び（tip の猶予規則の窓）は変えない。
+     新ギミックの初出 tip（S3〜）はステージごとの説明なので毎回出す。 ---- */
+  INTRO_IDS: ['jump_l', 'jump_r', 'lane', 'gap', 'laser', 'wide', 'both'],
+  LAST_ID: 'both',
+  skipped: 0,
+  isDone() { return !!U.lsGet('tutorialDone', false); },
+  markDone() { U.lsSet('tutorialDone', true); return true; },
+  resetDone() {
+    try { window.localStorage.removeItem(CFG.LS_PREFIX + 'tutorialDone'); } catch (e) { /* noop */ }
+    return true;
+  },
+  isIntro(id) { return Tutorial.INTRO_IDS.indexOf(id) >= 0; },
+
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },
 
@@ -90,7 +105,12 @@ const Tutorial = {
   update(dt, dist) {
     if (!Tutorial.current) return;
     if (Tutorial.untilM !== null) {
-      if (typeof dist === 'number' && dist >= Tutorial.untilM + Tutorial.PASS_M) Tutorial.hide();
+      if (typeof dist === 'number' && dist >= Tutorial.untilM + Tutorial.PASS_M) {
+        /* 最後の操作説明を通り抜けた＝チュートリアル済み（ボットの走行では記録しない） */
+        const bot = (typeof Game !== 'undefined' && Game.botMode);
+        if (Tutorial.current === Tutorial.LAST_ID && !bot) Tutorial.markDone();
+        Tutorial.hide();
+      }
       return;
     }
     Tutorial.t -= dt;
@@ -99,7 +119,9 @@ const Tutorial = {
 
   /* イベント入口（Game.onEvent から） */
   onEvent(e) {
-    if (e && e.type === 'tip' && e.params) Tutorial.show(e.params.id, e.params.untilM);
+    if (!e || e.type !== 'tip' || !e.params) return;
+    if (Tutorial.isIntro(e.params.id) && Tutorial.isDone()) { Tutorial.skipped++; return; }
+    Tutorial.show(e.params.id, e.params.untilM);
   },
 
   reset() { Tutorial.hide(); }

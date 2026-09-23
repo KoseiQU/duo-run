@@ -106,7 +106,9 @@ const ZoneKit = {
       for (let k = 0; k < f.count; k++) {
         const slot = base + k;
         const m = slot * f.spacing;
-        const o = (hideProps || (mk && m >= mk[0] && m <= mk[1])) ? null : f.place(slot, m, t, dist);
+        /* f.thin（World.quality ≥ 1 の粒子）は1つおきに間引く＝奥まで均等に半分 */
+        const o = (hideProps || (mk && m >= mk[0] && m <= mk[1]) || (f.thin && (slot & 1)))
+          ? null : f.place(slot, m, t, dist);
         if (!o) {
           d.position.set(0, -9999, 0);
           d.rotation.set(0, 0, 0);

@@ -58,7 +58,7 @@ const DUO = {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
     Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF, Sync: Sync, Current: Current,
-    Warp: Warp, Zero: Zero, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless, Audio: Audio,
+    Warp: Warp, Zero: Zero, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless, Audio: Audio, Platform: Platform,
     expandEntry: expandEntry,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
@@ -118,6 +118,8 @@ const DUO = {
       for (let i = 0; i < list.length; i++) {
         const s = list[i];
         DUO.reset();
+        /* 製品の初期状態＝チュートリアル未了（P6 初回のみ表示）。スイートごとに戻す */
+        try { window.localStorage.removeItem(CFG.LS_PREFIX + 'tutorialDone'); } catch (e) { /* noop */ }
         if (typeof UI !== 'undefined') UI._testLock = true;   // テスト中はステージ解放規則を本来の姿で検証
         const t = DUO._mkT();
         const st = (performance && performance.now) ? performance.now() : Date.now();

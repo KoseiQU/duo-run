@@ -1,0 +1,20 @@
+{
+  "name": "DUO RUN — Light & Shadow",
+  "short_name": "DUO RUN",
+  "description": "光の子 LUMEN と影の子 UMBRA を、画面の下半分と上半分で別々に操作するランナー",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%2305070f'/%3E%3Crect y='88' width='180' height='4' fill='%23ffffff'/%3E%3Ccircle cx='76' cy='96' r='12' fill='%23ffb347' transform='translate(0 60)'/%3E%3Cpath d='M74 140 L70 164 M74 146 L88 152 M74 146 L60 154 M70 164 L82 176 M70 164 L60 176' stroke='%23ffb347' stroke-width='9' stroke-linecap='round'/%3E%3Ccircle cx='104' cy='24' r='12' fill='%238c9bff'/%3E%3Cpath d='M106 40 L110 16 M106 34 L92 28 M106 34 L120 26 M110 16 L98 4 M110 16 L120 4' stroke='%238c9bff' stroke-width='9' stroke-linecap='round' transform='translate(0 20)'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

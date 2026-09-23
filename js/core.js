@@ -558,6 +558,8 @@ const Game = {
   loop(now) {
     const dt = Game._last ? (now - Game._last) / 1000 : 1 / 60;
     Game._last = now;
+    /* 実機の重さを測って描画品質を自動で下げる（走行中だけ / P6） */
+    if (Game.status === 'playing') World.perfSample(dt * 1000);
     Game.pump(dt);
     requestAnimationFrame(Game.loop);
   },

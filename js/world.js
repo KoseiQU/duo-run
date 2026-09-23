@@ -726,7 +726,60 @@ const World = {
     if (!World.ready) return;
     const el = World.renderer.domElement;
     World.setViewport(el.clientWidth || window.innerWidth, el.clientHeight || window.innerHeight,
-                      Math.min(window.devicePixelRatio || 1, 2));
+                      World.pixelRatio());
+  },
+
+  /* ==========================================================================
+     描画品質（§2「スマホで30fps以上」/ P6 スマホ実機最適化）
+       0 = 通常（devicePixelRatio は上限 2）
+       1 = 粒子を半分（ゾーンの粒子フィールドを1つおきに間引き、Points/LineSegments は描画範囲を半分）
+       2 = 1 ＋ 解像度の上限を 1.5
+     フレーム時間（指数平均）が 20ms を超えた状態が 3秒続いたら1段下げる（上げ直しはしない）。
+     GPU テクスチャは使わない（0 枚のまま / 契約§3）。
+     ========================================================================== */
+  quality: 0,
+  QUALITY_MAX: 2,
+  PARTICLE_FIELDS: { dust: 1, dustBig: 1, bubble: 1, bubbleBig: 1, plankton: 1, detritus: 1, school: 1,
+                     mote: 1, glint: 1, suck: 1, ember: 1, ice: 1, speedline: 1 },
+  perf: { ema: 16.7, slowT: 0, downs: 0, SLOW_MS: 20, HOLD_S: 3 },
+  pixelRatio() {
+    const cap = (World.quality >= 2) ? 1.5 : 2;
+    return Math.min((typeof window !== 'undefined' && window.devicePixelRatio) || 1, cap);
+  },
+  setQuality(q) {
+    World.quality = U.clamp(q | 0, 0, World.QUALITY_MAX);
+    World.applyQuality();
+    World.resize();
+    return World.quality;
+  },
+  applyQuality() {
+    if (!World.ready) return 0;
+    const thin = World.quality >= 1;
+    let n = 0;
+    const z = Zones.active();
+    if (z && z.fields) {
+      z.fields.forEach((f) => { f.thin = thin && !!World.PARTICLE_FIELDS[f.name]; if (f.thin) n++; });
+    }
+    World.scene.traverse((o) => {
+      if (!(o.isPoints || o.isLineSegments) || !o.geometry || !o.geometry.attributes.position) return;
+      const c = o.geometry.attributes.position.count;
+      const half = o.isLineSegments ? 2 * Math.floor(c / 4) : Math.floor(c / 2);
+      o.geometry.setDrawRange(0, thin ? half : Infinity);
+      if (thin) n++;
+    });
+    return n;
+  },
+  /* rAF の1フレームぶんの実時間（ms）。止まっていた後の大きな値（タブ復帰など）は数えない */
+  perfSample(ms) {
+    const P = World.perf;
+    if (!(ms > 0) || ms > 250) return World.quality;
+    P.ema += (ms - P.ema) * 0.1;
+    if (P.ema > P.SLOW_MS) P.slowT += ms / 1000; else P.slowT = 0;
+    if (P.slowT >= P.HOLD_S && World.quality < World.QUALITY_MAX) {
+      P.slowT = 0; P.downs++;
+      World.setQuality(World.quality + 1);
+    }
+    return World.quality;
   },
   /* ゴールゲート: ネオンの門。2体がここを抜けるとクリア演出に入る */
   _buildGoalGate() {
@@ -770,6 +823,8 @@ const World = {
     World.renderer.setClearColor(P.fog, 1);
     const f = World.scene.fog;
     if (f) World._fogBase = { near: f.near, far: f.far, color: f.color.getHex() };
+    /* 品質（粒子の間引き）は建て直したゾーンにも掛け直す */
+    World.applyQuality();
     return true;
   },
 

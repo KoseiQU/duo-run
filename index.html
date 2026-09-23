@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#05070f">
+<!-- ホーム画面に追加すると全画面で起動（iOS）。アイコンは platform.js が canvas で描いて足す -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DUO RUN">
+<meta name="format-detection" content="telephone=no">
 <!-- favicon を要求させない（ファイルを置かない＝$0構成のまま、コンソールを汚さない） -->
 <link rel="icon" href="data:,">
 <title>DUO RUN — Light &amp; Shadow</title>
@@ -16,8 +22,15 @@
   *{box-sizing:border-box; margin:0; padding:0;}
   html,body{height:100%; background:var(--bg); color:var(--ink); overflow:hidden;
     font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
-    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;}
-  #app{position:fixed; inset:0; touch-action:none;}
+    -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent;
+    /* iOS の実機の罠（P6）: ダブルタップ拡大・長押しの選択と文脈メニュー・引っぱりバウンスを止める */
+    touch-action:none; -webkit-touch-callout:none; overscroll-behavior:none; -webkit-text-size-adjust:100%;}
+  /* 100vh 問題（P6）: アドレスバーの出入りで高さが変わるので innerHeight に追従（platform.js が --app-h を入れる） */
+  #app{position:fixed; left:0; top:0; right:0; height:100%; height:100dvh; height:var(--app-h,100dvh);
+    touch-action:none; overscroll-behavior:none;}
+  button, input{touch-action:manipulation;}
+  button{min-height:44px;}          /* 親指で押せる大きさ（§4.8 最小44pt） */
+  button:disabled{opacity:.38; cursor:default;}
   #gl{display:block; width:100%; height:100%;}
 
   /* ---------- HUD ---------- */
@@ -79,6 +92,31 @@
   h1{font-size:clamp(28px,7vw,52px); font-weight:800; letter-spacing:.16em; line-height:1.15;}
   h1 .l{color:var(--lumen); text-shadow:0 0 26px rgba(255,179,71,.5);}
   h1 .u{color:var(--umbra); text-shadow:0 0 26px rgba(125,140,255,.5);}
+  /* ---------- タイトル（P6）: ネオン管のロゴ・2体のシルエット・全画面の一言 ---------- */
+  #screen-title{background:radial-gradient(110% 85% at 50% 45%,rgba(5,7,15,.62),rgba(5,7,15,.95));}
+  h1.logo{font-weight:300; letter-spacing:.22em; font-size:clamp(34px,min(10vw,12vh),64px); line-height:1.05;}
+  h1.logo i{font-style:normal;}
+  h1.logo .l{color:#fff3dc; -webkit-text-stroke:1px rgba(255,190,100,.9);
+    text-shadow:0 0 2px #fff,0 0 6px #ffcf8a,0 0 14px #ffb347,0 0 30px #ff9a1a,0 0 56px rgba(255,140,30,.7);}
+  h1.logo .u{color:#eef0ff; -webkit-text-stroke:1px rgba(150,165,255,.9);
+    text-shadow:0 0 2px #fff,0 0 6px #b9c3ff,0 0 14px #8c9bff,0 0 30px #5b6cff,0 0 56px rgba(90,100,255,.7);}
+  h1.logo i{animation:tubeFlicker 5.2s linear infinite;}
+  h1.logo i.f2{animation-delay:2.7s; animation-duration:6.4s;}
+  @keyframes tubeFlicker{0%,91%,95%,100%{opacity:1;} 92%{opacity:.35;} 93%{opacity:.9;} 94%{opacity:.25;}}
+  .duo-sil{width:min(64vw,260px); height:auto; max-height:17vh; overflow:visible;}
+  .duo-sil .sil-l{filter:drop-shadow(0 0 5px rgba(255,179,71,.9));}
+  .duo-sil .sil-u{filter:drop-shadow(0 0 5px rgba(140,155,255,.9));}
+  /* 日本語の説明は句読点の位置で折り返す（「天/井」のような語中改行をしない） */
+  #screen-title .sub{word-break:keep-all; overflow-wrap:anywhere;}
+  .hint{font-size:11px; letter-spacing:.06em; opacity:.62; padding:4px 10px; border-radius:99px;
+    border:1px solid rgba(255,255,255,.14);}
+  /* 横持ちのスマホ（高さが低い）: 詰めて1画面に収める */
+  @media (max-height:430px){
+    #screen-title{gap:7px; padding:10px 24px;}
+    #screen-title .sub{font-size:11.5px; line-height:1.55;}
+    #screen-title .duo-sil{max-height:15vh;}
+    #screen-title button{padding:9px 22px;}
+  }
   .sub{font-size:13px; opacity:.7; line-height:1.8; max-width:30em;}
   .btns{display:flex; gap:12px; flex-wrap:wrap; justify-content:center;}
   button{font:inherit; font-size:15px; font-weight:700; letter-spacing:.06em; color:var(--ink);
@@ -110,7 +148,9 @@
   .set-btns{display:flex; gap:10px; flex-wrap:wrap;}
   .set-btns button{min-height:44px;}
   #set-mute.off{color:#ff9bb0; border-color:rgba(255,120,150,.55);}
-  #screen-title.set-open > .sub, #screen-title.set-open > .btns{display:none;}
+  /* 設定を開いている間はパネルだけ（横持ちの低い画面でも収まる） */
+  #screen-title.set-open > :not(#settings){display:none;}
+  @media (max-height:430px){ #settings{gap:6px; padding:12px 18px;} .set-row input[type=range]{height:40px;} }
 
   /* ステージ選択 */
   #stage-grid{display:grid; grid-template-columns:repeat(4,minmax(96px,1fr)); gap:10px; max-width:560px; width:100%;}
@@ -268,8 +308,32 @@
   </div>
 
   <div class="screen on" id="screen-title" data-ui="screen-title">
-    <h1><span class="l">DUO</span> <span class="u">RUN</span></h1>
+    <!-- ネオン管のロゴ（P6）: 文字は管の輪郭＋にじむ光。1文字だけ瞬く -->
+    <h1 class="logo" aria-label="DUO RUN"><span class="l">D<i>U</i>O</span> <span class="u">R<i class="f2">U</i>N</span></h1>
     <div class="label">LIGHT &amp; SHADOW</div>
+    <!-- 2体のシルエット: 床の LUMEN（琥珀）と、天井から逆さの UMBRA（藍）。間は分割線 -->
+    <svg class="duo-sil" viewBox="0 0 240 100" aria-hidden="true">
+      <defs>
+        <linearGradient id="silLine" x1="0" x2="1">
+          <stop offset="0" stop-color="#ffb347" stop-opacity="0"/><stop offset=".25" stop-color="#ffbe5a"/>
+          <stop offset=".5" stop-color="#ffffff"/><stop offset=".75" stop-color="#8c9bff"/>
+          <stop offset="1" stop-color="#7d8cff" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <rect x="10" y="49" width="220" height="2" fill="url(#silLine)"/>
+      <rect x="40" y="96" width="160" height="2" rx="1" fill="#ffb347" opacity=".55"/>
+      <rect x="40" y="2" width="160" height="2" rx="1" fill="#7d8cff" opacity=".55"/>
+      <g class="sil-l" stroke="#ffb347" fill="#ffb347" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="98" cy="58" r="8"/>
+        <path d="M96 67 L91 81 M95 71 L104 76 L110 72 M95 71 L86 77 L82 83 M91 81 L99 89 L104 96 M91 81 L87 90 L79 94" fill="none"/>
+      </g>
+      <g class="sil-u" stroke="#8c9bff" fill="#8c9bff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"
+         transform="translate(0 100) scale(1 -1)">
+        <circle cx="146" cy="58" r="8"/>
+        <path d="M140 52 L138 45 L144 50 M152 52 L154 45 L148 50" stroke-width="3"/>
+        <path d="M144 67 L139 81 M143 71 L152 76 L158 72 M143 71 L134 77 L130 83 M139 81 L147 89 L152 96 M139 81 L135 90 L127 94" fill="none"/>
+      </g>
+    </svg>
     <div class="sub">
       画面の<b style="color:var(--lumen)">下半分</b>で LUMEN（床）、<b style="color:var(--umbra)">上半分</b>で UMBRA（天井）。<br>
       フリックで操作。<b>足場から離れる向きがジャンプ</b>。<br>
@@ -280,6 +344,7 @@
       <button class="ghost" id="btn-settings" data-ui="settings">設定</button>
     </div>
     <div class="label" id="title-best"></div>
+    <div class="hint" id="title-hint">共有 → 「ホーム画面に追加」で全画面で遊べます</div>
     <!-- 設定（音量・ミュート・チュートリアルの再表示 / §6 P6）。localStorage duorun.audio / duorun.tutorialDone -->
     <div class="panel" id="settings" data-ui="settings-panel">
       <div class="set-title label">SETTINGS</div>
@@ -345,6 +410,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/platform.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/zones.js"></script>
 <script src="js/obstacles.js"></script>
@@ -391,6 +457,7 @@
     // iPhone/iPad 専用（契約§1）。タッチ領域は常時表示する
     function updateTouchUI(){ document.body.classList.add('touch'); }
     updateTouchUI();
+    Platform.init();
     Audio.init();
     Game.init(document.getElementById('gl'));
     UI.init(Game);

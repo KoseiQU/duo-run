@@ -606,3 +606,180 @@
     }
   });
 })();
+
+/* ============================================================================
+   P6-3: 仕上げ（file:// 単体起動・スマホ実機の罠・描画品質・チュートリアル初回のみ）
+   ============================================================================ */
+(function () {
+  const I = () => DUO.__internal;
+
+  DUO.__suites.push({
+    name: 'P6-3: 単体起動（外部通信なし・ES Modules なし・読み込みは同一オリジンだけ）',
+    quick: true,
+    run(t) {
+      t.eq(document.querySelectorAll('script[type="module"]').length, 0, 'ES Modules を使わない（file:// で死ぬ）');
+      const srcs = Array.prototype.map.call(document.querySelectorAll('script[src]'), (s) => s.getAttribute('src'));
+      t.eq(srcs.filter((s) => /^(https?:)?\/\//.test(s)).length, 0, 'スクリプトはすべて相対パス（' + srcs.length + '本）');
+      const links = Array.prototype.map.call(document.querySelectorAll('link[href]'), (l) => l.getAttribute('href'));
+      t.eq(links.filter((h) => /^(https?:)?\/\//.test(h)).length, 0, 'link も外部を指さない');
+      const res = (performance.getEntriesByType ? performance.getEntriesByType('resource') : []);
+      const ext = res.filter((r) => r.name.indexOf('data:') !== 0 && r.name.indexOf(location.origin) !== 0 &&
+                                    location.protocol !== 'file:');
+      t.eq(ext.length, 0, '読み込んだ資源はすべて同一オリジン（' + res.length + '件' + (ext[0] ? ' 外: ' + ext[0].name : '') + '）');
+      const man = document.querySelector('link[rel="manifest"]');
+      if (location.protocol === 'file:') t.eq(man, null, 'file:// では manifest を繋がない（読めずにコンソールを汚すため）');
+      else t.ok(!!man && man.getAttribute('href') === 'manifest.json', 'http(s) では manifest.json を繋ぐ');
+      const icon = document.querySelector('link[rel="apple-touch-icon"]');
+      t.ok(!!icon && icon.href.indexOf('data:image/png') === 0, 'ホーム画面のアイコンはその場で描いた PNG（ファイル不要）');
+      t.eq(I().World.renderer.info.memory.textures, 0, 'GPU テクスチャは 0 枚');
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-3: iOS Safari の実機の罠（100vh・拡大/選択/バウンス禁止・ホーム画面追加・全画面の一言）',
+    quick: true,
+    run(t) {
+      const cs = getComputedStyle(document.documentElement), bs = getComputedStyle(document.body);
+      const app = document.getElementById('app');
+      t.eq(cs.touchAction, 'none', 'html: touch-action:none（ダブルタップ拡大を止める）');
+      t.eq(bs.overscrollBehaviorY || bs.overscrollBehavior, 'none', 'body: overscroll-behavior:none（バウンス禁止）');
+      t.ok((bs.webkitUserSelect || bs.userSelect) === 'none', '長押しの選択を止める');
+      t.eq(getComputedStyle(app).touchAction, 'none', '#app: touch-action:none');
+      /* 100vh 問題: #app の高さは innerHeight（--app-h）に追従する */
+      const keep = document.documentElement.style.getPropertyValue('--app-h');
+      document.documentElement.style.setProperty('--app-h', '500px');
+      t.eq(Math.round(app.getBoundingClientRect().height), 500, '#app の高さは --app-h に追従');
+      document.documentElement.style.setProperty('--app-h', keep);
+      t.eq(Platform.fitApp(), window.innerHeight, 'fitApp は innerHeight を入れる');
+      const meta = (n) => { const e = document.querySelector('meta[name="' + n + '"]'); return e ? e.getAttribute('content') : null; };
+      t.eq(meta('apple-mobile-web-app-capable'), 'yes', 'ホーム画面に追加で全画面（apple-mobile-web-app-capable）');
+      t.ok(!!meta('theme-color'), 'theme-color');
+      t.ok(/viewport-fit=cover/.test(meta('viewport')) && /user-scalable=no/.test(meta('viewport')), 'viewport（ノッチ・拡大禁止）');
+      const hint = document.getElementById('title-hint');
+      t.ok(!!hint && hint.textContent.indexOf('ホーム画面に追加') >= 0, 'タイトルに「ホーム画面に追加すると全画面」の一言');
+      t.eq(hint.style.display === 'none', Platform.standalone(), '全画面で起動していれば隠す');
+      /* タイトルの仕上げ: ネオン管のロゴと2体のシルエット */
+      DUO.reset();
+      const logo = document.querySelector('#screen-title h1.logo');
+      t.ok(!!logo && getComputedStyle(logo.querySelector('.l')).textShadow.split('rgb').length > 4, 'ロゴはネオン管風（多重の光）');
+      t.eq(document.querySelectorAll('#screen-title .duo-sil .sil-l, #screen-title .duo-sil .sil-u').length, 2, '2体のシルエット');
+      /* 横持ち（812×375）でもタイトルの要素が1画面に収まる */
+      const rect = (el) => el.getBoundingClientRect();
+      const start = document.getElementById('btn-start');
+      const r = rect(start);
+      t.ok(r.bottom <= window.innerHeight && r.top >= 0, 'START が画面内（' + Math.round(r.top) + '〜' + Math.round(r.bottom) + '）');
+      t.ok(Math.min(r.width, r.height) >= 44, 'START は親指で押せる大きさ');
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-3: 描画品質の自動調整（20ms 超が3秒続いたら粒子半減→解像度）',
+    quick: true,
+    run(t) {
+      const In = I(), W = In.World;
+      const keepQ = W.quality, keepP = Object.assign({}, W.perf);
+      try {
+        W.setQuality(0);
+        W.perf.ema = 16.7; W.perf.slowT = 0;
+        DUO.reset(); DUO.start('S1', 5);
+        for (let i = 0; i < 300; i++) W.perfSample(16.7);
+        t.eq(W.quality, 0, '16.7ms（60fps）では下げない');
+        for (let i = 0; i < 20; i++) W.perfSample(4000);
+        t.eq(W.quality, 0, '止まっていた後の大きな値（タブ復帰など）は数えない');
+        let n = 0;
+        while (W.quality === 0 && n++ < 400) W.perfSample(30);
+        const sec = n * 0.03;
+        t.eq(W.quality, 1, '30ms が続くと1段下げる');
+        t.ok(sec >= 3 && sec < 4.2, '下げるまで約3秒（' + sec.toFixed(2) + '秒 / 立ち上がりの平均化を含む）');
+        const z = In.Zones.active();
+        const thin = z.fields.filter((f) => f.thin).map((f) => f.name);
+        t.ok(thin.length > 0, '粒子のフィールドを間引く（' + thin.join(',') + '）');
+        DUO.pump(1 / 60);
+        const f0 = z.fields.filter((f) => f.thin)[0];
+        let shown = 0;
+        const m = new THREE.Matrix4(), v = new THREE.Vector3();
+        for (let k = 0; k < f0.count; k++) { f0.mesh.getMatrixAt(k, m); v.setFromMatrixPosition(m); if (v.y > -9000) shown++; }
+        t.ok(shown <= Math.ceil(f0.count / 2) + 1, f0.name + ' は半分以下（' + shown + '/' + f0.count + '）');
+        /* ゾーンを建て直しても掛け直す */
+        In.Zones.switchTo('sea', true);
+        t.ok(In.Zones.active().fields.some((f) => f.thin), 'ゾーンを替えても粒子は半分のまま');
+        n = 0;
+        while (W.quality === 1 && n++ < 400) W.perfSample(30);
+        t.eq(W.quality, 2, 'さらに続くともう1段（解像度）');
+        t.ok(W.pixelRatio() <= 1.5, '解像度の上限 1.5（' + W.pixelRatio() + '）');
+        for (let i = 0; i < 300; i++) W.perfSample(40);
+        t.eq(W.quality, 2, '下限で止まる');
+        t.eq(W.renderer.info.memory.textures, 0, 'テクスチャは 0 枚のまま');
+      } finally {
+        W.setQuality(keepQ);
+        Object.assign(W.perf, keepP);
+        DUO.reset();
+      }
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-3: チュートリアルは初回のみ（duorun.tutorialDone・設定で再表示）',
+    quick: true,
+    run(t) {
+      const In = I(), Game = In.Game, Tu = In.Tutorial, U = In.U;
+      const snap = U.lsSnapshot();
+      try {
+        t.eq(Tu.isDone(), false, 'はじめは未了（製品の初期状態）');
+        /* ボットの走行では済みにしない */
+        DUO.reset(); DUO.start('S1', 2); DUO.bot('perfect');
+        let g = 0;
+        while (Game.dist < 420 && Game.status === 'playing' && g++ < 3000) DUO.__step(1 / 60);
+        t.eq(Tu.isDone(), false, 'ボットが導入区間を抜けても済みにしない');
+        /* 人の操作で最後の説明（同時に来る！）を抜けると済み */
+        const g1 = In.createGenerator(In.makeStage('S1'), 2);
+        g1.ensure(700, 0);
+        DUO.reset(); DUO.start('S1', 2);
+        const ev = g1.events.filter((e) => e.type === 'tip' && e.params && e.params.id === 'both')[0];
+        t.ok(!!ev, '導入区間の最後の tip がある');
+        DUO.skipTo(ev.at - 4);
+        DUO.key('KeyA', true); DUO.pump(1 / 60); DUO.key('KeyA', false);   // 床は左へ（床の柵はレーン0）
+        g = 0;
+        let shown = false;
+        while (Game.dist < ev.params.untilM + 3 && Game.status === 'playing' && g++ < 600) {
+          DUO.pump(1 / 60);
+          if (Tu.current === 'both') shown = true;
+        }
+        t.eq(shown, true, '1回目は出る');
+        t.eq(Game.status, 'playing', '（避けて通過）');
+        t.eq(Tu.isDone(), true, '最後の説明を通り抜けたら済み（localStorage duorun.tutorialDone）');
+        /* 2回目の S1: 操作の説明は出さない（障害物の並びは同じ） */
+        DUO.reset(); DUO.start('S1', 2);
+        const sk0 = Tu.skipped;
+        g = 0; shown = false;
+        while (Game.dist < 110 && Game.status === 'playing' && g++ < 600) { DUO.pump(1 / 60); if (Tu.current) shown = true; }
+        t.eq(shown, false, '2回目は操作の説明を出さない');
+        t.ok(Tu.skipped > sk0, '（出さなかった数 ' + (Tu.skipped - sk0) + '）');
+        /* 新ギミックの説明（S3〜）は済みでも出す */
+        const g3 = In.createGenerator(In.makeStage('S3'), 1);
+        g3.ensure(1000, 0);
+        DUO.reset(); DUO.start('S3', 1);
+        const e3 = g3.events.filter((e) => e.type === 'tip')[0];
+        t.ok(!!e3, 'S3 に新ギミックの tip');
+        Tu.onEvent(e3);
+        t.eq(Tu.current, e3.params.id, '新ギミックの tip は出す（' + e3.params.id + '）');
+        /* 設定の「チュートリアルをもう一度」 */
+        DUO.reset();
+        document.querySelector('[data-ui="settings"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const btn = document.querySelector('[data-ui="tutorial-reset"]');
+        t.eq(btn.disabled, false, '済みのときはボタンが押せる');
+        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        t.eq(Tu.isDone(), false, '押すと未了に戻る');
+        t.eq(btn.disabled, true, '未了のときは押せない表示');
+        document.querySelector('[data-ui="settings-close"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        DUO.reset(); DUO.start('S1', 2);
+        g = 0; shown = false;
+        while (Game.dist < 110 && Game.status === 'playing' && g++ < 600) { DUO.pump(1 / 60); if (Tu.current) shown = true; }
+        t.eq(shown, true, 'もう一度出る');
+      } finally {
+        U.lsRestore(snap);
+        DUO.reset();
+      }
+    }
+  });
+})();
