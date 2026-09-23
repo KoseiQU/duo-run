@@ -416,6 +416,9 @@
     run(t) {
       isolate((A) => {
         A.ctx = null; A.unlocked = false; A._acOverride = FakeAC;
+        /* 監査環境ではタブが hidden のことがある（メイン監査で実際に踏んだ）。
+           解錠の検証は「見えている」前提なので、実 document.hidden に依存させない */
+        A._hiddenOverride = false;
         /* 合成イベント（dispatchEvent）では作らない＝自動再生ポリシーの警告を出さない */
         A._gesture({ isTrusted: false });
         t.eq(A.ctx, null, '信頼されない操作では AudioContext を作らない');
