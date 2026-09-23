@@ -216,16 +216,15 @@ const HUD = {
 /* ---------------------------------------------------------------- 画面遷移 */
 const UI = {
   screens: ['title', 'mode', 'stages', 'dead', 'clear'],
-  /* ステージ選択の並び（契約 §4.4）。実装済みは S1・S2、以降は P3 以降で解放 */
+  /* ステージ選択の並び（契約 §4.4 v2 / P7c: 7ステージ）。S1 はチュートリアル（白い空間） */
   STAGES: [
-    { id: 'S1', name: 'ネオン都市・入門', ready: true },
-    { id: 'S2', name: 'ネオン都市・夜', ready: true },
-    { id: 'S3', name: '古代遺跡・外周', ready: true },
-    { id: 'S4', name: '古代遺跡・内部', ready: true },
-    { id: 'S5', name: '深海', ready: true },
-    { id: 'S6', name: '宇宙ステーション', ready: true },
-    { id: 'S7', name: '鏡の世界', ready: true },
-    { id: 'S8', name: 'コア', ready: true }
+    { id: 'S1', name: 'チュートリアル', ready: true },
+    { id: 'S2', name: 'ネオン都市', ready: true },
+    { id: 'S3', name: '古代遺跡', ready: true },
+    { id: 'S4', name: '深海', ready: true },
+    { id: 'S5', name: '宇宙ステーション', ready: true },
+    { id: 'S6', name: '鏡の世界', ready: true },
+    { id: 'S7', name: 'コア', ready: true }
   ],
 
   show(name) {
@@ -241,10 +240,10 @@ const UI = {
   },
 
   cleared() { return U.lsGet('cleared', []) || []; },
-  /* 全クリア（8ステージすべて制覇 / 契約§6 P5b）。localStorage の印が唯一の出所 */
+  /* 全クリア（7ステージすべて制覇＝S7 コアのクリア / 契約§6 P5b・P7c）。localStorage の印が唯一の出所 */
   allCleared() { return !!U.lsGet('allclear', false); },
 
-  /* 全クリア演出（S8 クリア直後の短いオーバーレイ）。
+  /* 全クリア演出（最終ステージ S7 クリア直後の短いオーバーレイ）。
      2体は World がポーズを取り続け、ここは文字と「全ゾーンの色の流れ」を受け持つ。 */
   allClearShow() {
     const e = document.getElementById('allclear');
@@ -287,7 +286,7 @@ const UI = {
     if (mark) {
       const on = UI.allCleared();
       mark.style.display = on ? '' : 'none';
-      mark.textContent = on ? '★ ALL CLEAR — 全8ステージ制覇' : '';
+      mark.textContent = on ? '★ ALL CLEAR — 全' + UI.STAGES.length + 'ステージ制覇' : '';
     }
     UI.STAGES.forEach((st, i) => {
       const unlocked = UI.isUnlocked(i) && st.ready;

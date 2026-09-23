@@ -1721,248 +1721,194 @@ const TIP_ENTRY_ONLY = { ZEROG: 1, GRAVWARP: 1, MIRRORZ: 1, HANDSWAP: 1, MERGE: 
 const CHUNK_BY_ID = {};
 CHUNK_DEFS.forEach((c) => { CHUNK_BY_ID[c.id] = c; });
 
-/* ---------------------------------------------------------------- ステージ定義 */
+/* ---------------------------------------------------------------- ステージ定義
+   契約 §4.4【全面改訂 v2 / P7c】7ステージ＋エンドレス。
+   旧8ステージ（S1入門/S2夜、S3外周/S4内部、S5深海、S6宇宙、S7鏡、S8コア）は失効し、
+   チャンク・演出資産は新ステージへ継承する（ネオン=旧S1+S2、遺跡=旧S3+S4、以下同）。
+   旧ステージのプール（重み付けの重複ごと）は LEGACY_POOL に残し、新ステージが結合して使う。 */
+const NOT_LATE = (c) => !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8;
+const LEGACY_POOL = {
+  /* 旧S1 ネオン都市・入門（導入区間を除いたランダム区間の顔ぶれ）。
+     「横に避ける」チャンクを重み付け（同じidを2回入れる）して比率（§4.3）に寄せる。 */
+  neon1: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && NOT_LATE(c)).map((c) => c.id)
+    .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
+    .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b']),
+  /* 旧S2 ネオン都市・夜: 動くレーザー（厚め）＋壁の穴＋跳ぶ系＋横に避ける系（P2c で厚めに戻した） */
+  neon2: ['c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
+          'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
+          'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
+          'c1_rover_f', 'c1_rover_c', 'c1_gap_f', 'c1_gap_c', 'c1_lowl_f', 'c1_lowl_c',
+          'c1_laserv',
+          'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
+          'c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
+          'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
+          'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
+          'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
+    .concat(CHUNK_DEFS.filter((c) => c.moving && NOT_LATE(c)).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.moving && NOT_LATE(c)).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.moving && NOT_LATE(c) && c.difficulty <= 2).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.dense && NOT_LATE(c)).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.dense && NOT_LATE(c)).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.dense && NOT_LATE(c)).map((c) => c.id))
+    .concat(['c2_blink_v', 'c2_blink_low', 'c3_blink_scan', 'c2_blink_v', 'c2_blink_low', 'c3_blink_scan']),
+  /* 旧S3 古代遺跡・外周: 崩れる橋・振り子の刃・転がる丸岩（厚め）＋ネオンで覚えた基本形 */
+  ruins1: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id)
+    .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s3 && c.bridge).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s3 && c.rock).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s3 && c.rock).map((c) => c.id))
+    .concat(['c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
+             'd3_duo_a', 'd3_duo_c', 'd3_duo_e', 'd3_duo_f',
+             'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
+             'c3_rot_lean', 'c3_rot_ceil', 'c3_rot_pair', 'c3_scan_rot']),
+  /* 旧S4 古代遺跡・内部: 同時スイッチ（厚め）・転がる丸岩＋外周で覚えた遺跡の形 */
+  ruins2: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id)
+    .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s4 && c.rock).map((c) => c.id))
+    .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
+             'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole']),
+  /* 旧S5 深海: 深海の札が主役。跳び継ぎ（leap）を厚く（both 型が主役でレーン移動に偏るため） */
+  sea: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id)
+    .concat(CHUNK_DEFS.filter((c) => c.s5 && c.dense === 2).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id)),
+  /* 旧S6 宇宙: 新ギミックの札（無重力・重力反転）は間合いが伸びて密度で負けるので厚めに */
+  space: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id)
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.id.indexOf('s6_weave') !== 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.id.indexOf('s6_mix') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.id.indexOf('s6_mix') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.warp).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.warp).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.zero).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.zero).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.net).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.wallhole).map((c) => c.id)),
+  /* 旧S7 鏡: 主役（s7_mix / s7_net）を厚く。ゲートの札は1本ずつ、重ね掛け（dual）は後半用に厚め */
+  mirror: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id)
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.net && !c.mir && !c.swap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.net && !c.mir && !c.swap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.leap && !c.mir && !c.swap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.leap && !c.mir && !c.swap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.mir && !c.swap).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.swap && !c.mir).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.wallhole).map((c) => c.id)),
+  /* 旧S8 コア: 網羅札＋工兵札＋先行ステージの rank4〜5（長い札は入れない） */
+  core: CHUNK_DEFS.filter((c) => c.s8).map((c) => c.id)
+    .concat(CHUNK_DEFS.filter((c) => c.s8 && c.cover).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s8 && c.fill).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_mix') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_weave') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_leap') === 0).map((c) => c.id))
+    .concat(CHUNK_DEFS.filter((c) => !c.s8 && c.difficulty >= 4 && !c.fill && !c.dual && c.lengthM <= 58).map((c) => c.id))
+};
+
 const STAGE_DEFS = {
-  /* P1の仮ステージ（無地のコリドー・ゾーン装飾なし） */
+  /* P1の仮ステージ（無地のコリドー・機械テスト用。ステージ選択には出ない） */
   S0: {
     id: 'S0', name: '仮ステージ S0', zone: 'neon', lengthM: 900,
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
-    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id)
+    chunkPool: CHUNK_DEFS.filter((c) => !c.moving && NOT_LATE(c)).map((c) => c.id)
   },
-  /* S1 ネオン都市・入門（契約 §4.4）: 900m / 16→20 / チェックポイント 300・600 /
-     冒頭に固定の導入区間、終盤200mは「高速道路の連鎖崩落」。ランク1〜2のみ＝スライド0%。 */
+  /* S1 チュートリアル（契約 §4.4 v2）: 700m / 14→16 / 白い無地の空間。
+     レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー を1つずつ（INTRO_TUT）。
+     大演出なし・エンドレスに含めない。クリアで「準備完了」＋ duorun.tutorialDone。 */
   S1: {
-    id: 'S1', name: 'S1 ネオン都市・入門', zone: 'neon', lengthM: 900,
-    speedFrom: 16, speedTo: 20, maxRank: 2, setpiece: 'collapse',
-    density: [3, 6],                       // 100mあたりの必須動作（契約§4.7）
+    id: 'S1', name: 'S1 チュートリアル', zone: 'neon', lengthM: 700,
+    speedFrom: 14, speedTo: 16, maxRank: 1, setpiece: null,
+    density: [3, 4],
+    tutorial: true,
     intro: INTRO_S1,
-    /* 導入区間と終盤の崩落は「跳ぶ」要求が多めなので、ランダム区間は
-       「横に避ける」チャンクを重み付け（同じidを2回入れる＝選ばれやすくする）して
-       ステージ全体を契約§4.3の比率（レーン50%前後／ジャンプ35%前後）に寄せる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id)
-      .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
-      .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b'])
+    chunkPool: LEGACY_POOL.neon1
   },
-  /* S2 ネオン都市・夜（契約 §4.4）: 1200m / 20→24 / チェックポイント 400・800 /
-     新ギミック＝動くレーザー（横スキャン・回転・点滅）、ここから壁の穴が登場。
-     終盤200mは「ビル間の大ジャンプ」。ランク1〜3。 */
+  /* S2 ネオン都市（旧S1+S2）: 1800m / 16→24。
+     中盤（780〜980m）に「高速道路の連鎖崩落」、終盤200mに「ビル間の大ジャンプ」。
+     ランク1〜3（前半＝旧S1の顔ぶれ、後半に動くレーザー・壁の穴）。 */
   S2: {
-    id: 'S2', name: 'S2 ネオン都市・夜', zone: 'neon', lengthM: 1200,
-    speedFrom: 20, speedTo: 24, minRank: 2, maxRank: 3, setpiece: 'bigjump',
-    density: [5, 8],                       // 100mあたりの必須動作（契約§4.7）
-    /* 動くレーザーのチャンクを厚めに（同じidを2回入れる＝選ばれやすくする）。
-       レーン移動に寄りすぎないよう、跳ぶ系（ローバー/ギャップ/ローレーザー）も残す。 */
-    /* 顔ぶれ: 動くレーザー（厚め）＋壁の穴＋跳ぶ系。
-       S1 で使った「柱/縦レーザーだけ」の rank1 チャンク（＝レーン移動しか要求しない）は
-       S2 では外す。動くレーザー自体が両者にレーン移動を要求するので、そのままだと
-       レーン移動に偏って §4.3 の比率（レーン50%前後／ジャンプ35%前後）を外れるため。 */
-    /* 【2026-09-21 P2c】大ジャンプが自由飛行になり、演出区間がレーン移動の要求を
-       持たなくなった（§4.5 改訂）。その分をランダム区間で取り戻さないと
-       §4.3 の比率（レーン50%前後）を割るので、横に避けるだけのチャンクを厚めに戻す。 */
-    chunkPool: ['c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
-                'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
-                'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
-                'c1_rover_f', 'c1_rover_c', 'c1_gap_f', 'c1_gap_c', 'c1_lowl_f', 'c1_lowl_c',
-                'c1_laserv',
-                'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
-                'c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
-                /* 壁の穴は S2 から登場する顔なので厚めに（連続禁止は生成器が見る） */
-                'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
-                'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
-                'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
-      /* S3 の顔ぶれ（!c.s3）は混ぜない。ゾーンが変わればギミックも変わる（契約§4.4） */
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))     // 動くレーザーを厚く
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && c.difficulty <= 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))      // 密集チャンク
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.dense && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7).map((c) => c.id))
-      /* 横に避けるチャンクを厚くしたぶん、点滅レーザーが薄まらないよう補う（P2c） */
-      .concat(['c2_blink_v', 'c2_blink_low', 'c3_blink_scan',
-               'c2_blink_v', 'c2_blink_low', 'c3_blink_scan'])
+    id: 'S2', name: 'S2 ネオン都市', zone: 'neon', lengthM: 1800,
+    speedFrom: 16, speedTo: 24, minRank: 1, maxRank: 3,
+    setpiece: ['collapse', 'bigjump'], midAt: 780,
+    density: [4, 8],
+    chunkPool: LEGACY_POOL.neon1.concat(LEGACY_POOL.neon2)
   },
-  /* S3 古代遺跡・外周（契約 §4.4）: 1200m / 22→26 / チェックポイント 400・800 /
-     新ギミック＝崩れる橋・振り子の刃。終盤200mは「巨岩の追跡」。
-     §4.7 の「両者同時要求の余白」は S3 以降 0.45秒。密度は 6→10回/100m。 */
+  /* S3 古代遺跡（旧S3+S4）: 2000m / 22→28。
+     新ギミック＝崩れる橋・振り子の刃・同時スイッチ・転がる丸岩（初出は tip）。
+     中盤（900〜1100m）に「巨岩の追跡」、終盤200mに「神殿崩壊」。
+     区間パターンは中盤の演出まで「外周」、そこから「内部」（zoneMode の距離指定）。 */
   S3: {
-    id: 'S3', name: 'S3 古代遺跡・外周', zone: 'ruins', lengthM: 1200,
-    speedFrom: 22, speedTo: 26, minRank: 2, maxRank: 3, setpiece: 'rockchase',
+    id: 'S3', name: 'S3 古代遺跡', zone: 'ruins', lengthM: 2000,
+    zoneMode: [{ from: 0, mode: 'outer' }, { from: 1100, mode: 'inner' }],
+    speedFrom: 22, speedTo: 28, minRank: 2, maxRank: 4,
+    setpiece: ['rockchase', 'templefall'], midAt: 900,
     density: [6, 10],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
-    /* 新ギミックの初出で短い指示を出す（契約§4.8 チュートリアル） */
-    tipOnce: { bridge: 'bridge', pend: 'pendulum', rock: 'rock' },
-    /* P7b: 転がる丸岩（rank3＝後半だけ候補）を1回の走行で顔出しさせる（初出は tip つき） */
+    tipOnce: { bridge: 'bridge', pend: 'pendulum', rock: 'rock', sync: 'sync' },
     tipBoost: true,
     tipMul: 6,
-    /* 顔ぶれ: 遺跡の新チャンクを主役に、ネオンで覚えた基本形（密集・動くレーザー）を混ぜる。
-       遺跡スキンでは動くレーザー＝振り子の刃・火の輪・噴き出す炎に見える（判定は共通）。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id)
-      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.dense === 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.bridge).map((c) => c.id))
-      /* 転がる丸岩（P7b・rank3＝後半だけ候補）は厚めに積んで、1回の走行で顔を出させる */
-      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.rock).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s3 && c.rock).map((c) => c.id))
-      .concat(['c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
-               'd3_duo_a', 'd3_duo_c', 'd3_duo_e', 'd3_duo_f',
-               'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
-               'c3_rot_lean', 'c3_rot_ceil', 'c3_rot_pair', 'c3_scan_rot'])
+    chunkPool: LEGACY_POOL.ruins1.concat(LEGACY_POOL.ruins2)
   },
-  /* S4 古代遺跡・内部（契約 §4.4）: 1200m / 24→28 / チェックポイント 400・800 /
-     新ギミック＝同時スイッチ・落ちる天井。終盤200mは「神殿崩壊」。
-     ゾーンは遺跡のまま、区間パターンだけ **内部（壁区間主体）** に替える（zoneMode）。 */
+  /* S4 深海（旧S5）: 1600m / 26→30 / サメの横断・泡の噴出口・点滅レーザー／終盤: 巨大魚の通過 */
   S4: {
-    id: 'S4', name: 'S4 古代遺跡・内部', zone: 'ruins', zoneMode: 'inner', lengthM: 1200,
-    speedFrom: 24, speedTo: 28, minRank: 3, maxRank: 4, setpiece: 'templefall',
-    density: [6, 10],
-    reactBoth: CFG.FAIR.REACT_BOTH_LATE,
-    tipOnce: { sync: 'sync' },
-    /* 顔ぶれ: S4 の新チャンクを主役に、S3 で覚えた遺跡の形（崩れる橋・振り子・列柱）を混ぜる */
-    chunkPool: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id)
-      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.dense === 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
-      /* 転がる丸岩（P7b）を厚めに（S3 で覚えた形を S4 で本格的に） */
-      .concat(CHUNK_DEFS.filter((c) => c.s4 && c.rock).map((c) => c.id))
-      .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
-               'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole'])
-  },
-  /* S5 深海（契約 §4.4）: 1500m / 26→30 / チェックポイント 500・1000 /
-     新ギミック＝海流ベルト・浮上足場・色の扉。終盤200mは「巨大魚の通過」。
-     密度は 8→12回/100m（契約§4.7）。両者同時要求の余白は 0.45秒。 */
-  S5: {
-    id: 'S5', name: 'S5 深海', zone: 'sea', lengthM: 1500,
+    id: 'S4', name: 'S4 深海', zone: 'sea', lengthM: 1600,
     speedFrom: 26, speedTo: 30, minRank: 3, maxRank: 4, setpiece: 'megafish',
     density: [8, 12],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
-    /* P7b: 新ギミック（サメの横断・泡の噴出口）の初出は tip つき。1回の走行で必ず顔を出させる */
     tipOnce: { shark: 'shark', vent: 'vent' },
     tipBoost: true,
     tipMul: 6,
-    /* 海流ベルト・浮上足場・色の扉は契約 v2（2026-09-24）で失効。新ギミック（サメ・泡）は P7b */
-    /* 顔ぶれ: S5 の新チャンクが主役。基本形（柱・光線・跳び継ぎ）は深海スキンで顔が変わる。
-       他ゾーン専用のギミック（崩れる橋・同時スイッチ・落ちる天井）は混ぜない（契約§4.4）。 */
-    /* 跳び継ぎ（leap）を厚く入れて §4.3 の比率（レーン50%前後／ジャンプ35%前後）に寄せる。
-       深海の顔ぶれは both 型（岩柱・放電柱・触手）が主役でレーン移動に偏るため。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id)
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.dense === 2).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s5 && c.leap).map((c) => c.id))
+    chunkPool: LEGACY_POOL.sea
   },
-  /* S6 宇宙ステーション（契約 §4.4）: 1500m / 28→34 / チェックポイント 500・1000 /
-     新ギミック＝重力反転ワープ・無重力ジャンプ・レーザーネット。
-     終盤200mは「区画爆発」。密度は 8→12回/100m（契約§4.7）。ランク4〜5。 */
-  S6: {
-    id: 'S6', name: 'S6 宇宙ステーション', zone: 'space', lengthM: 1500,
+  /* S5 宇宙ステーション（旧S6）: 1600m / 28→34 / 重力反転ワープ・無重力・レーザーネット／終盤: 区画爆発。
+     28→34 m/s では跳ぶ譜面が密度で不利なので比率の引きを強める（ratioPull / mix）。 */
+  S5: {
+    id: 'S5', name: 'S5 宇宙ステーション', zone: 'space', lengthM: 1600,
     speedFrom: 28, speedTo: 34, minRank: 4, maxRank: 5, setpiece: 'blastout',
     density: [8, 12],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
-    /* 28→34 m/s では「跳ぶ譜面」が密度で不利になる（ジャンプ連続は 0.70秒より詰められない）。
-       比率の引きを強め、出せないスライドぶんをジャンプへ振り直す（§4.3 のレーン50%前後）。 */
-    /* P5c: tip の窓で初出チャンクの頭（跳びを含む）を外すぶんレーン寄りになるので 9 → 13 */
     ratioPull: 13,
     mix: { lane: 0.49, jump: 0.47, slide: 0.04 },
-    /* 新ギミック（重力反転・無重力・レーザーネット）を1回の走行で必ず顔出しさせる */
     tipBoost: true,
-    /* P5c（契約§4.8）: 初出は tip の窓（speed×3.5秒）ぶん場所を取るので、顔出しの率を保つよう強める */
     tipMul: 9,
     tipOnce: { warp: 'gravwarp', zero: 'zerog', net: 'lasernet' },
-    /* 顔ぶれ: S6 の新チャンクだけ。他ゾーン専用のギミック（崩れる橋・同時スイッチ・
-       落ちる天井・海流・色の扉）は混ぜない（契約§4.4）。
-       跳び継ぎ（leap）を厚く入れて §4.3 の比率に寄せる（宇宙の顔ぶれは both 型
-       ＝支柱・防護フィールド・斜めビームが主役でレーン移動に偏るため）。 */
-    /* 新ギミックのチャンク（無重力・重力反転）は間合いが伸びるぶん密度が下がるので、
-       そのままだと密度の重みに負けて出てこない。厚めに積んで顔を出させる。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id)
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.id.indexOf('s6_weave') !== 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.id.indexOf('s6_mix') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.id.indexOf('s6_mix') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.warp).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.warp).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.zero).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.zero).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.net).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s6 && c.wallhole).map((c) => c.id))
+    chunkPool: LEGACY_POOL.space
   },
-  /* S7 鏡の世界（契約 §4.4）: 1500m / 30→38 / チェックポイント 500・1000 /
-     新ギミック＝鏡ゾーン（片方の左右が反転）・入れ替えワープ（上下の担当が入れ替わる）＋
-     レーザーネットの密度アップ（1区画 4〜5本）。終盤200mは「鏡の砕け散り」。ランク4〜5。
-     ■ 密度: 契約§4.7 の目安は 10→14回/100m だが、30〜38 m/s では
-       「ジャンプ連続 0.70秒」「ウォール間隔 0.45秒」の下限から
-       **約11.7回/100m（全部レーン移動）が理論上限**で、§4.3 の比率
-       （ジャンプ 35%前後）と両立する実質上限は決定ログどおり **約10回/100m**。
-       そこでステージの目安を 9→11 に置く（契約§4.7 との差は既知の妥協点）。 */
-  S7: {
-    id: 'S7', name: 'S7 鏡の世界', zone: 'mirror', lengthM: 1500,
+  /* S6 鏡の世界（旧S7）: 1600m / 30→38 / 鏡ゾーン・入れ替えワープ・レーザーネット密／終盤: 鏡の砕け散り。
+     ■ 密度: 30〜38 m/s の実質上限は約10回/100m（決定ログ）＝ 8→10 に置く（既知の妥協点）。
+     ■ 重ね掛け（dual）: P7a の既知課題「1/50 に減」を回収する（P7c）。
+       鏡・入れ替えの初出が早く済むほど、後半に重ね掛けの札を置く余地が残る。 */
+  S6: {
+    id: 'S6', name: 'S6 鏡の世界', zone: 'mirror', lengthM: 1600,
     speedFrom: 30, speedTo: 38, minRank: 4, maxRank: 5, setpiece: 'shatter',
     density: [8, 10],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     ratioPull: 10,
     mix: { lane: 0.52, jump: 0.45, slide: 0.03 },
-    /* 新ギミック（鏡ゾーン・入れ替えワープ）を1回の走行で必ず顔出しさせる */
     tipBoost: true,
-    /* ゲートのチャンクは猶予のぶん密度が低く、密度の重みに強く負けるので
-       S6（×3）より強く引き上げる。まだ出していないギミックだけに掛かる。 */
-    /* P5c（契約§4.8）: tip の窓のぶん初出が遅れ、重ね掛け（鏡と入れ替えの両方が出てから）
-       まで届かない走行が増えたので 9 → 40 に強める（tip 出現率を従来並みに保つ） */
     tipMul: 40,
-    /* 重ね掛け（dual）も「新ギミック」として1回の走行で必ず顔を出させる
-       ＝ 契約§6 P5a「S7後半＝脳の負荷の最高点」 */
     tipOnce: { mir: 'mirrorzone', swap: 'handswap', dual: 'dualzone' },
-    /* 顔ぶれ: S7 の新チャンクだけ。他ゾーン専用のギミックは混ぜない（契約§4.4）。
-       主役（跳2・レーン3 の s7_mix / ネットの s7_net）を厚く積む。
-       ゲートを持つチャンク（鏡・入れ替え）は猶予のぶん密度が落ちるので、
-       **1本ずつだけ** 積み増す（顔出しは tipBoost が受け持つ）。
-       重ね掛け（mir かつ swap）はさらに空くので積み増さない。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id)
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.net && !c.mir && !c.swap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.net && !c.mir && !c.swap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.leap && !c.mir && !c.swap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.leap && !c.mir && !c.swap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.mir && !c.swap).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.swap && !c.mir).map((c) => c.id))
-      /* 重ね掛け（S7後半の山場）は長くて密度も低いので、置ける機会そのものが少ない。
-         後半にしか候補にならない（minSpeed 34）ぶん、厚めに積む。 */
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s7 && c.wallhole).map((c) => c.id))
+    chunkPool: LEGACY_POOL.mirror
   },
-  /* S8 コア（契約 §4.4）: 1500m / 32→44 / チェックポイント 500・1000 /
-     **全部混在**（S3〜S7 の全ギミック）＋ 新ギミック＝合体区間（必ず2回）。
-     終盤は大演出「全崩壊エスケープ」。ランク4〜5。
-     ■ 密度: 契約§4.7 の目安は 10→14回/100m だが、32〜44 m/s では
-       「ウォール間隔 0.45秒」の下限から **理論上限が 2/(44×0.45)×100 ＝ 10.1回/100m**
-       （全部レーン移動・両面同時要求）で、§4.3 の比率（ジャンプ 35%前後）と
-       両立する実質上限は決定ログどおり **約10回/100m**。速度が S7 より上がるぶん
-       さらに薄くなるので、ステージの目安は 8→9 に置く（既知の妥協点）。
-     ■ 顔ぶれ: 1回の走行に入るチャンクは 7本前後しかない（速度で 130〜260実mに伸びる）。
-       そのうち2本は合体区間（契約どおり必ず2回・exclusive ＋ forcePlan）に取られるので、
-       残り4〜5本で12種を顔出しさせる必要がある。**1本で3〜4ギミックを持つ
-       「網羅札」（cov_*）を4本で12種ちょうどを覆う**形にし、coverFlags の重みで
-       互いを選び合わせる。 */
-  S8: {
-    /* P7a（契約§4.5 緩和 v2）: 全崩壊の自由飛行が 5.9秒 要るので大演出は 540m に伸びた。
-       ランダム区間（網羅札3組＋合体2回）を従来どおり確保するため、契約 v2 §4.4 の
-       「コア 1800m」をここだけ先に適用する（7本統合そのものは P7c）。 */
-    id: 'S8', name: 'S8 コア', zone: 'core', lengthM: 1800,
-    /* S8 の新チャンクはすべて rank5。minRank 4 にすると前半に S8 の札が
-       1枚も候補に入らない（maxRankAt が前半で 4 に留まる）ので 5 で固定する。 */
+  /* S7 コア（旧S8）: 1800m / 32→44 / 全部混在＋合体区間2回／終盤: 全崩壊エスケープ→ALL CLEAR。
+     ■ 密度: 構造上の上限（合体区間2回・ゲート型の猶予）で実測は約5回/100m（既知の妥協点）。
+       density ＝ 生成器の狙い、densityReal ＝ 機械テストの帯。
+     ■ 走行の骨格: 網羅札 → 合体 → 網羅札 → 合体 → 網羅札（4組の網羅札のうち3組をシードで回す）。 */
+  S7: {
+    id: 'S7', name: 'S7 コア', zone: 'core', lengthM: 1800,
     speedFrom: 32, speedTo: 44, minRank: 5, maxRank: 5, setpiece: 'collapseall',
-    /* density ＝ **生成器の狙い**（継ぎ目をどこまで詰めるか）。§4.7 の下限まで
-       詰めさせたいので高いまま置く。ただし S8 は契約が要求する構造そのもの
-       （合体区間2回＝1体ぶんの要求しか置けない／12種のギミックのうち5種が
-       ゲート・区間型で直後 1.0秒の猶予が要る）のせいで、この狙いには届かない。
-       機械テストは実測できる帯 densityReal で判定する（**既知の妥協点**）。 */
     density: [8, 9],
     densityReal: [5, 5],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
@@ -1971,18 +1917,9 @@ const STAGE_DEFS = {
     tipBoost: true,
     tipMul: 9,
     tipOnce: { merge: 'mergerun' },
-    /* 合体区間は「強制されたときだけ」候補に入る＝回数がぶれない（必ず2回） */
     exclusive: ['merge'],
-    /* 走行の骨格（契約§4.4 S8）: **網羅札 → 合体 → 網羅札 → 合体 → 網羅札**。
-       ・合体区間は必ず2回（契約§4.4）。
-       ・ランダム区間に置ける札は 3〜4本しかないので、12種のギミックは
-         4組の網羅札（fam_*）で覆い、**どの3組を出すかをシードで回す**
-         （= どの組も 3/4 = 75% のシードで顔を出す）。
-       ・at は「そこまで来たら次は必ずこの顔ぶれ」の敷居。前の札が終わった
-         時点の cursor より小さく取ってあるので、順に消化されていく。 */
     forcePlan(rng) {
-      /* 4組を**シードで混ぜて**先頭3組を使う。mulberry32 の**出だしは偏る**
-         （seed 1〜50 の1発目を4分割すると 11/9/22/8）ので、4回空引きして暖める。 */
+      /* 4組をシードで混ぜて先頭3組を使う。mulberry32 の出だしは偏るので4回空引きして暖める。 */
       const f = ['fam_net', 'fam_cur', 'fam_zero', 'fam_warp'];
       if (rng) { rng(); rng(); rng(); rng(); }
       for (let i = f.length - 1; i > 0; i--) {
@@ -1993,45 +1930,35 @@ const STAGE_DEFS = {
               { at: 400, flag: f[1] }, { at: 500, flag: 'merge' },
               { at: 800, flag: f[2] }];
     },
-    /* 「全部混在」（契約§4.4 S8）: まだ出していないギミックを持つ札を強く引く。
-       網羅札（cov_*）は1本で3〜4種を持つので、この重みで4本が互いを選び合う。
-       合体は forcePlan が受け持つのでここには入れない。 */
+    /* 「全部混在」: まだ出していないギミックを持つ札を強く引く（網羅札が互いを選び合う） */
     coverFlags: ['bridge', 'pend', 'sync', 'warp', 'zero', 'net', 'mir', 'swap'],
     coverMul: 6,
-    /* 顔ぶれ: S8 の新チャンク（網羅札＋短い工兵札）＋
-       先行ステージの rank4〜5 のチャンク（ゾーン依存のスキンはコアの混在スキンが
-       障害物ごとに寄り親を選ぶので、そのまま混ぜられる / 契約§5）。
-       **長い先行チャンクは入れない**（1本で 250実m を超えると網羅の枠を潰す）。 */
-    chunkPool: CHUNK_DEFS.filter((c) => c.s8).map((c) => c.id)
-      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.cover).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.fill).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_mix') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_weave') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => c.s8 && c.id.indexOf('s8_leap') === 0).map((c) => c.id))
-      .concat(CHUNK_DEFS.filter((c) => !c.s8 && c.difficulty >= 4 && !c.fill && !c.dual && c.lengthM <= 58).map((c) => c.id))
+    chunkPool: LEGACY_POOL.core
   },
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
-    /* 最初から入っているのは S1 の顔ぶれ（基本セット）だけ。
-       遺跡の新ギミックは S3 をクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
-    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id)
+    /* 最初から入っているのは基本セット（旧S1 の顔ぶれ）だけ。
+       ギミックはそのステージをクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
+    chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && NOT_LATE(c)).map((c) => c.id)
   }
 };
+/* ステージの並び（ステージ選択・移行・全クリアの判定の唯一の出所） */
+const STAGE_ORDER = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'];
+const STAGE_LAST = 'S7';
 
 /* エンドレスは「クリア済みゾーンのチャンクを混ぜて無限生成」（契約§4.4）。
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
-  S1: [],                                      // S1 の顔ぶれ＝最初から入っている基本セット
-  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && !c.s3 && !c.s4 && !c.s5 && !c.s6 && !c.s7 && !c.s8).map((c) => c.id),
-  S3: CHUNK_DEFS.filter((c) => c.s3).map((c) => c.id),       // 崩れる橋・振り子の刃
-  S4: CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id),       // 同時スイッチ（落ちる天井は失効）
-  S5: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),       // 深海の顔ぶれ（旧 海流・浮上足場・色の扉は失効）
-  S6: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id),       // 重力反転・無重力・レーザーネット
-  S7: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id),       // 鏡ゾーン・入れ替えワープ
-  /* S8 の顔ぶれ（全部混在）。合体区間は S8 専用の演出なのでエンドレスには持ち込まない
-     （区間の途中で 1000m ごとのゾーン切替に当たると「1体のまま景色が変わる」ため）。 */
-  S8: CHUNK_DEFS.filter((c) => c.s8 && !c.merge).map((c) => c.id)
+  S1: [],                                      // チュートリアル（白空間）はエンドレスに含めない
+  /* ネオン都市（旧S2 の持ち込み）: 動くレーザー・壁の穴・密集チャンク */
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && NOT_LATE(c)).map((c) => c.id),
+  S3: CHUNK_DEFS.filter((c) => c.s3 || c.s4).map((c) => c.id),   // 崩れる橋・振り子・同時スイッチ・丸岩
+  S4: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),           // 深海（サメ・泡の噴出口）
+  S5: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id),           // 重力反転・無重力・レーザーネット
+  S6: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id),           // 鏡ゾーン・入れ替えワープ
+  /* コアの顔ぶれ（全部混在）。合体区間はエンドレスには持ち込まない（ゾーン切替と噛み合わない） */
+  S7: CHUNK_DEFS.filter((c) => c.s8 && !c.merge).map((c) => c.id)
 };
 function endlessPool(cleared) {
   let pool = STAGE_DEFS.endless.chunkPool.slice();
@@ -2062,8 +1989,23 @@ function makeStage(id) {
   s.speedAt = s.endless
     ? function (m) { return Math.min(CFG.SPEED_MAX, d.speedFrom + m / CFG.SPEED_STEP_M); }
     : function (m) { return U.lerp(d.speedFrom, d.speedTo, U.clamp(m / d.lengthM, 0, 1)); };
-  /* チェックポイントは 1/3・2/3 地点（§4.4） */
-  s.checkpoints = s.endless ? [] : [d.lengthM / 3, d.lengthM * 2 / 3];
+  /* 大演出の並び（契約§4.4 v2）: setpiece は1本（終盤）か配列（中盤＋終盤）。
+     s.setpieces = [{id, start}]（start の昇順）。中盤の演出は midAt から、終盤は lengthM − 長さ から。 */
+  const spIds = Array.isArray(d.setpiece) ? d.setpiece : (d.setpiece ? [d.setpiece] : []);
+  s.setpieces = spIds.filter((id) => typeof Setpieces !== 'undefined' && Setpieces.DEFS[id]).map((id, i, arr) => {
+    const L = Setpieces.DEFS[id].lengthM;
+    const last = (i === arr.length - 1);
+    return { id: id, start: last ? d.lengthM - L : d.midAt, lengthM: L, mid: !last };
+  });
+  /* チェックポイント（§4.4）: 1/3・2/3 地点。中盤の大演出を持つステージは
+     1/3 地点・**中盤の演出の直後**・その後と終盤の演出の中ほど（演出の中からは再開させない） */
+  const midSp = s.setpieces.filter((x) => x.mid)[0];
+  if (s.endless) s.checkpoints = [];
+  else if (midSp) {
+    const after = midSp.start + midSp.lengthM + Setpieces.MID_END_M + 8;
+    const fin = s.setpieces[s.setpieces.length - 1].start;
+    s.checkpoints = [Math.min(d.lengthM / 3, midSp.start - 60), after, Math.round((after + fin) / 2)];
+  } else s.checkpoints = [d.lengthM / 3, d.lengthM * 2 / 3];
   return s;
 }
 
@@ -2664,8 +2606,11 @@ function createGenerator(stage, seed) {
   const forcePlan = (typeof stage.forcePlan === 'function') ? stage.forcePlan(rng) : (stage.forceAt || null);
   /* 大演出の始まり。エンドレス（P6）では「次の区切り」（ゾーン切替の通路の手前／ミニ大演出）が
      ここに入り、置くたびに先へ進む（＝有限ステージの大演出と同じ仕組みで手前を詰める）。 */
-  let spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
-    ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
+  /* 大演出の並び（契約§4.4 v2: 中盤＋終盤の2本を持つステージがある / makeStage が決める）。
+     spStart は常に「次に置く大演出」の始まり。置くたびに次の演出へ進み、最後を置いたら setpieceDone。 */
+  const SPS = stage.setpieces || [];
+  let spIdx = 0;
+  let spStart = SPS.length ? SPS[0].start : Infinity;
   /* ---- エンドレス（契約§4.4 / P6）: 1000m ごとのゾーン切替・1500m ごとのミニ大演出 ----
      EP = { zones:[順], pools:{zone:{pool,minRank,maxRank,reactBoth}} }（Endless.plan）。
      どのゾーンのチャンクを置くかは「いま生成しているゾーン」（zi）で決まる。 */
@@ -2785,20 +2730,26 @@ function createGenerator(stage, seed) {
   let spHead = [];
   let spPillars = 0, spWides = 0;
   const placed = { total: 0 };          // ランダム区間だけの実測（密度の制御に使う）
-  if (stage.setpiece && Setpieces.DEFS[stage.setpiece]) {
-    const sp0 = Setpieces.build(stage.setpiece, spStart, 0, stage.speedAt(spStart) / CFG.REF_SPEED, null);
-    if (sp0) spHead = sp0.items.filter((o) => o.at < spStart + 80);
+  /* 大演出の頭（spStart から 80m）の障害物。次の演出の手前のチャンクとの間隔を §4.7 で見る */
+  function headOf(i) {
+    const sp = SPS[i];
+    if (!sp) return [];
+    const b = Setpieces.build(sp.id, sp.start, 0, stage.speedAt(sp.start) / CFG.REF_SPEED, null);
+    return b ? b.items.filter((o) => o.at < sp.start + 80) : [];
+  }
+  SPS.forEach((sp, i) => {
+    const sp0 = Setpieces.build(sp.id, sp.start, 0, stage.speedAt(sp.start) / CFG.REF_SPEED, null);
+    if (!sp0) return;
+    if (i === 0) spHead = sp0.items.filter((o) => o.at < sp.start + 80);
     /* ワイド梁の比（§4.3 v2）: 大演出の柱は置き換えないので、最初から数に入れておく
        （gates は下で宣言＝ここでは数だけ控えて、宣言のあとで足す） */
-    if (sp0) {
-      spPillars = sp0.items.filter((o) => o.type === 'PILLAR').length;
-      const ws = {};
-      sp0.items.forEach((o) => { if (o.type === 'WIDEBAR') ws[o.at.toFixed(2) + '|' + o.lane] = 1; });
-      spWides = Object.keys(ws).length;
-    }
-    if (sp0) { seedMix = Fair.countDemands(sp0.items, stage.speedAt);
-               got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total; }
-  }
+    spPillars += sp0.items.filter((o) => o.type === 'PILLAR').length;
+    const ws = {};
+    sp0.items.forEach((o) => { if (o.type === 'WIDEBAR') ws[o.at.toFixed(2) + '|' + o.lane] = 1; });
+    spWides += Object.keys(ws).length;
+    seedMix = Fair.countDemands(sp0.items, stage.speedAt);
+    got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total;
+  });
   function noteDemands(items, local) {
     const c = Fair.countDemands(items, stage.speedAt,
                                 { merges: merges.concat((local && local.merges) || []) });
@@ -3098,8 +3049,15 @@ function createGenerator(stage, seed) {
   function appendSetpiece(nowDist) {
     if (EP) return (barrier === 'mini') ? placeMini(nowDist) : placeSwitch(nowDist);
     if (setpieceDone) return false;             // 二度置かない（置いたら二度と戻らない）
-    const inst = Setpieces.build(stage.setpiece, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, sink);
+    const cur = SPS[spIdx];
+    const inst = cur ? Setpieces.build(cur.id, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, sink) : null;
     if (!inst) { setpieceDone = true; return false; }
+    /* 中盤の大演出（契約§4.4 v2）: ゴールで片付かないので、終わりの少し後で必ず片付ける（mid.end） */
+    if (cur.mid) {
+      const endM = inst.startM + inst.lengthM;
+      inst.events.forEach((e) => { e.params = Object.assign({ mid: cur.id, endM: endM }, e.params || {}); });
+      inst.events.push({ at: endM + Setpieces.MID_END_M, type: 'mid.end', params: { mid: cur.id, endM: endM }, done: false });
+    }
     const tail = tailOf(8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
                                { startLanes: 'any', reactBoth: RB,
@@ -3109,11 +3067,11 @@ function createGenerator(stage, seed) {
     inst.items.forEach((o) => out.push(o));
     noteItems(inst.items);
     inst.events.forEach((e) => events.push(e));
-    log.push({ id: 'setpiece:' + inst.id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true });
+    log.push({ id: 'setpiece:' + inst.id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true, mid: !!cur.mid });
     cursor = inst.startM + inst.lengthM;
     /* 自由飛行の着地の後 FF.GRACE_T 秒（= speed × 2.0 m）は障害物を置かない（契約§4.5）。
        演出が 200m で終わっても、猶予がその先まで伸びるならそこまで空ける。 */
-    const def = Setpieces.DEFS[stage.setpiece];
+    const def = Setpieces.DEFS[cur.id];
     if (def && def.air && def.landRel !== undefined) {
       const landM = inst.startM + def.landRel;
       const until = landM + stage.speedAt(landM) * FF.GRACE_T;
@@ -3123,7 +3081,10 @@ function createGenerator(stage, seed) {
       }
       lastItemAt = Math.max(lastItemAt, cursor - seamFor(cursor));
     }
-    setpieceDone = true;
+    /* 次の大演出へ（中盤の後は終盤）。最後を置いたら二度と戻らない */
+    spIdx++;
+    if (spIdx < SPS.length) { spStart = SPS[spIdx].start; spHead = headOf(spIdx); }
+    else setpieceDone = true;
     lastWallhole = false;
     return true;
   }

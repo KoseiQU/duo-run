@@ -64,14 +64,39 @@ const ZoneRuins = {
   WALL_PERIOD: 110,
   WALL_LEN: 70,
   mode: 'outer',
+  /* 距離で区間パターンを替える（契約§4.4 v2 / P7c: S3 は中盤の巨岩の追跡まで「外周」、その後「内部」）。
+     split = [{from, period, len, mode}]（from 昇順）。null なら WALL_PERIOD/WALL_LEN の1本だけ。 */
+  split: null,
   setMode(id) {
+    if (Array.isArray(id)) {
+      const sp = id.map((x) => {
+        const m = ZoneRuins.MODE[x.mode] || ZoneRuins.MODE.outer;
+        return { from: x.from || 0, period: m.period, len: m.len, mode: ZoneRuins.MODE[x.mode] ? x.mode : 'outer' };
+      }).sort((a, b) => a.from - b.from);
+      ZoneRuins.setMode(sp[0] ? sp[0].mode : 'outer');
+      ZoneRuins.split = (sp.length > 1) ? sp : null;
+      return ZoneRuins.mode;
+    }
     const m = ZoneRuins.MODE[id] || ZoneRuins.MODE.outer;
     ZoneRuins.mode = ZoneRuins.MODE[id] ? id : 'outer';
     ZoneRuins.WALL_PERIOD = m.period;
     ZoneRuins.WALL_LEN = m.len;
+    ZoneRuins.split = null;
     return ZoneRuins.mode;
   },
+  _seg(m) {
+    const sp = ZoneRuins.split;
+    let r = sp[0];
+    for (let i = 1; i < sp.length; i++) if (m >= sp[i].from) r = sp[i];
+    return r;
+  },
+  /* 距離 m の区間パターン名（監査用） */
+  modeAt(m) { return ZoneRuins.split ? ZoneRuins._seg(m).mode : ZoneRuins.mode; },
   isWall(m) {
+    if (ZoneRuins.split) {
+      const r = ZoneRuins._seg(m);
+      return ((((m - r.from) % r.period) + r.period) % r.period) < r.len;
+    }
     const p = ((m % ZoneRuins.WALL_PERIOD) + ZoneRuins.WALL_PERIOD) % ZoneRuins.WALL_PERIOD;
     return p < ZoneRuins.WALL_LEN;
   },

@@ -27,7 +27,7 @@ const Game = {
   genPtr: 0,
   eventLog: [],
   goalT: 0,              // ゴール演出の経過（§4.8 ゴールゲート→ポーズ→リザルト）
-  allClearT: 0,          // 全クリア演出の経過（S8 クリア＝全8ステージ制覇 / §6 P5b）
+  allClearT: 0,          // 全クリア演出の経過（S7 クリア＝全7ステージ制覇 / §6 P5b・P7c）
   ALLCLEAR_T: 2.2,       // 全クリア演出の長さ（秒）
   slowT: 0,              // 減速帯（§4.4 S3）の残り時間。速度が一時的に落ちる
   bestUpdated: false,    // 直近のリザルトでベスト更新したか
@@ -43,10 +43,40 @@ const Game = {
     if (canvas) { World.init(canvas); Input.attach(canvas.parentNode || canvas); }
     HUD.init();
     Tutorial.init();
+    Game.migrateSave();
     Game.stage = makeStage('S0');
     Game.speed = Game.stage.speedAt(0);
     Game.status = 'idle';
     UI.show('title');
+  },
+
+  /* --- 保存の移行（契約§4.4 v2 / P7c: 旧8ステージ → 新7ステージ） -----------
+     旧ID の cleared / best.* を新ID へ1回だけ移す（duorun.migrated = 'v2'）。
+       旧S1|S2 → 新S2（ネオン都市）／旧S3|S4 → 新S3（古代遺跡）／旧S5→S4／旧S6→S5／旧S7→S6／旧S8→S7。
+     新S1（チュートリアル）は旧データから作らない。best は統合先の大きい方。allclear はそのまま。 */
+  MIGRATE_MAP: { S1: 'S2', S2: 'S2', S3: 'S3', S4: 'S3', S5: 'S4', S6: 'S5', S7: 'S6', S8: 'S7' },
+  migrateSave() {
+    if (U.lsGet('migrated', null) === 'v2') return false;
+    const M = Game.MIGRATE_MAP;
+    const oldCleared = U.lsGet('cleared', []) || [];
+    const cleared = [];
+    oldCleared.forEach((id) => { const n = M[id]; if (n && cleared.indexOf(n) < 0) cleared.push(n); });
+    const best = {};
+    Object.keys(M).forEach((id) => {
+      const v = U.lsGet('best.' + id, null);
+      if (typeof v === 'number' && v > 0) best[M[id]] = Math.max(best[M[id]] || 0, v);
+    });
+    /* 旧キーを消してから新キーを書く（旧 best.S1 が新 S1 の記録に化けないように） */
+    try {
+      Object.keys(M).forEach((id) => window.localStorage.removeItem(CFG.LS_PREFIX + 'best.' + id));
+    } catch (e) { /* noop */ }
+    Object.keys(best).forEach((id) => U.lsSet('best.' + id, best[id]));
+    if (oldCleared.length || U.lsGet('cleared', null) !== null) {
+      cleared.sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b));
+      U.lsSet('cleared', cleared);
+    }
+    U.lsSet('migrated', 'v2');
+    return true;
   },
 
   /* --- 手 ↔ キャラ（入れ替えワープのフック） ------------------------------ */
@@ -505,12 +535,12 @@ const Game = {
     U.sfx('goal');
     Tutorial.hide();
   },
-  /* ゴール演出のあと。最終ステージ（S8）なら **全クリア演出**を挟む（§6 P5b） */
+  /* ゴール演出のあと。最終ステージ（S7 コア）なら **全クリア演出**を挟む（§6 P5b / P7c） */
   afterGoal() {
-    if (Game.stage && Game.stage.id === 'S8') { Game.startAllClear(); return; }
+    if (Game.stage && Game.stage.id === STAGE_LAST) { Game.startAllClear(); return; }
     Game.onClear();
   },
-  /* 全クリア（8ステージすべて）: localStorage に印を残し、短い演出へ */
+  /* 全クリア（7ステージの最後＝S7 コア）: localStorage に印を残し、短い演出へ */
   startAllClear() {
     Game.status = 'allclear';
     Game.allClearT = 0;

@@ -445,6 +445,7 @@ const Setpieces = {
   },
   /* イベントの params からミニ版の印を state へ写す */
   _markMini(st, e) {
+    if (st && e && e.params && e.params.mid) { st.mid = e.params.mid; st.endM = e.params.endM; }
     if (!st || !e || !e.params || !e.params.mini) return st;
     st.mini = e.params.mini;
     st.k = e.params.k || 1;
@@ -640,8 +641,16 @@ const Setpieces = {
     l.forEach((n) => U.sfx(n));
     return l.length;
   },
+  /* 中盤の大演出（契約§4.4 v2 / P7c）: 終わってから MID_END_M m で片付ける
+     （崩れた路面・巨岩がカメラの後ろへ抜けてから。ミニ版の mini.end と同じ考え方） */
+  MID_END_M: 32,
   /* イベント（Game.onEvent から） */
   onEvent(e) {
+    if (e.type === 'mid.end') {
+      const s0 = Setpieces.state;
+      if (s0 && s0.mid) Setpieces.reset();
+      return;
+    }
     /* ミニ大演出（エンドレス / P6）の片付け: ゴールが無いので演出を残さない */
     if (e.params && e.params.mini &&
         (e.type === 'mini.end' || e.type === 'rock.end' || e.type === 'bigjump.end')) {
@@ -1378,8 +1387,8 @@ const Setpieces = {
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
     const want = game.dist - (mid + amp * Math.cos(s.t * 0.9));
-    /* ミニ版（エンドレス）は終わったら前線を止める（走り去る＝崩落が遠のく） */
-    if (s.mini && s.ending) return;
+    /* ミニ版（エンドレス）・中盤の演出（P7c）は終わったら前線を止める（走り去る＝崩落が遠のく） */
+    if ((s.mini || s.mid) && s.ending) return;
     /* 後退はさせない（崩れた路面が戻るのはおかしい） */
     s.front = Math.max(s.front, want);
   },
@@ -1463,9 +1472,20 @@ const Setpieces = {
   camFx() {
     const fx = Setpieces._camFx();
     const s = Setpieces.state;
-    if (!fx || !s || !s.mini) return fx;
+    if (!fx || !s || !(s.mini || s.mid)) return fx;
     const base = (typeof World !== 'undefined' && World._fogBase) ? World._fogBase : null;
     if (!base) return fx;
+    /* 中盤の演出（P7c）: 演出の霧・揺れのまま走り、終わったら片付け（mid.end）までに素のゾーンへ戻す */
+    if (s.mid) {
+      if (s.ending && s.endM !== undefined) {
+        const e = U.clamp(((s.dist || s.endM) - s.endM) / (Setpieces.MID_END_M - 4), 0, 1);
+        fx.shake *= (1 - e); fx.fovAdd *= (1 - e); fx.camBack = (fx.camBack || 0) * (1 - e);
+        fx.camUp = (fx.camUp || 0) * (1 - e); fx.lookUp = (fx.lookUp || 0) * (1 - e);
+        fx.fogFar = U.lerp(fx.fogFar, base.far, e);
+        if (fx.fogColor !== undefined) fx.fogColor = new THREE.Color(fx.fogColor).lerp(new THREE.Color(base.color), e).getHex();
+      }
+      return fx;
+    }
     fx.fogColor = base.color;
     if (s.id === 'bigjump') fx.fogFar = U.lerp(base.far, Math.max(base.far, 210), fx.glide || 0);
     else if (s.id === 'rockchase') fx.fogFar = U.lerp(base.far, base.far * 0.78, fx.prox || 0);

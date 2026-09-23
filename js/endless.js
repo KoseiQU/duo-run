@@ -14,7 +14,9 @@
 const Endless = {
   ORDER: ['neon', 'ruins', 'sea', 'space', 'mirror', 'core'],
   /* ゾーン → そのゾーンを持ち込むステージ（クリア判定の出所） */
-  STAGES: { neon: ['S1', 'S2'], ruins: ['S3', 'S4'], sea: ['S5'], space: ['S6'], mirror: ['S7'], core: ['S8'] },
+  /* ゾーン → そのゾーンを持ち込むステージ（クリア判定の出所 / 契約§4.4 v2 の7ステージ）。
+     S1（白空間チュートリアル）はエンドレスに含めない。 */
+  STAGES: { neon: ['S2'], ruins: ['S3'], sea: ['S4'], space: ['S5'], mirror: ['S6'], core: ['S7'] },
   LABEL: { neon: 'ネオン都市', ruins: '古代遺跡', sea: '深海', space: '宇宙ステーション', mirror: '鏡の世界', core: 'コア' },
   TITLE: { neon: 'NEON CITY', ruins: 'RUINS', sea: 'DEEP SEA', space: 'STATION', mirror: 'MIRROR', core: 'CORE' },
 
@@ -26,7 +28,7 @@ const Endless = {
   MINIS: ['mini_collapse', 'mini_jump', 'mini_rock'],
   CUE_T: 1.8,           // ゾーン名の表示（秒）
 
-  ALL: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'],
+  ALL: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'],
   /* 開発中の全解放（UI.UNLOCK_ALL）なら全ステージをクリア済みとみなす。
      機械テストは UI._testLock で本来の規則（クリア済みのゾーンだけ）を検証する。 */
   clearedList() {
@@ -41,20 +43,16 @@ const Endless = {
     const has = (id) => (cleared || []).indexOf(id) >= 0;
     const late = CFG.FAIR.REACT_BOTH_LATE;
     const pools = {};
+    /* ネオン都市は基本セットとして最初から入っている。S2 クリアで動くレーザー・壁の穴が混ざる */
     let neon = STAGE_DEFS.endless.chunkPool.slice(), nr = STAGE_DEFS.endless.maxRank;
     if (has('S2')) { neon = neon.concat(ENDLESS_UNLOCK.S2); nr = 3; }
     pools.neon = { pool: neon, minRank: 1, maxRank: nr, reactBoth: CFG.FAIR.REACT_BOTH };
-    if (has('S3') || has('S4')) {
-      let p = [], lo = 3, hi = 2;
-      if (has('S3')) { p = p.concat(STAGE_DEFS.S3.chunkPool); lo = 2; hi = 3; }
-      if (has('S4')) { p = p.concat(STAGE_DEFS.S4.chunkPool); hi = 4; }
-      pools.ruins = { pool: p, minRank: lo, maxRank: hi, reactBoth: late };
-    }
-    if (has('S5')) pools.sea = { pool: STAGE_DEFS.S5.chunkPool.slice(), minRank: 3, maxRank: 4, reactBoth: late };
-    if (has('S6')) pools.space = { pool: STAGE_DEFS.S6.chunkPool.slice(), minRank: 4, maxRank: 5, reactBoth: late };
-    if (has('S7')) pools.mirror = { pool: STAGE_DEFS.S7.chunkPool.slice(), minRank: 4, maxRank: 5, reactBoth: late };
-    if (has('S8')) {
-      pools.core = { pool: STAGE_DEFS.S8.chunkPool.filter((id) => CHUNK_BY_ID[id] && !CHUNK_BY_ID[id].merge),
+    if (has('S3')) pools.ruins = { pool: STAGE_DEFS.S3.chunkPool.slice(), minRank: 2, maxRank: 4, reactBoth: late };
+    if (has('S4')) pools.sea = { pool: STAGE_DEFS.S4.chunkPool.slice(), minRank: 3, maxRank: 4, reactBoth: late };
+    if (has('S5')) pools.space = { pool: STAGE_DEFS.S5.chunkPool.slice(), minRank: 4, maxRank: 5, reactBoth: late };
+    if (has('S6')) pools.mirror = { pool: STAGE_DEFS.S6.chunkPool.slice(), minRank: 4, maxRank: 5, reactBoth: late };
+    if (has('S7')) {
+      pools.core = { pool: STAGE_DEFS.S7.chunkPool.filter((id) => CHUNK_BY_ID[id] && !CHUNK_BY_ID[id].merge),
                      minRank: 5, maxRank: 5, reactBoth: late };
     }
     return { zones: Endless.ORDER.filter((z) => !!pools[z]), pools: pools };
