@@ -555,8 +555,11 @@ const Game = {
     Game.status = 'clear';
     if (typeof UI !== 'undefined' && UI.allClearHide) UI.allClearHide();
     Game.bestUpdated = Game.saveBest(true);
+    /* S1 チュートリアルのクリア＝チュートリアル済み（契約§4.4 v2 / P7c。ボットの走行では記録しない） */
+    if (Game.stage.tutorial && !Game.botMode) Tutorial.markDone();
     const cd = document.getElementById('clear-dist');
-    if (cd) cd.textContent = Math.floor(Game.stage.lengthM) + ' m 完走 ／ ' + Game.stage.name;
+    if (cd) cd.textContent = Game.stage.tutorial ? '準備完了 ／ 次は S2 ネオン都市へ'
+      : (Math.floor(Game.stage.lengthM) + ' m 完走 ／ ' + Game.stage.name);
     const cb = document.getElementById('clear-best');
     if (cb) cb.textContent = Game.bestUpdated ? '★ ベスト更新！' : '';
     Setpieces.reset();

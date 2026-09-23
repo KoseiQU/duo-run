@@ -33,7 +33,7 @@ const World = {
     /* 道の簡素化（契約§5 v2）: 路面・天井面は **無地の暗色**（継ぎ目・光沢・模様なし）。
        ゾーンの色味は路肩のラインと壁・遠景で出すので、路面はゾーンの色をごく暗く沈めた1色。 */
     const tileGeo = new THREE.BoxGeometry(CFG.LANE_W + 0.002, 0.14, World.TILE + 0.002);
-    const roadMat = new THREE.MeshBasicMaterial({ color: World.roadColor(P.road), fog: true });
+    const roadMat = new THREE.MeshBasicMaterial({ color: P.roadRaw ? P.road : World.roadColor(P.road), fog: true });
     World._roadMat = roadMat;
     World.nTiles = Math.ceil((CFG.VIEW_FAR + World.TILE_BEHIND) / World.TILE) + 2;
     World.tileMesh = {};
@@ -644,6 +644,17 @@ const World = {
       const off = Runners.footOffset(r);
       v.glow.scale.setScalar(U.clamp(1 - off * 0.45, 0.35, 1));
       v.glow.visible = r.alive && duoK < 0.02;
+      /* 白い空間（S1 / P7c）: 加算の光る丸は白に溶けるので、自分の色の暗い影（通常合成）にする */
+      const darkSh = !!(Zones.pal() && Zones.pal().shadowDark);
+      if (v._darkSh !== darkSh) {
+        v._darkSh = darkSh;
+        const gm = v.glow.material, base = (r.id === 'lumen') ? CFG.COL.LUMEN : CFG.COL.UMBRA;
+        gm.blending = darkSh ? THREE.NormalBlending : THREE.AdditiveBlending;
+        gm.color.setHex(base);
+        if (darkSh) gm.color.multiplyScalar(0.45);
+        gm.opacity = darkSh ? 0.5 : 0.42;
+        gm.needsUpdate = true;
+      }
       v.light.position.set(0, (r.act === 'slide') ? 0.3 : 0.55, 0);
 
       /* 鏡の光（銀の粒）: 反転している間だけ、体のまわりを螺旋に舞う（体の上下の向きに従う） */
@@ -857,7 +868,7 @@ const World = {
     if (!World.ready) return false;
     const P = Zones.pal();
     if (!P) return false;
-    if (World._roadMat) World._roadMat.color.setHex(World.roadColor(P.road));
+    if (World._roadMat) World._roadMat.color.setHex(P.roadRaw ? P.road : World.roadColor(P.road));   // 白い空間（S1）は素の色
     if (World._skirtMat) World._skirtMat.color.setHex(P.skirt);
     (World._frameMats || []).forEach((m) => m.color.setHex(P.metal));
     World.renderer.setClearColor(P.fog, 1);

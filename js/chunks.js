@@ -1691,19 +1691,42 @@ const CHUNK_DEFS = [
             { at: 19.4, lane: -1, type: 'ROVER' }, { at: 27.1, lane: 1, type: 'ROVER' }], events: [] }
 ];
 
-/* ---------------------------------------------------------------- 導入区間（S1）
-   契約 §4.4「基本障害物を1種ずつ順に紹介」/ §4.8 チュートリアル。
-   ・位置は**実寸 m**（速度で伸縮させない）。1つずつ 33m 間隔で出す＝16m/s で約2秒おき。
-   ・tip は障害物の 30m 手前（約1.9秒前）に出す DOM オーバーレイの合図。
-   ・まず片側だけ（床→天井）→ 横に避ける → 光線 → ワイド梁 → 最後に両側同時（穴は契約 v2 で失効）。 */
-const INTRO_S1 = [
-  { at: 60,  tip: 'jump_l', floor: [{ lane: 0, type: 'ROVER' }] },
-  { at: 93,  tip: 'jump_r', ceil:  [{ lane: 0, type: 'ROVER' }] },
-  { at: 126, tip: 'lane',   floor: [{ lane: 1, type: 'PILLAR' }] },          // both（2体ともレーン移動）
-  { at: 192, tip: 'laser',  ceil:  [{ lane: 0, type: 'LASER_LOW' }] },
-  { at: 225, tip: 'wide',   floor: [{ lane: -1, type: 'WIDEBAR' }] },
-  { at: 262, tip: 'both',   floor: [{ lane: 0, type: 'ROVER' }], ceil: [{ lane: 1, type: 'ROVER' }] }
+/* ---------------------------------------------------------------- S1 チュートリアル（白い空間）
+   契約 §4.4 v2 S1: レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー を1つずつ。
+   各項目 = tip つきの「対象」1つ ＋ その項目だけを要求する練習（2〜3回）。
+   ・位置は生成器が決める（appendIntro）: tip つきの対象は tip の猶予規則（§4.8: speed×4.0秒前に出て
+     2.0秒で消え、窓の中は対象だけ、対象通過後 speed×1.0秒は空ける）の最小位置へ。
+     練習は直前の障害物から speed × gapT 秒の後ろ（かつ tip の窓が明けてから）。
+   ・「跳ぶ」項目は3レーン全部に置く（横へ逃げずに必ず跳ぶ）。2レーン封鎖は床＋天井の対（全高のゲート）。
+   ・動くレーザーの周期は速度で伸縮させる（scale ＝ 秒で一定・通常のチャンクと同じ）。
+   ・最後の練習の後に「準備完了」（tut.ready）→ 700m でゴール。ランダム区間・大演出は無い。 */
+const INTRO_TUT = [
+  /* 1. レーン移動（柱＝両者に効く） */
+  { tip: 'lane',  floor: [{ lane: 0, type: 'PILLAR' }] },
+  { gapT: 1.3,    floor: [{ lane: 1, type: 'PILLAR' }] },
+  { gapT: 1.3,    floor: [{ lane: -1, type: 'PILLAR' }] },
+  /* 2. ジャンプ（床→天井→床。3レーン全部＝跳ぶしかない） */
+  { tip: 'jump',  floor: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }] },
+  { gapT: 1.2,    ceil:  [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }] },
+  { gapT: 1.2,    floor: [{ lane: -1, type: 'LASER_LOW' }, { lane: 0, type: 'LASER_LOW' }, { lane: 1, type: 'LASER_LOW' }] },
+  /* 3. 2レーン封鎖（空いた1レーンへ。2本目は反対側が空く＝2レーンぶん動く） */
+  { tip: 'wide',  floor: [{ lane: -1, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
+  { gapT: 1.5,    floor: [{ lane: 0, type: 'WIDEBAR' }],  ceil: [{ lane: 0, type: 'WIDEBAR' }] },
+  /* 4. 壁の穴（そのレーンへ移って潜る。床→天井→床） */
+  { tip: 'hole',  floor: [{ lane: 0, type: 'WALLHOLE' }] },
+  { gapT: 1.6,    ceil:  [{ lane: 1, type: 'WALLHOLE' }] },
+  { gapT: 1.6,    floor: [{ lane: -1, type: 'WALLHOLE' }] },
+  /* 5. 両手同時（下は跳ぶ・上は横へ → 下は横へ・上は跳ぶ → 両方跳ぶ） */
+  { tip: 'both',  floor: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
+  { gapT: 1.5,    floor: [{ lane: 0, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }] },
+  { gapT: 1.5,    floor: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }], ceil: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }] },
+  /* 6. 動くレーザー（横スキャン＝両者に効く。来る時に空いているレーンへ） */
+  { tip: 'moving', floor: [{ lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } }] },
+  { gapT: 1.6,    floor: [{ lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.5 } } }] },
+  { gapT: 1.6,    floor: [{ lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.25 } } }] }
 ];
+/* 旧 S1 導入区間（INTRO_S1）は契約 v2 で失効（S1 は白空間のチュートリアルへ）。互換の名前だけ残す */
+const INTRO_S1 = INTRO_TUT;
 
 /* ---------------------------------------------------------------- tip の対象（契約§4.8）
    新ギミックの初出 tip が「何を」説明するか。チャンクの中で、この型のエントリの
@@ -1828,12 +1851,12 @@ const STAGE_DEFS = {
      レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー を1つずつ（INTRO_TUT）。
      大演出なし・エンドレスに含めない。クリアで「準備完了」＋ duorun.tutorialDone。 */
   S1: {
-    id: 'S1', name: 'S1 チュートリアル', zone: 'neon', lengthM: 700,
+    id: 'S1', name: 'S1 チュートリアル', zone: 'white', lengthM: 700,
     speedFrom: 14, speedTo: 16, maxRank: 1, setpiece: null,
     density: [3, 4],
     tutorial: true,
-    intro: INTRO_S1,
-    chunkPool: LEGACY_POOL.neon1
+    intro: INTRO_TUT,
+    chunkPool: []
   },
   /* S2 ネオン都市（旧S1+S2）: 1800m / 16→24。
      中盤（780〜980m）に「高速道路の連鎖崩落」、終盤200mに「ビル間の大ジャンプ」。
@@ -1900,6 +1923,10 @@ const STAGE_DEFS = {
     tipBoost: true,
     tipMul: 40,
     tipOnce: { mir: 'mirrorzone', swap: 'handswap', dual: 'dualzone' },
+    /* 重ね掛けの札は後半（34 m/s＝800m〜）しか候補にならず、重みだけでは 1600m の中で
+       20/50 シードしか置けなかった。800m を越えたら「次は必ず重ね掛け」にする（置けるまで持ち越し）。
+       ＝ 50シード中 35 で出る（P7a の既知課題「1/50 に減」の回収 / P7c）。 */
+    forceAt: [{ at: 800, flag: 'dual' }],
     chunkPool: LEGACY_POOL.mirror
   },
   /* S7 コア（旧S8）: 1800m / 32→44 / 全部混在＋合体区間2回／終盤: 全崩壊エスケープ→ALL CLEAR。
@@ -3007,29 +3034,31 @@ function createGenerator(stage, seed) {
     return out;
   }
 
-  /* 導入区間（実寸・固定） */
-  /* 導入区間の位置は **tip の猶予規則（契約§4.8）** から決める:
-     前の対象の窓（通過後 speed×1.0秒）が明けてから、次の tip を speed×2.5秒 手前に出す。
-     INTRO の at は「これより手前には置かない」下限（最初の1つ＝60m）。 */
+  /* チュートリアル（S1）の項目を1つ置く（契約§4.4 v2 / §4.8）。
+     tip つきの対象: 前の対象の窓（通過後 speed×1.0秒）が明けてから、tip を speed×LEAD_T 秒手前に出せる最小の位置。
+     練習（gapT）: 直前の障害物から speed × gapT 秒の後ろ（tip の窓が明けてから）。 */
   function appendIntro(nowDist) {
     const it = stage.intro[introPtr++];
-    /* 次の tip は前の対象の通過（＋体の奥行きぶん）の後に出す＝吹き出しが重ならない。
-       対象は前の窓（通過後 speed×1.0秒）が明けてから。 */
     const base = lastItemAt + 1.0;
-    let at = it.at;
+    let at = it.at || 0;
     if (it.tip) {
       let T = base + stage.speedAt(base) * CFG.TIP.LEAD_T;
       T = Math.max(base + stage.speedAt(T) * CFG.TIP.LEAD_T, noDemandUntil + 0.5);
       /* 走り出しの最初の tip も対象の speed×LEAD_T 秒手前に出せる位置へ（tip は 2m より前に出せない） */
       T = Math.max(T, 2 + stage.speedAt(2 + stage.speedAt(0) * CFG.TIP.LEAD_T) * CFG.TIP.LEAD_T + 0.5);
       at = Math.max(at, Math.ceil(T * 2) / 2);
+    } else if (it.gapT) {
+      at = Math.max(at, lastItemAt + stage.speedAt(lastItemAt) * it.gapT, noDemandUntil + 0.5);
+      at = Math.ceil(at * 2) / 2;
     }
     const items = [];
-    (it.floor || []).forEach((e) => put(items, e, 'floor', at, nowDist));
-    (it.ceil || []).forEach((e) => put(items, e, 'ceil', at, nowDist));
+    const sc = stage.speedAt(at) / CFG.REF_SPEED;
+    (it.floor || []).forEach((e) => put(items, e, 'floor', at, nowDist, sc));
+    (it.ceil || []).forEach((e) => put(items, e, 'ceil', at, nowDist, sc));
     items.sort((a, b) => a.at - b.at);
     items.forEach((o) => out.push(o));
     noteItems(items);
+    noteDemands(items);
     if (it.tip) {
       const winEnd = at + stage.speedAt(at) * CFG.TIP.AFTER_T;
       const tipAt = Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T);
@@ -3038,10 +3067,17 @@ function createGenerator(stage, seed) {
                               hideM: tipAt + stage.speedAt(tipAt) * CFG.TIP.SHOW_T,
                               target: items.map((o) => o.uid) }, done: false });
       noDemandUntil = Math.max(noDemandUntil, winEnd);
-      noteTipWindow(Math.max(2, at - stage.speedAt(at) * CFG.TIP.LEAD_T), winEnd);
+      noteTipWindow(tipAt, winEnd);
     }
-    log.push({ id: 'intro:' + it.tip, startM: at - 8, lengthM: 16, intro: true });
-    cursor = at + ((introPtr < stage.intro.length) ? 8 : 40);
+    log.push({ id: 'intro:' + (it.tip || 'drill'), startM: at - 8, lengthM: 16, intro: true, tip: it.tip || null });
+    cursor = at + 8;
+    /* 最後の練習を抜けたら「準備完了」（契約§4.4 S1） */
+    if (introPtr >= stage.intro.length) {
+      const readyAt = at + stage.speedAt(at) * 1.2;
+      events.push({ at: readyAt, type: 'tut.ready', params: {}, done: false });
+      log.push({ id: '(ready)', startM: readyAt, lengthM: 0, intro: true });
+      cursor = Math.max(cursor, readyAt);
+    }
     return true;
   }
 
@@ -3199,6 +3235,8 @@ function createGenerator(stage, seed) {
 
   function appendOne(nowDist) {
     if (stage.intro && introPtr < stage.intro.length) return appendIntro(nowDist);
+    /* チュートリアル（S1）はランダム区間を持たない: 最後の項目の後はゴールまで空ける */
+    if (stage.tutorial) { cursor = Math.max(cursor + 40, stage.lengthM + 1); return false; }
     if (!setpieceDone && cursor >= spStart) return appendSetpiece(nowDist);
     let cands = candidates(cursor);
     /* 決まった場所で必ず出す顔ぶれ（S8 の合体区間＝2回 / 契約§4.4） */

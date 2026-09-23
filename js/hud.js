@@ -268,7 +268,13 @@ const UI = {
     return UI.cleared().indexOf(UI.STAGES[i - 1].id) >= 0;
   },
 
+  tutorialPending() { return !(typeof Tutorial !== 'undefined' && Tutorial.isDone && Tutorial.isDone()); },
   renderTitle() {
+    const pend = UI.tutorialPending();
+    const bs = document.getElementById('btn-start');
+    if (bs) bs.textContent = pend ? 'START ─ チュートリアル' : 'START';
+    const sk = document.getElementById('btn-start-skip');
+    if (sk) sk.style.display = pend ? '' : 'none';
     const e = HUD.el['title-best'] || document.getElementById('title-best');
     if (!e) return;
     const be = U.lsGet('best.endless', 0);
@@ -339,7 +345,7 @@ const UI = {
     on('settings', () => UI.settingsOpen(true));
     on('settings-close', () => UI.settingsOpen(false));
     on('audio-mute', () => { if (typeof Audio !== 'undefined' && Audio.SE) Audio.toggleMute(); UI.renderSettings(); });
-    on('tutorial-reset', () => { if (typeof Tutorial !== 'undefined' && Tutorial.resetDone) Tutorial.resetDone(); UI.renderSettings(); });
+    on('tutorial-reset', () => { if (typeof Tutorial !== 'undefined' && Tutorial.resetDone) Tutorial.resetDone(); UI.renderSettings(); UI.renderTitle(); });
     ['bgm', 'se'].forEach((k) => {
       const e = document.querySelector('[data-ui="audio-' + k + '"]');
       if (e) e.addEventListener('input', () => {
@@ -348,7 +354,14 @@ const UI = {
       });
     });
     UI.renderSettings();
-    on('start', () => { UI.settingsOpen(false); UI.show('mode'); });
+    /* 初回（チュートリアル未了）は START が S1 チュートリアルを促す（契約§4.4 v2 / P7c）。
+       済みならモード選択へ。未了でも「スキップ」でモード選択へ行ける（ステージ選択でも S1 を選べる） */
+    on('start', () => {
+      UI.settingsOpen(false);
+      if (UI.tutorialPending()) game.start('S1');
+      else UI.show('mode');
+    });
+    on('start-skip', () => { UI.settingsOpen(false); UI.show('mode'); });
     on('mode-stage', () => UI.show('stages'));
     on('mode-endless', () => game.start('endless'));
     on('back-title', () => UI.show('title'));

@@ -67,6 +67,12 @@
   .hand span{opacity:.65;}
   .hand.r{text-align:right;}
 
+  /* 白い空間（S1 チュートリアル / P7c）: 背景が白いので HUD の文字は暗色に */
+  body[data-zone="white"] .hud-top{color:#1c2340;}
+  body[data-zone="white"] #hud-dist{text-shadow:0 0 10px rgba(255,255,255,.9);}
+  body[data-zone="white"] #cue-sub{color:#2a3150; opacity:.95;}
+  body[data-zone="white"] #touch-split{box-shadow:0 0 0 1px rgba(30,36,64,.55), 0 0 10px rgba(40,50,90,.35);}
+
   /* ---------- タッチ領域: 画面を上下に2分割（§4.2/§4.8 改訂） ----------
      上半分＝天井のUMBRA（藍）／下半分＝床のLUMEN（琥珀）。常時ごく薄く示す。 */
   #touchzones{position:absolute; inset:0; display:flex; flex-direction:column; pointer-events:none;
@@ -372,6 +378,7 @@
     </div>
     <div class="btns">
       <button class="primary" id="btn-start" data-ui="start">START</button>
+      <button class="ghost" id="btn-start-skip" data-ui="start-skip" style="display:none">スキップ</button>
       <button class="ghost" id="btn-settings" data-ui="settings">設定</button>
     </div>
     <div class="label" id="title-best"></div>
@@ -397,7 +404,7 @@
       <button class="primary" id="btn-mode-stage" data-ui="mode-stage">ステージ</button>
       <button class="second" id="btn-mode-endless" data-ui="mode-endless">エンドレス</button>
     </div>
-    <div class="sub">ステージ: 8つのゾーンを順に攻略／エンドレス: どこまで走れるか</div>
+    <div class="sub">ステージ: 7つのステージを順に攻略／エンドレス: どこまで走れるか</div>
     <div class="btns"><button class="ghost" data-ui="back-title">戻る</button></div>
   </div>
 
@@ -457,6 +464,7 @@
 <script src="js/zone_space.js"></script>
 <script src="js/zone_mirror.js"></script>
 <script src="js/zone_core.js"></script>
+<script src="js/zone_white.js"></script>
 <script src="js/world.js"></script>
 <script src="js/input.js"></script>
 <script src="js/tutorial.js"></script>

@@ -347,6 +347,8 @@ const Zones = {
     /* build が足したものだけを覚える（消し忘れが構造的に起きない） */
     Zones._owned = scene.children.filter((c) => before.indexOf(c) < 0);
     Zones._cur = id;
+    /* HUD の文字色をゾーンの明るさに合わせる（白い空間 S1 では暗い文字 / P7c）。CSS の body[data-zone] */
+    if (typeof document !== 'undefined' && document.body) document.body.setAttribute('data-zone', id);
     if (typeof World !== 'undefined' && World.ready) World.applyZone();
     return z;
   },
