@@ -335,7 +335,119 @@ const Setpieces = {
         { at: 312, type: 'fall.flip' },
         { at: 350, type: 'fall.end' }
       ]
+    },
+
+    /* ====================================================================
+       エンドレスのミニ大演出（契約§4.4「ミニ版（崩落・大ジャンプ）を1500mごとにランダム挿入」/ P6）
+       既存の大演出のキーフレームを短くしたもの（各 100〜150m・設計速度 vd での実寸）。
+       ・vd より速いときは **全体を speed / vd 倍に伸ばす**（Setpieces.buildMini）＝
+         「動作に使える秒数」は速度によらず一定（§4.7 と同じ考え方）。
+       ・状態の id は元の大演出と同じ（collapse / bigjump / rockchase）で、state.mini が立つ。
+         見た目・カメラ・判定の仕組みはそのまま流用し、キーフレーム表だけ差し替える。
+       ・終わったら Setpieces.reset() で必ず片付ける（ゴールが無いので演出を残さない）。
+       ・カメラカット: 大ジャンプは無し、巨岩は振り返り1回だけ（契約「省略可」）。
+       §4.7 は通常どおり（生成器が Fair.validate を通す）。
+       ==================================================================== */
+    mini_collapse: {
+      id: 'mini_collapse', base: 'collapse', mini: true, vd: 24,
+      lengthM: 130,
+      /* 両面同時のジャンプ → 両者のレーン移動 → 床のジャンプ（44 m/s でも §4.7 を満たす間合い） */
+      floor: [
+        { at: 30,  lane: 0,  type: 'GAP' },
+        { at: 84,  lane: 1,  type: 'PILLAR' },
+        { at: 116, lane: -1, type: 'GAP' }
+      ],
+      ceil: [
+        { at: 30, lane: -1, type: 'ROVER' }
+      ],
+      events: [
+        { at: 0,   type: 'collapse.start' },
+        { at: 130, type: 'collapse.end' },
+        { at: 162, type: 'mini.end' }          // 崩れた路面がカメラの後ろへ抜けてから片付ける
+      ]
+    },
+    mini_jump: {
+      id: 'mini_jump', base: 'bigjump', mini: true, vd: 24,
+      lengthM: 124,
+      floor: [],
+      ceil: [],
+      air: true,
+      landRel: 110,
+      events: [
+        { at: 0,   type: 'bigjump.start' },
+        { at: 36,  type: 'bigjump.launch' },
+        { at: 110, type: 'bigjump.land' },
+        { at: 124, type: 'bigjump.end' }
+      ]
+    },
+    mini_rock: {
+      id: 'mini_rock', base: 'rockchase', mini: true, vd: 26,
+      lengthM: 140,
+      /* 振り返りカット（6〜26）の後、視認距離ぶん空けてから（64〜） */
+      floor: [
+        { at: 64,  lane: 0, type: 'SLOWBAND' },
+        { at: 92,  lane: 0, type: 'PILLAR' },
+        { at: 122, lane: 1, type: 'SLOWBAND' }
+      ],
+      ceil: [
+        { at: 64,  lane: 1, type: 'ROVER' },
+        { at: 122, lane: 0, type: 'SLOWBAND' }
+      ],
+      events: [
+        { at: 0,   type: 'rock.start' },
+        { at: 34,  type: 'rock.cue' },
+        { at: 140, type: 'rock.end' }
+      ]
     }
+  },
+
+  /* ミニ版のキーフレーム表（設計速度 vd での実寸。buildMini の倍率 k で伸ばして state.tbl に入れる） */
+  BJM: {
+    RAMP0: 4, RAMP1: 28, LIP: 36, LAND: 110, END: 124,
+    RAMP_H: 2.0, KICK: 0.45, ARC: 2.6, ARC_PEAK: 0.34, SETTLE: 9, SETTLE_D: 0.5
+  },
+  ROCKM: { LOOKBACK: [[6, 26]], CLOSE_M: 60 },
+  /* 距離のキー（倍率 k を掛けるもの） */
+  _BJ_DIST: ['RAMP0', 'RAMP1', 'LIP', 'LAND', 'END', 'SETTLE'],
+  miniTable(base, k) {
+    if (base === 'bigjump') {
+      const t = Object.assign({}, Setpieces.BJM);
+      Setpieces._BJ_DIST.forEach((key) => { t[key] = Setpieces.BJM[key] * k; });
+      return t;
+    }
+    if (base === 'rockchase') {
+      return { LOOKBACK: Setpieces.ROCKM.LOOKBACK.map((w) => [w[0] * k, w[1] * k]),
+               CLOSE_M: Setpieces.ROCKM.CLOSE_M * k };
+    }
+    return null;
+  },
+  /* ミニ版の生成（エンドレスの生成器から）。speedAt はステージの速度関数。 */
+  buildMini(id, startM, nowDist, speedAt) {
+    const d = Setpieces.DEFS[id];
+    if (!d) return null;
+    const sp = speedAt(startM);
+    const k = Math.max(1, sp / (d.vd || 24));
+    const sc = sp / CFG.REF_SPEED;
+    const items = [];
+    (d.floor || []).forEach((e) => expandEntry(items, e, 'floor', startM + e.at * k, nowDist, sc, null));
+    (d.ceil || []).forEach((e) => expandEntry(items, e, 'ceil', startM + e.at * k, nowDist, sc, null));
+    items.sort((a, b) => a.at - b.at);
+    const endM = startM + d.lengthM * k;
+    const events = (d.events || []).map((e) => ({
+      at: startM + e.at * k, type: e.type, done: false,
+      params: Object.assign({ mini: id, base: d.base, k: k, startM: startM, endM: endM }, e.params || {})
+    }));
+    return { id: id, items: items, events: events, lengthM: d.lengthM * k, startM: startM, k: k,
+             landM: d.air ? startM + d.landRel * k : null };
+  },
+  /* イベントの params からミニ版の印を state へ写す */
+  _markMini(st, e) {
+    if (!st || !e || !e.params || !e.params.mini) return st;
+    st.mini = e.params.mini;
+    st.k = e.params.k || 1;
+    st.endM = e.params.endM;
+    st.tbl = Setpieces.miniTable(e.params.base, st.k);
+    return st;
   },
 
   /* ---- 全崩壊エスケープのキーフレーム（距離 m。すべてここから引く） --------
@@ -478,7 +590,7 @@ const Setpieces = {
   keys(st) {
     const s = (st === undefined) ? Setpieces.state : st;
     if (!s) return null;
-    if (s.id === 'bigjump') return Setpieces.BJ;
+    if (s.id === 'bigjump') return s.tbl || Setpieces.BJ;
     if (s.id === 'blastout') return Setpieces.BL;
     if (s.id === 'collapseall') return Setpieces.CA;
     return null;
@@ -514,15 +626,22 @@ const Setpieces = {
 
   /* イベント（Game.onEvent から） */
   onEvent(e) {
+    /* ミニ大演出（エンドレス / P6）の片付け: ゴールが無いので演出を残さない */
+    if (e.params && e.params.mini &&
+        (e.type === 'mini.end' || e.type === 'rock.end' || e.type === 'bigjump.end')) {
+      const s0 = Setpieces.state;
+      if (s0 && s0.mini) Setpieces.reset();
+      return;
+    }
     if (e.type === 'collapse.start') {
-      Setpieces.state = { id: 'collapse', startM: e.at, t: 0, front: e.at - 40 };
+      Setpieces.state = Setpieces._markMini({ id: 'collapse', startM: e.at, t: 0, front: e.at - 40 }, e);
     } else if (e.type === 'collapse.end') {
       /* 終わってもゴールまで崩落は続く（前線は走り続ける） */
       if (Setpieces.state) Setpieces.state.ending = true;
     } else if (e.type === 'bigjump.start') {
-      Setpieces.state = { id: 'bigjump', startM: e.at, t: 0, phase: 'ramp', land: 0,
+      Setpieces.state = Setpieces._markMini({ id: 'bigjump', startM: e.at, t: 0, phase: 'ramp', land: 0,
                           speed: (typeof Game !== 'undefined' && Game.speed) ? Game.speed : CFG.SPEED_MIN,
-                          course: null, split: -1 };
+                          course: null, split: -1 }, e);
       Setpieces.makeAir(e.at);
       if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('JUMP!', '手を繋いで跳ぶ', 'high');
     } else if (e.type === 'bigjump.launch') {
@@ -532,8 +651,8 @@ const Setpieces = {
     } else if (e.type === 'bigjump.end') {
       if (Setpieces.state) Setpieces.state.phase = 'done';
     } else if (e.type === 'rock.start') {
-      Setpieces.state = { id: 'rockchase', startM: e.at, t: 0, penalty: 0,
-                          gap: Setpieces.ROCK.GAP0, rockM: e.at - Setpieces.ROCK.GAP0, caught: false };
+      Setpieces.state = Setpieces._markMini({ id: 'rockchase', startM: e.at, t: 0, penalty: 0,
+                          gap: Setpieces.ROCK.GAP0, rockM: e.at - Setpieces.ROCK.GAP0, caught: false }, e);
       if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('BOULDER!', '巨岩が来る ／ 瓦礫は跳び越えろ');
     } else if (e.type === 'rock.cue') {
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
@@ -1037,9 +1156,10 @@ const Setpieces = {
     const s = Setpieces.state;
     if (!s || s.id !== 'rockchase') return 0;
     const rel = m - s.startM;
+    const LB = (s.tbl && s.tbl.LOOKBACK) || Setpieces.ROCK.LOOKBACK;
     let k = 0;
-    for (let i = 0; i < Setpieces.ROCK.LOOKBACK.length; i++) {
-      const w = Setpieces.ROCK.LOOKBACK[i];
+    for (let i = 0; i < LB.length; i++) {
+      const w = LB[i];
       if (rel > w[0] && rel < w[1]) k = Math.max(k, Math.sin(Math.PI * (rel - w[0]) / (w[1] - w[0])));
     }
     return k;
@@ -1049,8 +1169,9 @@ const Setpieces = {
     const s = Setpieces.state;
     if (!s || s.id !== 'rockchase') return -1;
     const rel = m - s.startM;
-    for (let i = 0; i < Setpieces.ROCK.LOOKBACK.length; i++) {
-      const w = Setpieces.ROCK.LOOKBACK[i];
+    const LB = (s.tbl && s.tbl.LOOKBACK) || Setpieces.ROCK.LOOKBACK;
+    for (let i = 0; i < LB.length; i++) {
+      const w = LB[i];
       if (rel > w[0] && rel < w[1]) return i;
     }
     return -1;
@@ -1157,9 +1278,9 @@ const Setpieces = {
     if (rel === null) return 0;
     const s = Setpieces.state;
     if (s && s.id !== 'bigjump') return 0;
-    const B = Setpieces.BJ;
+    const B = Setpieces.keys(s) || Setpieces.BJ;
     if (rel < -6 || rel > B.LIP) return 0;
-    return U.clamp(1 - Math.abs(rel - B.RAMP1) / 46, 0, 1);
+    return U.clamp(1 - Math.abs(rel - B.RAMP1) / B.RAMP1, 0, 1);
   },
 
   /* 毎フレーム（Game.step の中から。dt は演出時間） */
@@ -1208,7 +1329,8 @@ const Setpieces = {
       const R = Setpieces.ROCK;
       const rel = game.dist - s.startM;
       /* 基本の距離（近づいてくる）＋ゆらぎ */
-      const base = U.lerp(R.GAP0, R.GAP1, U.smooth(U.clamp(rel / R.CLOSE_M, 0, 1)))
+      const closeM = (s.tbl && s.tbl.CLOSE_M) || R.CLOSE_M;
+      const base = U.lerp(R.GAP0, R.GAP1, U.smooth(U.clamp(rel / closeM, 0, 1)))
                  + R.SWAY * Math.sin(s.t * 1.25);
       /* 減速帯で失った距離を「遅れ」として貯める（ゆっくりだけ回復する） */
       const nominal = game.stage.speedAt(game.dist);
@@ -1239,6 +1361,8 @@ const Setpieces = {
     const amp = (Setpieces.GAP_MAX - Setpieces.GAP_MIN) / 2;
     const mid = (Setpieces.GAP_MAX + Setpieces.GAP_MIN) / 2;
     const want = game.dist - (mid + amp * Math.cos(s.t * 0.9));
+    /* ミニ版（エンドレス）は終わったら前線を止める（走り去る＝崩落が遠のく） */
+    if (s.mini && s.ending) return;
     /* 後退はさせない（崩れた路面が戻るのはおかしい） */
     s.front = Math.max(s.front, want);
   },
@@ -1248,7 +1372,7 @@ const Setpieces = {
     const s = Setpieces.state;
     if (s && s.id === 'bigjump') {
       /* 発射台に近づくと路面が震える＋着地の瞬間に強く揺れる */
-      const rel = atM - s.startM, B = Setpieces.BJ;
+      const rel = atM - s.startM, B = Setpieces.keys(s) || Setpieces.BJ;
       if (rel > B.RAMP0 - 20 && rel < B.LIP) return 0.03 * Math.sin(s.t * 30 + atM * 1.9);
       if (s.phase === 'land' && s.land < B.SETTLE) {
         return 0.09 * (1 - s.land / B.SETTLE) * Math.sin(s.t * 42 + atM * 2.4);
@@ -1318,11 +1442,30 @@ const Setpieces = {
   },
 
   /* カメラ・霧の演出量（World から読む） */
+  /* ミニ版（エンドレス / P6）は霧をそのゾーンの色に合わせ、終わり際に演出を抜いていく */
   camFx() {
+    const fx = Setpieces._camFx();
+    const s = Setpieces.state;
+    if (!fx || !s || !s.mini) return fx;
+    const base = (typeof World !== 'undefined' && World._fogBase) ? World._fogBase : null;
+    if (!base) return fx;
+    fx.fogColor = base.color;
+    if (s.id === 'bigjump') fx.fogFar = U.lerp(base.far, Math.max(base.far, 210), fx.glide || 0);
+    else if (s.id === 'rockchase') fx.fogFar = U.lerp(base.far, base.far * 0.78, fx.prox || 0);
+    else fx.fogFar = base.far * 0.85;
+    if (s.ending && s.endM !== undefined) {
+      const m = s.dist || s.endM;
+      const e = U.clamp((m - s.endM) / (26 * (s.k || 1)), 0, 1);
+      fx.shake *= (1 - e); fx.fovAdd *= (1 - e); fx.camBack = (fx.camBack || 0) * (1 - e);
+      fx.fogFar = U.lerp(fx.fogFar, base.far, e);
+    }
+    return fx;
+  },
+  _camFx() {
     const s = Setpieces.state;
     if (!s) return null;
     if (s.id === 'bigjump') {
-      const B = Setpieces.BJ, rel = (s.dist || s.startM) - s.startM;
+      const B = Setpieces.keys(s) || Setpieces.BJ, rel = (s.dist || s.startM) - s.startM;
       const lift = Setpieces.viewLift(s.dist || s.startM);
       /* 滑空の強さ 0..1（発射で立ち上がり、着地で落とす） */
       const g = (s.phase === 'glide')

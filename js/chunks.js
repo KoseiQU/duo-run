@@ -2094,7 +2094,9 @@ const Fair = {
         errs.push('反応窓: ウォール間 ' + gap.toFixed(2) + 'm < ' + (sp * CFG.FAIR.REACT).toFixed(2) + 'm @' + b.at.toFixed(1));
       }
       /* 両者同時要求の前後の余白。S1〜S2 は 0.6秒、S3 以降は 0.45秒（契約§4.7） */
-      const rb = (opt.reactBoth === undefined) ? CFG.FAIR.REACT_BOTH : opt.reactBoth;
+      /* エンドレス（P6）はゾーンで値が変わるので、距離の関数も受け付ける */
+      const rb = (opt.reactBoth === undefined) ? CFG.FAIR.REACT_BOTH
+               : (typeof opt.reactBoth === 'function') ? opt.reactBoth(b.at) : opt.reactBoth;
       if ((a.both || b.both) && gap < sp * rb - 1e-6) {
         errs.push('同時要求の余白: ' + gap.toFixed(2) + 'm < ' + (sp * rb).toFixed(2) + 'm @' + b.at.toFixed(1));
       }
@@ -2515,8 +2517,47 @@ function createGenerator(stage, seed) {
      ＝ 回数がぶれない（何度も出たり一度も出なかったりしない）。 */
   let forcePtr = 0;
   const forcePlan = (typeof stage.forcePlan === 'function') ? stage.forcePlan(rng) : (stage.forceAt || null);
-  const spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
+  /* 大演出の始まり。エンドレス（P6）では「次の区切り」（ゾーン切替の通路の手前／ミニ大演出）が
+     ここに入り、置くたびに先へ進む（＝有限ステージの大演出と同じ仕組みで手前を詰める）。 */
+  let spStart = (stage.setpiece && Setpieces.DEFS[stage.setpiece])
     ? stage.lengthM - Setpieces.DEFS[stage.setpiece].lengthM : Infinity;
+  /* ---- エンドレス（契約§4.4 / P6）: 1000m ごとのゾーン切替・1500m ごとのミニ大演出 ----
+     EP = { zones:[順], pools:{zone:{pool,minRank,maxRank,reactBoth}} }（Endless.plan）。
+     どのゾーンのチャンクを置くかは「いま生成しているゾーン」（zi）で決まる。 */
+  const EP = stage.endless ? (stage.endlessPlan || Endless.plan(Endless.clearedList())) : null;
+  const switches = [];          // {t0（通路の入口）, at（光のゲート）, swapAt, from, to, idx, delay}
+  const minis = [];             // {id, startM, endM, k}
+  let zi = 0;                   // EP.zones の何番目を生成中か（ループで増え続ける）
+  let zoneStart = 0;            // 生成中のゾーンが始まった距離
+  let nextSwitch = (EP && EP.zones.length > 1) ? Endless.SWITCH_M : Infinity;
+  let nextMini = EP ? Endless.MINI_M : Infinity;
+  let barrier = null;           // 'switch' | 'mini'
+  function zoneNow() { return EP ? EP.zones[zi % EP.zones.length] : stage.zone; }
+  function endlessLoop() { return EP ? Math.floor(zi / EP.zones.length) : 0; }
+  /* 2周目以降（速度はほぼ上限）は、序盤ゾーンの素朴な札だけでは密度（§4.7 エンドレス 1000mごと+1）に
+     届かない（44 m/s では同じ譜面が 4.4倍に伸びる）。いちばん奥のゾーン（全クリアならコア＝全部混在）の
+     顔ぶれを混ぜて、後半の密度を保つ。 */
+  function endlessPoolNow() {
+    const zp = EP.pools[zoneNow()];
+    if (endlessLoop() < 1 || EP.zones.length < 2) return zp.pool;
+    /* 2周目以降は、そのゾーンの素朴な札（ランク上限−1 より下）を外す */
+    const lo = Math.max(1, zp.maxRank - 1);
+    const own = zp.pool.filter((id) => CHUNK_BY_ID[id] && CHUNK_BY_ID[id].difficulty >= lo);
+    return (own.length ? own : zp.pool).concat(EP.pools[EP.zones[EP.zones.length - 1]].pool);
+  }
+  function zoneAt(m) {
+    if (!EP) return stage.zone;
+    let z = EP.zones[0];
+    for (let i = 0; i < switches.length; i++) if (switches[i].swapAt <= m) z = switches[i].to;
+    return z;
+  }
+  /* 両者同時要求の余白（§4.7）はゾーンで変わる（ネオン 0.6秒／遺跡以降 0.45秒）。
+     2周目以降はどのゾーンも S3 以降の値（速度はほぼ上限＝後半の難しさ）。 */
+  const RB = EP ? function (m) {
+    let rb = EP.pools[EP.zones[0]].reactBoth;
+    for (let i = 0; i < switches.length; i++) if (switches[i].swapAt <= m) rb = switches[i].rb;
+    return rb;
+  } : stage.reactBoth;
   const out = [];               // 生成済み障害物（at 昇順）
   const syncs = [];             // 同時スイッチのグループ（Sync が 0.3秒窓を判定する / P3b）
   const currents = [];          // 海流ベルトの区間（Current が押し出しを判定する / P4a）
@@ -2547,6 +2588,14 @@ function createGenerator(stage, seed) {
      （チャンクは速度でおよそ2倍に伸びるので、1本のステージに入るチャンクは10本前後。
        S2 のように「最初から rank2」のステージは minRank を指定する） */
   function maxRankAt(m) {
+    if (EP) {
+      /* エンドレス: ゾーンごとの顔ぶれの範囲で、そのゾーンに入ってからの距離で上げる。
+         2周目以降は最初から上限（速度も上限近い） */
+      const zp = EP.pools[zoneNow()];
+      if (endlessLoop() >= 1) return Math.max(zp.maxRank, EP.pools[EP.zones[EP.zones.length - 1]].maxRank);
+      const pz = U.clamp((m - zoneStart) / Endless.SWITCH_M, 0, 1);
+      return U.clamp(zp.minRank + Math.floor(pz * (zp.maxRank - zp.minRank + 1)), zp.minRank, zp.maxRank);
+    }
     const p = progress(m);
     const lo = stage.minRank || 1;
     return U.clamp(lo + Math.floor(p * (stage.maxRank - lo + 1)), lo, stage.maxRank);
@@ -2554,7 +2603,7 @@ function createGenerator(stage, seed) {
   function candidates(m) {
     const rank = maxRankAt(m);
     const sp = stage.speedAt(m);
-    const pool = stage.chunkPool.map((id) => CHUNK_BY_ID[id]).filter(Boolean);
+    const pool = (EP ? endlessPoolNow() : stage.chunkPool).map((id) => CHUNK_BY_ID[id]).filter(Boolean);
     let c = pool.filter((d) => d.difficulty <= rank && sp >= (d.minSpeed || 0));
     /* 回数を決めてある顔ぶれ（合体区間）は、強制のときしか出さない */
     if (stage.exclusive && stage.exclusive.length) {
@@ -2566,6 +2615,11 @@ function createGenerator(stage, seed) {
       if (c2.length) c = c2;
     }
     if (!c.length) c = pool.filter((d) => d.difficulty === 1);
+    /* エンドレスのゾーンの顔ぶれが速度・ランクで尽きたら、速度の条件を満たす札 → 基本セットの順で埋める */
+    if (!c.length && EP) {
+      c = pool.filter((d) => sp >= (d.minSpeed || 0) && !d.wallhole);
+      if (!c.length) c = STAGE_DEFS.endless.chunkPool.map((id) => CHUNK_BY_ID[id]).filter(Boolean);
+    }
     return c;
   }
 
@@ -2754,7 +2808,7 @@ function createGenerator(stage, seed) {
       /* 大演出の手前に窓がはみ出すなら置かない */
       if (!setpieceDone && isFinite(spStart) && win.end > spStart - 1) return null;
       const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
-                                 { startLanes: 'any', reactBoth: stage.reactBoth,
+                                 { startLanes: 'any', reactBoth: RB,
                                    currents: currents.concat(inst.local.currents),
                                    zeros: zeros.concat(inst.local.zeros),
                                    warps: warps.concat(inst.local.warps),
@@ -2821,12 +2875,13 @@ function createGenerator(stage, seed) {
 
   /* 終盤の大演出（実寸・固定。§4.7 は通常どおり検査する） */
   function appendSetpiece(nowDist) {
+    if (EP) return (barrier === 'mini') ? placeMini(nowDist) : placeSwitch(nowDist);
     if (setpieceDone) return false;             // 二度置かない（置いたら二度と戻らない）
     const inst = Setpieces.build(stage.setpiece, spStart, nowDist, stage.speedAt(spStart) / CFG.REF_SPEED, sink);
     if (!inst) { setpieceDone = true; return false; }
     const tail = out.slice(-8);
     const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
-                               { startLanes: 'any', reactBoth: stage.reactBoth, currents: currents,
+                               { startLanes: 'any', reactBoth: RB, currents: currents,
                                  zeros: zeros, warps: warps, mirrors: mirrors, swaps: swaps,
                                  merges: merges });
     if (errs.length) log.push({ id: '(setpiece-unfair)', startM: spStart, lengthM: 0, errs: errs });
@@ -2849,6 +2904,114 @@ function createGenerator(stage, seed) {
     }
     setpieceDone = true;
     lastWallhole = false;
+    return true;
+  }
+
+  /* ------------------------------------------------------------------------
+     エンドレスの区切り（契約§4.4 / P6）
+       ・ゾーン切替: 通路の入口 t0 ＝ ゲート G − 40m。[t0 − speed×1.0秒, G + speed×1.0秒] は障害物なし。
+         G は 1000m の倍数が基本。手前のチャンク（ゲート型ギミックの区間を含む）が
+         食い込んでいたら、その終わり＋猶予まで **遅らせる**（区間の途中で切り替えない）。
+       ・ミニ大演出: 1500m の倍数から。次の切替の手前に収まらなければ切替の後へ回す。
+     どちらも「次の区切り」を spStart に入れておくと、有限ステージの大演出と同じ仕組みで
+     手前のチャンクが収まるものから選ばれ、はみ出すなら区切りを先に置く。
+     ------------------------------------------------------------------------ */
+  function miniRoom(m) {
+    /* ミニ大演出が占める長さの見積り（最長のもの＋着地猶予＋余白） */
+    const sp = stage.speedAt(m);
+    let len = 0;
+    Endless.MINIS.forEach((id) => {
+      const d = Setpieces.DEFS[id];
+      if (!d) return;
+      const k = Math.max(1, sp / (d.vd || 24));
+      len = Math.max(len, d.lengthM * k + (d.air ? sp * FF.GRACE_T : 0));
+    });
+    return len + sp * 2.0;
+  }
+  function refreshBarrier() {
+    if (!EP) return;
+    const swFree = isFinite(nextSwitch)
+      ? nextSwitch - Endless.TUNNEL_M - stage.speedAt(nextSwitch) * Endless.GRACE_T : Infinity;
+    const mAt = Math.max(nextMini, cursor);
+    if (mAt < swFree && mAt + miniRoom(mAt) <= swFree) { barrier = 'mini'; spStart = mAt; }
+    else { barrier = 'switch'; spStart = swFree; }
+  }
+  function regionEnd() {
+    let e = -1e9;
+    [currents, zeros, warps, mirrors, swaps, merges].forEach((l) => l.forEach((r) => {
+      if (typeof r.to === 'number') e = Math.max(e, r.to);
+    }));
+    syncs.forEach((g) => { e = Math.max(e, g.gapAt || 0); });
+    return e;
+  }
+  function placeSwitch(nowDist) {
+    const from = zoneNow();
+    const to = EP.zones[(zi + 1) % EP.zones.length];
+    const G0 = nextSwitch;
+    const sp0 = stage.speedAt(G0);
+    /* 前のチャンク・ゲート型ギミックの区間・tip の窓が明けてから、猶予＋通路 */
+    const clear = Math.max(cursor, lastItemAt, regionEnd(), noDemandUntil);
+    const G = Math.max(G0, clear + sp0 * Endless.GRACE_T + Endless.TUNNEL_M);
+    const t0 = G - Endless.TUNNEL_M;
+    const spG = stage.speedAt(G);
+    const sw = { t0: t0, at: G, swapAt: G - Endless.SWAP_BEFORE, from: from, to: to,
+                 idx: switches.length + 1, delay: +(G - G0).toFixed(2),
+                 freeFrom: t0 - stage.speedAt(t0) * Endless.GRACE_T, freeTo: G + spG * Endless.GRACE_T,
+                 rb: (Math.floor((zi + 1) / EP.zones.length) >= 1) ? CFG.FAIR.REACT_BOTH_LATE : EP.pools[to].reactBoth };
+    switches.push(sw);
+    events.push({ at: sw.swapAt, type: 'zone.switch', params: { zone: to, from: from, idx: sw.idx }, done: false });
+    events.push({ at: G, type: 'zone.gate', params: { zone: to, from: from, idx: sw.idx }, done: false });
+    /* 通路とその前後は「規則で空けている区間」なので、密度の実測から外す */
+    noteTipWindow(sw.freeFrom, sw.freeTo);
+    noDemandUntil = Math.max(noDemandUntil, sw.freeTo);
+    lastItemAt = Math.max(lastItemAt, G);
+    cursor = Math.max(cursor, sw.freeTo);
+    log.push({ id: 'zone:' + from + '>' + to, startM: t0, lengthM: Endless.TUNNEL_M, zone: true });
+    zi++;
+    zoneStart = G;
+    nextSwitch += Endless.SWITCH_M;
+    while (nextSwitch - Endless.TUNNEL_M - stage.speedAt(nextSwitch) * Endless.GRACE_T < cursor + 60) nextSwitch += Endless.SWITCH_M;
+    lastWallhole = false;
+    /* 切替の直後にミニ大演出が来るなら、ゾーン名の表示と重ならないよう少しだけ空ける */
+    if (nextMini <= cursor + spG * 1.0) nextMini = Math.max(nextMini, cursor + spG * 1.0);
+    refreshBarrier();
+    return true;
+  }
+  function placeMini(nowDist) {
+    const id = Endless.MINIS[Math.min(Endless.MINIS.length - 1, (rng() * Endless.MINIS.length) | 0)];
+    const tail = out.slice(-10);
+    const sp0 = stage.speedAt(cursor);
+    let inst = null, errs = null;
+    const base = Math.max(cursor, lastItemAt + sp0 * CFG.FAIR.REACT, noDemandUntil + 0.5);
+    for (let pad = 0; pad <= 60; pad += 4) {
+      inst = Setpieces.buildMini(id, base + pad, nowDist, stage.speedAt);
+      errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
+                           { startLanes: 'any', reactBoth: RB, currents: currents, zeros: zeros,
+                             warps: warps, mirrors: mirrors, swaps: swaps, merges: merges });
+      if (!errs.length) break;
+    }
+    if (errs.length) log.push({ id: '(mini-unfair)', startM: inst.startM, lengthM: 0, errs: errs });
+    inst.items.forEach((o) => out.push(o));
+    noteItems(inst.items);
+    noteDemands(inst.items);
+    inst.events.forEach((e) => events.push(e));
+    const endM = inst.startM + inst.lengthM;
+    let until = endM;
+    if (inst.landM !== null) until = Math.max(until, inst.landM + stage.speedAt(inst.landM) * FF.GRACE_T);
+    minis.push({ id: id, startM: inst.startM, endM: endM, k: inst.k, landM: inst.landM, freeTo: until });
+    log.push({ id: 'mini:' + id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true, mini: true });
+    /* ミニ大演出は規則で薄い区間なので、密度の実測から外す（後ろを詰め込ませない） */
+    noteTipWindow(inst.startM, until);
+    if (until > endM) {
+      noDemandUntil = Math.max(noDemandUntil, until);
+      log.push({ id: '(landing-grace)', startM: inst.landM, lengthM: until - inst.landM, grace: true });
+    }
+    cursor = Math.max(cursor, until);
+    lastItemAt = Math.max(lastItemAt, cursor - seamFor(cursor));
+    lastWallhole = false;
+    nextMini += Endless.MINI_M;
+    while (nextMini < cursor) nextMini += Endless.MINI_M;
+    refreshBarrier();
     return true;
   }
 
@@ -2879,6 +3042,8 @@ function createGenerator(stage, seed) {
       const st = chunkStats(def);
       /* 大演出の手前ははみ出さないよう空白で詰める（演出を置く前だけ） */
       if (!setpieceDone && cursor + def.lengthM * scale > spStart) {
+        /* エンドレスの区切りの手前は、収まる札が残っていればそちらを試す（空白を短く） */
+        if (EP) { cands = cands.filter((d) => d !== def && d.lengthM * scale <= spStart - cursor); if (cands.length) continue; }
         log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: spStart - cursor });
         cursor = spStart;
         return appendSetpiece(nowDist);
@@ -2934,6 +3099,7 @@ function createGenerator(stage, seed) {
       const need = st.demands / Math.max(wantDensity(cursor), 0.5) * 100 - st.span * scale;
       const gap = U.clamp(need, stage.speedAt(cursor) * 0.18, seam);
       const wantFirst = (lastItemAt > -1e9) ? (lastItemAt + gap) : (cursor + st.firstAt * scale);
+      let tooLong = false;
       for (let pad = 0; pad <= 40; pad += 3) {
         /* tip の窓（契約§4.8）が明けるまでは次のチャンクを始めない */
         const startM = Math.max(cursor - st.firstAt * scale, wantFirst + pad - st.firstAt * scale,
@@ -2941,6 +3107,7 @@ function createGenerator(stage, seed) {
         /* 起点が cursor より後ろへずれた分で大演出にはみ出すなら、このチャンクはやめる
            （tip の窓明けを待つと起点が後ろへずれる / P5c） */
         if (!setpieceDone && isFinite(spStart) && startM + st.lastAt * scale > spStart) {
+          if (EP) { tooLong = true; break; }    // エンドレス: 別の札を試す（下で候補から外す）
           log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: spStart - cursor });
           cursor = spStart;
           return appendSetpiece(nowDist);
@@ -2948,7 +3115,7 @@ function createGenerator(stage, seed) {
         const inst = instantiate(def, startM, nowDist);
         /* 大演出の頭との間隔も §4.7 で見る（起点が後ろへずれると大演出に詰まる / P5c） */
         const errs = Fair.validate(tail.concat(inst.items).concat(setpieceDone ? [] : spHead), stage.speedAt,
-                                   { startLanes: 'any', reactBoth: stage.reactBoth,
+                                   { startLanes: 'any', reactBoth: RB,
                                      currents: currents.concat(inst.local.currents),
                                      zeros: zeros.concat(inst.local.zeros),
                                      warps: warps.concat(inst.local.warps),
@@ -2970,6 +3137,20 @@ function createGenerator(stage, seed) {
           return true;
         }
       }
+      if (tooLong) {
+        cands = cands.filter((d) => d !== def);
+        if (!cands.length) {
+          log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: spStart - cursor });
+          cursor = spStart;
+          return appendSetpiece(nowDist);
+        }
+      }
+    }
+    /* エンドレスの区切りが近ければ、空白の代わりに区切りを置く */
+    if (EP && isFinite(spStart) && cursor + 40 >= spStart) {
+      log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: Math.max(0, spStart - cursor) });
+      cursor = Math.max(cursor, spStart);
+      return appendSetpiece(nowDist);
     }
     /* どうしても入らない時は空白を置いて先へ（“理不尽な配置”より空白を選ぶ） */
     cursor += 40;
@@ -2979,10 +3160,18 @@ function createGenerator(stage, seed) {
     return false;
   }
 
+  refreshBarrier();
+
   return {
     stage: stage,
     seed: seed,
     get cursor() { return cursor; },
+    /* エンドレス（P6）: ゾーン切替・ミニ大演出・その距離のゾーン・同時要求の余白 */
+    switches: switches,
+    minis: minis,
+    plan: EP,
+    zoneAt: zoneAt,
+    reactBoth: RB,
     obstacles: out,
     syncs: syncs,
     currents: currents,

@@ -92,9 +92,13 @@ const ZoneKit = {
   },
 
   /* フィールドを一括で前方へ送り出す（毎フレーム）。戻り値＝前方60mに見えている小物の数 */
+  /* 小物を伏せる区間 [a, b]（エンドレスの連絡通路 / P6）。World.syncTunnel が毎フレーム入れる。
+     通路の中は「無地」なので、ゾーンの小物（壁際の配管・看板・床の意匠）を出さない。 */
+  mask: null,
   syncFields(zone, dist, t, hideProps) {
     const d = zone._dummy || (zone._dummy = new THREE.Object3D());
     const fs = zone.fields;
+    const mk = ZoneKit.mask;
     let ahead = 0;
     for (let i = 0; i < fs.length; i++) {
       const f = fs[i];
@@ -102,7 +106,7 @@ const ZoneKit = {
       for (let k = 0; k < f.count; k++) {
         const slot = base + k;
         const m = slot * f.spacing;
-        const o = hideProps ? null : f.place(slot, m, t, dist);
+        const o = (hideProps || (mk && m >= mk[0] && m <= mk[1])) ? null : f.place(slot, m, t, dist);
         if (!o) {
           d.position.set(0, -9999, 0);
           d.rotation.set(0, 0, 0);
@@ -206,14 +210,18 @@ const Zones = {
   },
   /* ゾーン切替（契約§6 P3a「切替APIはここで用意」）。
      前のゾーンのメッシュ／ライト／粒子とマテリアルを確実に捨ててから次を建てる。 */
-  switchTo(id) {
+  /* quiet=true は暗転なし（エンドレスのトンネル抜け / P6 は通路と光のゲートで繋ぐ） */
+  switchTo(id, quiet) {
     const next = Zones._reg[id];
     if (!next || !Zones.scene) return false;
+    const t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
     Zones.unmount();
     Zones._mount(id);
-    Zones.flash();
+    if (!quiet) Zones.flash();
+    Zones.lastSwitchMs = ((typeof performance !== 'undefined') ? performance.now() : 0) - t0;
     return true;
   },
+  lastSwitchMs: 0,
   _mount(id) {
     const z = Zones._reg[id];
     if (!z) throw new Error('unknown zone: ' + id);

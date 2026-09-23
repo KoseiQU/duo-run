@@ -121,7 +121,11 @@ const HUD = {
   update(g) {
     HUD._set('hud-dist', Math.floor(g.dist) + ' m');
     HUD._set('hud-speed', g.speed.toFixed(1) + ' m/s');
-    HUD._set('hud-stage', g.stage ? g.stage.name : '');
+    /* エンドレスは今のゾーン名も出す（1000m ごとに切り替わる / §4.4 P6） */
+    HUD._set('hud-stage', g.stage
+      ? (g.stage.endless && typeof Endless !== 'undefined' && Zones.id()
+         ? g.stage.name + ' · ' + (Endless.LABEL[Zones.id()] || '') : g.stage.name)
+      : '');
     /* 全クリア演出（§6 P5b）の間は、操作の案内と状態フラグを伏せる
        （もう操作しないし、最後の画面に「GRAVITY」などが残ると邪魔になる）。 */
     const fin = (g.status === 'allclear');

@@ -87,6 +87,11 @@ const World = {
     World.rampCue.visible = false;
     scene.add(World.rampCue);
 
+    /* --- エンドレスの連絡通路＋光のゲート（§4.4 ゾーン切替 / P6） -------- */
+    World.tunnel = World._buildTunnel();
+    World.tunnel.visible = false;
+    scene.add(World.tunnel);
+
     /* --- ゴールゲート（§4.8 ゴール演出） ---------------------------------- */
     World.goal = World._buildGoalGate();
     World.goal.visible = false;
@@ -386,7 +391,7 @@ const World = {
     const k = Setpieces.rampCue(dist);
     if (k <= 0) { c.visible = false; return; }
     const s = Setpieces.state;
-    const lipM = s.startM + Setpieces.BJ.RAMP1;
+    const lipM = s.startM + (Setpieces.keys(s) || Setpieces.BJ).RAMP1;
     c.visible = true;
     c.position.set(0, Setpieces.viewLift(lipM), -(lipM - dist));
     const blink = (Math.sin(World._t * 9 + dist * 0.35) > -0.2) ? 1 : 0.25;
@@ -395,9 +400,101 @@ const World = {
     c.traverse((m) => { if (m.isMesh) m.visible = (blink > 0.5) || m.geometry.parameters.width < 0.3; });
   },
 
+  /* ==========================================================================
+     エンドレスの連絡通路（契約§4.4「1000mごとにゾーン切替演出」/ P6）
+     無地の通路 40m（壁・天井裏・床下の板＋入口の額縁）と、出口の **光のゲート**。
+     入口 z=0 → ゲート z=-L のローカル座標で組み、走行距離で送り出す。
+     ・通路の中は壁と板で外が見えない。出口は光の膜でふさがっているので、
+       カメラが奥に入った瞬間にゾーンを差し替えても画面に出ない（Endless.SWAP_BEFORE）。
+     ・どのゾーンの霧にも馴染むよう、材質は霧つきの Basic（ライトに依存しない）。
+     ・ゾーンの持ち物ではない（切替で捨てられない）＝ World が持つ。ドローコール 7。
+     ========================================================================== */
+  _buildTunnel() {
+    const L = Endless.TUNNEL_M, H = CFG.H, HW = CFG.HALF_W;
+    const g = new THREE.Group();
+    const merged = (list, mat) => { const m = new THREE.Mesh(ZoneKit.merge(list), mat); g.add(m); return m; };
+    const WX = HW + 0.42;                                     // 壁の中心（内面 x=±1.92）
+    merged([
+      { g: ZoneKit.box(0.6, H + 1.4, L), p: [-WX, H / 2, -L / 2] },
+      { g: ZoneKit.box(0.6, H + 1.4, L), p: [WX, H / 2, -L / 2] },
+      { g: ZoneKit.box(HW * 2 + 1.4, 0.5, L), p: [0, H + 0.45, -L / 2] },
+      { g: ZoneKit.box(HW * 2 + 1.4, 0.5, L), p: [0, -0.45, -L / 2] }
+    ], new THREE.MeshBasicMaterial({ color: 0x2b3346, fog: true }));
+    /* 入口の額縁（通路の外の景色を半分ほど隠し、「トンネルに入る」と読ませる） */
+    const OX = WX + 0.3, OY0 = -0.7, OY1 = H + 0.7;
+    merged([
+      { g: ZoneKit.box(9, 16, 0.9), p: [-(OX + 4.5), H / 2 + 1, 0.2] },
+      { g: ZoneKit.box(9, 16, 0.9), p: [OX + 4.5, H / 2 + 1, 0.2] },
+      { g: ZoneKit.box(OX * 2, 6, 0.9), p: [0, OY1 + 3, 0.2] },
+      { g: ZoneKit.box(OX * 2, 3, 0.9), p: [0, OY0 - 1.5, 0.2] }
+    ], new THREE.MeshBasicMaterial({ color: 0x1b2130, fog: true }));
+    /* 額縁の縁の発光（開口の輪郭）と、通路の中の光の輪（5m おき） */
+    const rim = [];
+    [[-OX, 0], [OX, 0]].forEach((q) => rim.push({ g: ZoneKit.box(0.12, OY1 - OY0, 0.12), p: [q[0], H / 2, -0.3] }));
+    rim.push({ g: ZoneKit.box(OX * 2, 0.12, 0.12), p: [0, OY1, -0.3] });
+    merged(rim, new THREE.MeshBasicMaterial({ color: 0x9fe8ff, fog: true }));
+    const rings = [];
+    for (let z = 5; z < L; z += 5) {
+      [-1, 1].forEach((sx) => rings.push({ g: ZoneKit.box(0.05, H + 0.2, 0.18), p: [sx * (WX - 0.33), H / 2, -z] }));
+      rings.push({ g: ZoneKit.box(HW * 2 + 0.2, 0.05, 0.18), p: [0, H + 0.19, -z] });
+      [-1, 1].forEach((sx) => rings.push({ g: ZoneKit.box(0.3, 0.05, 0.18), p: [sx * (HW + 0.02), 0.01, -z] }));
+    }
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xcfe6ff, fog: true });
+    merged(rings, ringMat);
+    /* 出口の光のゲート: 枠＋光の膜（通常合成＝向こうを隠す）＋外へ広がる光輪（加算） */
+    const gate = new THREE.Group();
+    gate.position.z = -L;
+    g.add(gate);
+    const gm = new THREE.Mesh(ZoneKit.merge([
+      { g: ZoneKit.box(0.3, H + 0.6, 0.3), p: [-(HW + 0.1), H / 2, 0] },
+      { g: ZoneKit.box(0.3, H + 0.6, 0.3), p: [HW + 0.1, H / 2, 0] },
+      { g: ZoneKit.box(HW * 2 + 0.5, 0.3, 0.3), p: [0, H + 0.15, 0] },
+      { g: ZoneKit.box(HW * 2 + 0.5, 0.3, 0.3), p: [0, -0.15, 0] }
+    ]), new THREE.MeshBasicMaterial({ color: 0xfff4d8, fog: false }));
+    gate.add(gm);
+    const veil = new THREE.Mesh(new THREE.PlaneGeometry(HW * 2 + 0.2, H + 0.3),
+      new THREE.MeshBasicMaterial({ color: 0xf4f8ff, transparent: true, opacity: 0.9, depthWrite: false, fog: false }));
+    veil.position.set(0, H / 2, 0.05);
+    veil.renderOrder = 6;
+    gate.add(veil);
+    const halo = new THREE.Mesh(new THREE.PlaneGeometry(14, 11),
+      new THREE.MeshBasicMaterial({ color: 0xdff0ff, transparent: true, opacity: 0.4, depthWrite: false,
+                                    blending: THREE.AdditiveBlending, fog: false }));
+    halo.position.set(0, H / 2, -0.4);
+    halo.renderOrder = 5;
+    gate.add(halo);
+    World._tun = { group: g, gate: gate, veil: veil, halo: halo, ringMat: ringMat };
+    return g;
+  },
+  /* 通路の送り出し（毎フレーム）。見えている通路が無ければ隠し、小物の伏せも外す */
+  syncTunnel(dist) {
+    const T = World._tun;
+    if (!T) return null;
+    const s = (typeof Game !== 'undefined' && Game.stage && Game.stage.endless) ? Endless.tunnelNear(dist) : null;
+    if (!s) {
+      if (T.group.visible) T.group.visible = false;
+      ZoneKit.mask = null;
+      return null;
+    }
+    T.group.visible = true;
+    T.group.position.set(0, 0, -(s.t0 - dist));
+    ZoneKit.mask = [s.t0 - 1.5, s.at + 1.5];
+    /* 光の膜: 近づくほど明るく、くぐったら一気に抜ける */
+    const toGate = s.at - dist;
+    const near = U.clamp(1 - toGate / 70, 0, 1);
+    const pass = U.clamp(1 + toGate / 7, 0, 1);            // ゲートを越えて 7m で消える
+    const pulse = 0.94 + 0.06 * Math.sin(World._t * 7.5);
+    T.veil.material.opacity = (0.72 + 0.26 * near) * pass;
+    T.veil.visible = pass > 0.01;
+    T.halo.material.opacity = (0.22 + 0.5 * near) * pulse * pass;
+    T.ringMat.color.setHSL(0.58, 0.55, 0.72 + 0.12 * near);
+    return s;
+  },
+
   /* ゴールゲートを置く（有限ステージのみ。視界に入ったら出す） */
   syncGoal(dist, stage) {
     World.syncRampCue(dist);
+    World.syncTunnel(dist);
     if (!World.goal) return;
     if (!stage || stage.endless) { World.goal.visible = false; return; }
     const rel = stage.lengthM - dist;

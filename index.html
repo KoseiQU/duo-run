@@ -164,6 +164,11 @@
   /* ---------- ゾーン切替の暗転（§6 P3a 切替を繋ぐ簡易演出） ---------- */
   #zonefade{position:absolute; inset:0; background:#05070f; opacity:0; pointer-events:none;}
   #zonefade.on{animation:zoneFade .42s ease-out 1;}
+  /* エンドレスの光のゲートを抜けた瞬間（§4.4 ゾーン切替 / P6）: 白く抜けて戻る */
+  #zonegate{position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:radial-gradient(90% 80% at 50% 50%,rgba(255,252,240,.95),rgba(220,236,255,.55) 55%,rgba(200,220,255,0));}
+  #zonegate.on{animation:zoneGate .5s ease-out 1;}
+  @keyframes zoneGate{0%{opacity:.85;} 100%{opacity:0;}}
   @keyframes zoneFade{0%{opacity:1;} 60%{opacity:.55;} 100%{opacity:0;}}
 
   /* ---------- 大演出の予告（§4.4 ビル間の大ジャンプ「JUMP!」） ---------- */
@@ -209,6 +214,7 @@
   <canvas id="gl"></canvas>
 
   <div id="zonefade"></div>
+  <div id="zonegate"></div>
 
   <div id="allclear" data-ui="allclear">
     <div class="ac-main">ALL CLEAR</div>
@@ -319,6 +325,7 @@
 <script src="js/runners.js"></script>
 <script src="js/freeflight.js"></script>
 <script src="js/setpieces.js"></script>
+<script src="js/endless.js"></script>
 <script src="js/zone_neon.js"></script>
 <script src="js/zone_ruins.js"></script>
 <script src="js/zone_sea.js"></script>
@@ -350,6 +357,7 @@
 <script src="tests/test_p5a.js"></script>
 <script src="tests/test_p5b.js"></script>
 <script src="tests/test_p5c.js"></script>
+<script src="tests/test_p6.js"></script>
 
 <script>
   (function boot(){

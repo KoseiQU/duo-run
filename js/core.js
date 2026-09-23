@@ -206,6 +206,12 @@ const Game = {
     Input.clear();
     Game.gen = createGenerator(Game.stage, Game.seed);
     Game.gen.ensure(fromM + CFG.SPAWN_AHEAD, fromM);
+    /* エンドレス（P6）: 再開位置のゾーンに合わせる（最初から＝ネオン、skipTo なら途中のゾーン） */
+    Endless.reset();
+    if (Game.stage.endless && Game.gen.zoneAt) {
+      const z = Game.gen.zoneAt(fromM);
+      if (Zones.id() !== z) { Zones.switchTo(z, true); Zones.mode(null); }
+    }
     /* 再開直後の助走: 視認距離ぶんの空白を必ず確保する（§4.7 視認距離） */
     const runway = Math.max(CFG.LEAD_IN * 0.6, Game.speed * CFG.FAIR.SEE + 10);
     /* 同時スイッチは「パッドは通り過ぎたのに橋だけ残る」を作らない（P3b）＝
@@ -319,6 +325,7 @@ const Game = {
       Game.syncMerged();
       if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
       Game.fireEvents();
+      if (Game.stage.endless) Endless.update(Game);
       Setpieces.update(Game, d);
       Tutorial.update(dt, Game.dist);
 
@@ -397,6 +404,8 @@ const Game = {
     /* チュートリアルの吹き出しと、大演出の開始/終了 */
     Tutorial.onEvent(e);
     Setpieces.onEvent(e);
+    /* エンドレスのゾーン切替（トンネル抜け / P6） */
+    if (e.type === 'zone.switch' || e.type === 'zone.gate') Endless.onEvent(e, Game);
     /* P3以降: 鏡ゲート・入れ替え・重力反転などもここで処理する */
   },
 
@@ -607,6 +616,11 @@ const Game = {
       rockGap: Setpieces.rockGap(),
       lookBack: +Setpieces.lookBack(Game.dist).toFixed(3),
       setpiece: Setpieces.id(),
+      mini: (Setpieces.state && Setpieces.state.mini) || null,
+      /* エンドレス（§4.4 / P6）: いまのゾーンと、生成済みのゾーン切替・ミニ大演出 */
+      zone: Zones.id(),
+      switches: (Game.gen && Game.gen.switches) ? Game.gen.switches.length : 0,
+      minis: (Game.gen && Game.gen.minis) ? Game.gen.minis.length : 0,
       phase: Setpieces.state ? (Setpieces.state.phase || null) : null,
       glide: Setpieces.glideActive(),
       /* 大ジャンプの DUO体（契約§4.5 改訂）: 合体の度合いと断面での位置 */
