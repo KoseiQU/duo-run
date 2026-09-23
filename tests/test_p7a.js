@@ -14,14 +14,14 @@
        ・全ステージ（30シード）でピラー:ワイド梁 ≈ 6:4（ワイド梁の割合 0.40 ±0.10）・§4.7 違反0
      【P7a-4】tip 猶予改訂（tests/test_p5c.js の v2 版）＋自由飛行の緩和
        ・自由飛行: 判定半径 0.30・隙間 +30%・発射後2.0秒なし・間隔 ≥ 1.5秒・1回の飛行で 3〜4個
-         （S2 大ジャンプ・S6 区画爆発・S8 全崩壊・エンドレスのミニ版 × 50シード）
+         （S2 大ジャンプ・S5 区画爆発・S7 全崩壊・エンドレスのミニ版 × 50シード）
        ・高さの手がかり（床と天井の影・照準リング・次の隙間への誘導線）が飛行中だけ出る
    ============================================================================ */
 'use strict';
 
 (function () {
   const I = () => DUO.__internal;
-  const ZONES = ['neon', 'ruins', 'sea', 'space', 'mirror', 'core'];
+  const ZONES = ['neon', 'ruins', 'sea', 'space', 'mirror', 'core', 'white'];
   /* 見た目を検査する「障害物」（ゲート・帯などの目印は障害物ではない） */
   const HAZ = ['ROVER', 'LASER_LOW', 'PILLAR', 'WIDEBAR', 'LASER_V', 'WALLHOLE', 'WALLSOLID',
                'LASER_SCAN', 'LASER_ROT', 'COLUMN', 'FISH_TOOTH', 'FISH_FIN', 'FISH_TAIL'];
@@ -106,11 +106,12 @@
 
   /* 40m 先の障害物の画素と、その周りの背景の輝度差（契約§5「背景より必ず明るい（+40）」） */
   DUO.__suites.push({
-    name: 'P7a-1: 障害物は背景より明るい（40m 先・輝度差 +40 以上・全6ゾーン）',
+    name: 'P7a-1: 障害物は背景より明るい（40m 先・輝度差 +40 以上・全6ゾーン＋白空間は絶対差）',
     quick: false,
     run(t) {
       const In = I(), Game = In.Game, W = In.World;
-      const SPEC = [['neon', 'S1'], ['ruins', 'S3'], ['sea', 'S5'], ['space', 'S6'], ['mirror', 'S7'], ['core', 'S8']];
+      /* P7c: 7ステージの新ID。S1 の白空間は「白背景に対して暗い/赤い」方向で満たす＝符号なしの絶対差（契約§5 / P7c 指示） */
+      const SPEC = [['neon', 'S2'], ['ruins', 'S3'], ['sea', 'S4'], ['space', 'S5'], ['mirror', 'S6'], ['core', 'S7'], ['white', 'S1']];
       const TYPES = ['ROVER', 'LASER_LOW', 'PILLAR', 'WIDEBAR', 'LASER_V', 'WALLHOLE'];
       const w = 812, h = 375;
       const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
@@ -156,7 +157,8 @@
           }
           const d = (n && nb) ? so / n - sb / nb : -999;
           rows.push(sp[0] + '/' + ty + ' ' + d.toFixed(0) + '(' + (so / Math.max(1, n)).toFixed(0) + '-' + (sb / Math.max(1, nb)).toFixed(0) + ')');
-          t.ok(n > 20 && d >= 40, sp[0] + '/' + ty + ': 40m 先の輝度差 ' + d.toFixed(1) + ' ≥ +40（' + n + 'px）');
+          if (sp[0] === 'white') t.ok(n > 20 && Math.abs(d) >= 40, sp[0] + '/' + ty + ': 40m 先の輝度差の絶対値 ' + Math.abs(d).toFixed(1) + ' ≥ 40（白背景に対して暗い/赤い・' + n + 'px）');
+          else t.ok(n > 20 && d >= 40, sp[0] + '/' + ty + ': 40m 先の輝度差 ' + d.toFixed(1) + ' ≥ +40（' + n + 'px）');
         });
         W.resize();
       });
@@ -170,7 +172,22 @@
     quick: true,
     run(t) {
       const In = I(), Zs = In.Zones, W = In.World;
-      const SPEC = [['neon', 'S1'], ['ruins', 'S3'], ['sea', 'S5'], ['space', 'S6'], ['mirror', 'S7'], ['core', 'S8']];
+      const SPEC = [['neon', 'S2'], ['ruins', 'S3'], ['sea', 'S4'], ['space', 'S5'], ['mirror', 'S6'], ['core', 'S7']];
+      /* S1（白い無地の空間 / 契約§5 v2 の例外）: 小物も遠景も置かない・路面は霧より一段暗い薄灰の無地 */
+      DUO.reset(); DUO.start('S1', 11); DUO.pump(1 / 60);
+      t.eq(Zs.id(), 'white', 'S1 は白い空間');
+      let wbad = 0, wprops = 0;
+      [150, 400, 600].forEach((at) => {
+        DUO.skipTo(at);
+        for (let i = 0; i < 3; i++) DUO.pump(1 / 60);
+        wbad += In.ZoneKit.corridorScan(80).length;
+        wprops = Math.max(wprops, Zs.propsAhead());
+      });
+      t.eq(wbad, 0, 'white: コリドー内に物がない（グリッド線は床・天井の面の上）');
+      t.eq(wprops, 0, 'white: 小物は置かない（造形なし）');
+      t.eq(Zs.active().propFields.length, 0, 'white: 小物のフィールドを持たない');
+      t.eq(W._roadMat.color.getHex(), Zs.get('white').PAL.road, 'white: 路面は無地の薄灰（霧より暗い）');
+      t.ok(Zs.get('white').PAL.road < Zs.get('white').PAL.fog, 'white: 路面は霧（背景）より一段暗い');
       SPEC.forEach((sp) => {
         DUO.reset(); DUO.start(sp[1], 11); DUO.pump(1 / 60);
         const bad = {};
@@ -207,7 +224,7 @@
         const d = In.Setpieces.DEFS[k];
         (d.floor || []).concat(d.ceil || []).forEach((e) => ents.push(k + ':' + e.type));
       });
-      In.INTRO_S1.forEach((it) => (it.floor || []).concat(it.ceil || []).forEach((e) => ents.push('intro:' + e.type)));
+      In.STAGE_DEFS.S1.intro.forEach((it) => (it.floor || []).concat(it.ceil || []).forEach((e) => ents.push('intro:' + e.type)));
       const bad = ents.filter((x) => GONE.indexOf(x.split(':')[1]) >= 0);
       t.eq(bad.length, 0, '譜面・大演出・導入区間に失効ギミックが無い' + (bad.length ? ': ' + bad.slice(0, 4).join(', ') : ''));
       const flags = In.CHUNK_DEFS.filter((c) => c.drop || c.cur || c.lift || c.door).map((c) => c.id);
@@ -221,7 +238,7 @@
 
       t.eq(CFG.WIDE_SHARE, 0.40, 'ピラー:ワイド梁 ＝ 6:4');
       const rows = [];
-      ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'endless'].forEach((sid) => {
+      ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'endless'].forEach((sid) => {
         const st = In.makeStage(sid);
         const L = isFinite(st.lengthM) ? st.lengthM : 6000;
         let P = 0, W = 0, bad = 0, pairs = 0;
@@ -242,7 +259,9 @@
         }
         const share = W / Math.max(1, P + W);
         rows.push(sid + ' ' + P + ':' + W + '=' + share.toFixed(2) + '（対 ' + pairs + '）');
-        t.ok(Math.abs(share - CFG.WIDE_SHARE) <= 0.10, sid + ': ワイド梁の割合 ' + share.toFixed(3) + '（ピラー ' + P + '・ワイド梁 ' + W + '・目安 0.40 ±0.10）');
+        /* S1 はチュートリアルの固定譜面（1種ずつ紹介）＝ランダム区間を持たないので比の対象外 */
+        if (st.tutorial) t.ok(P > 0 && W > 0, sid + ': チュートリアルに柱とワイド梁の両方がある（' + P + ':' + W + '）');
+        else t.ok(Math.abs(share - CFG.WIDE_SHARE) <= 0.10, sid + ': ワイド梁の割合 ' + share.toFixed(3) + '（ピラー ' + P + '・ワイド梁 ' + W + '・目安 0.40 ±0.10）');
         t.eq(bad, 0, sid + ': 30シードで §4.7 違反なし');
       });
       t.info(rows.join(' / '));
@@ -260,15 +279,16 @@
       t.eq(FF.FIRST_T, 2.0, '発射後 2.0秒は障害物なし');
       t.eq(FF.GAP_MIN_T, 1.5, '障害物の間隔 ≥ 1.5秒');
       const cases = [
-        ['S2 大ジャンプ', 'S2', Sp.BJ, null],
-        ['S6 区画爆発', 'S6', Sp.BL, null],
-        ['S8 全崩壊', 'S8', Sp.CA, null],
-        ['エンドレスのミニ版', 'endless', Sp.BJM, 3000]
+        ['S2 大ジャンプ', 'S2', Sp.BJ, null, 'bigjump'],
+        ['S5 区画爆発', 'S5', Sp.BL, null, 'blastout'],
+        ['S7 全崩壊', 'S7', Sp.CA, null, 'collapseall'],
+        ['エンドレスのミニ版', 'endless', Sp.BJM, 3000, null]
       ];
       cases.forEach((c) => {
         const st = In.makeStage(c[1]);
-        const def = Sp.DEFS[st.setpiece] || null;
-        const startM = (c[3] !== null) ? c[3] : (st.lengthM - def.lengthM);
+        /* P7c: 大演出の位置は makeStage が決める（stage.setpieces） */
+        const sp1 = c[4] ? st.setpieces.filter((x) => x.id === c[4])[0] : null;
+        const startM = (c[3] !== null) ? c[3] : sp1.start;
         const k = (c[3] !== null) ? Math.max(1, st.speedAt(startM) / 24) : 1;
         const launch = startM + c[2].LIP * k, land = startM + c[2].LAND * k;
         const flightT = (land - launch) / st.speedAt(land);
@@ -324,7 +344,7 @@
 
   /* P7a 最終確認: 全8ステージ＋エンドレス × perfect / delay250 × seed 1〜30 */
   DUO.__suites.push({
-    name: 'P7a: ボット完走（S1〜S8 × perfect/delay250 × seed 1〜30、エンドレス perfect 5000m / delay250 2500m）',
+    name: 'P7a→P7c: ボット完走（新7ステージ S1〜S7 × perfect/delay250 × seed 1〜30、エンドレス perfect 5000m / delay250 2500m）',
     quick: false,
     run(t) {
       const In = I(), G = In.Game, U = In.U;
@@ -341,14 +361,14 @@
         }
         return fails;
       };
-      ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'].forEach((sid) => {
+      ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'].forEach((sid) => {
         ['perfect', 'delay250'].forEach((mode) => {
           const f = run(sid, mode);
           t.eq(f.length, 0, sid + ' ' + mode + ' が 30/30 完走' + (f.length ? '（落ちた種: ' + f.slice(0, 5).join(',') + '）' : ''));
         });
       });
       const snap = U.lsSnapshot();
-      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8']);
+      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']);
       const fp = run('endless', 'perfect', 5000), fd = run('endless', 'delay250', 2500);
       U.lsRestore(snap);
       t.eq(fp.length, 0, 'エンドレス（全ゾーン）perfect が 5000m を 30/30' + (fp.length ? '（' + fp.join(',') + '）' : ''));

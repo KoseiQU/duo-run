@@ -1298,12 +1298,18 @@ const Obstacles = {
   },
   /* 光る警告色（霧を掛けない＝遠くからでも背景より明るく浮く / 契約§5「輝度差 +40」）。
      P5c の実測: 霧を掛けると 48m で輝度差が半分に潰れた。 */
+  /* 露出（ゾーンの PAL.obstacleTone / P7c）: 白い空間（S1）では白い壁・白い縞が背景に溶けるので、
+     障害物の光る部分を同じ色相のまま一段暗く描く（形・配色は共通デザインのまま＝ゾーン別スキンではない）。
+     Zones._mount が切替のたびに入れる。プールはゾーン切替で空になるので、次に建てる見た目から効く。 */
+  tone: 1,
   _glow(key, color, opacity) {
-    const k = Obstacles.skinId() + '|G' + key;
+    const tn = Obstacles.tone || 1;
+    const k = Obstacles.skinId() + '|G' + (tn !== 1 ? 't' + tn + ':' : '') + key;
     if (!Obstacles._mat[k]) {
+      const col = (tn !== 1) ? new THREE.Color(color).multiplyScalar(tn).getHex() : color;
       Obstacles._mat[k] = (opacity === undefined)
-        ? new THREE.MeshBasicMaterial({ color: color, fog: false })
-        : new THREE.MeshBasicMaterial({ color: color, fog: false, transparent: true, opacity: opacity,
+        ? new THREE.MeshBasicMaterial({ color: col, fog: false })
+        : new THREE.MeshBasicMaterial({ color: col, fog: false, transparent: true, opacity: opacity,
                                         depthWrite: false });
     }
     return Obstacles._mat[k];

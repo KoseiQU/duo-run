@@ -37,7 +37,7 @@
   /* 同時スイッチを1つだけ、前方 aheadM に置く（他の障害物は消す） */
   const placeSync = (opt) => {
     const In = I();
-    DUO.reset(); DUO.start('S4', 5); DUO.skipTo(300);
+    DUO.reset(); DUO.start('S3', 5); DUO.skipTo(300);
     In.clearObstacles();
     Game.gen.syncs.length = 0;
     const items = [];
@@ -181,19 +181,18 @@
      ========================================================================== */
   /* （S4: 落ちる天井（… は契約 v2 で失効したギミックの検査のため削除） */
   DUO.__suites.push({
-    name: 'S4: 定義と不変条件・密度・動作比率（50シード）',
+    name: 'S3（旧S4の顔ぶれ）: 同時スイッチの札・神殿崩壊・不変条件・密度・動作比率（50シード）',
     quick: true,
     run(t) {
       const In = I();
-      const st0 = In.makeStage('S4');
-      t.eq(st0.lengthM, 1200, 'S4 は 1200m');
+      /* 契約§4.4 v2（P7c）: 旧S4（遺跡・内部）は S3 古代遺跡へ統合。後半＝内部・終盤に神殿崩壊 */
+      const st0 = In.makeStage('S3');
+      t.eq(st0.lengthM, 2000, 'S3 は 2000m');
       t.eq(st0.zone, 'ruins', 'ゾーンは古代遺跡');
-      t.eq(st0.zoneMode, 'inner', '区間パターンは「内部」（壁区間主体 / 契約§4.4）');
-      t.near(st0.speedAt(0), 24, 1e-6, '開始 24 m/s');
-      t.near(st0.speedAt(1200), 28, 1e-6, '終了 28 m/s');
-      t.near(st0.checkpoints[0], 400, 1e-6, 'チェックポイント1 は 400m');
-      t.near(st0.checkpoints[1], 800, 1e-6, 'チェックポイント2 は 800m');
-      t.eq(st0.setpiece, 'templefall', '終盤の大演出は「神殿崩壊」');
+      t.ok(Array.isArray(st0.zoneMode) && st0.zoneMode[st0.zoneMode.length - 1].mode === 'inner',
+           '区間パターンは後半が「内部」（壁区間主体 / 契約§4.4）');
+      t.near(st0.speedAt(2000), 28, 1e-6, '終了 28 m/s');
+      t.eq(st0.setpieces[st0.setpieces.length - 1].id, 'templefall', '終盤の大演出は「神殿崩壊」');
       t.near(st0.reactBoth, In.CFG.FAIR.REACT_BOTH_LATE, 1e-9, '両者同時要求の余白は 0.45秒（契約§4.7）');
       /* チャンクの追加本数（契約§6 P3b「rank3〜4 を中心に10本以上」） */
       const s4 = In.CHUNK_DEFS.filter((c) => c.s4);
@@ -207,14 +206,14 @@
       const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
       const half = { a: 0, b: 0 };
       for (let seed = 1; seed <= 50; seed++) {
-        const st = In.makeStage('S4');
+        const st = In.makeStage('S3');
         const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-        const l = g.obstacles.filter((o) => o.at <= 1200);
+        for (let d = 0; d < 2000; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        const l = g.obstacles.filter((o) => o.at <= 2000);
         const errs = In.Fair.validate(l, st.speedAt, { startLanes: [0], reactBoth: st.reactBoth });
         if (errs.length) { bad++; if (bad === 1) t.info('seed' + seed + ': ' + errs.slice(0, 2).join(' | ')); }
         if (In.Fair.checkVisibility(l, st.speedAt).length) bad++;
-        if (g.log.some((c) => c.setpiece)) spFound++;
+        if (g.log.some((c) => c.id === 'setpiece:templefall')) spFound++;
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         blanks += g.log.filter((c) => c.id === '(blank)').length;
         if (l.some((o) => o.type === 'SYNCGAP')) syncSeen++;
@@ -224,24 +223,24 @@
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
-        half.xa = (half.xa || 0) + In.Fair.tipOverlap(tw, 0, 600);
-        half.xb = (half.xb || 0) + In.Fair.tipOverlap(tw, 600, 1200);
+        half.xa = (half.xa || 0) + In.Fair.tipOverlap(tw, 0, 1000);
+        half.xb = (half.xb || 0) + In.Fair.tipOverlap(tw, 1000, 2000);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
           if (In.Fair.inTipWindow(tw, w.at)) return;
-          if (w.at < 600) half.a += n; else half.b += n;
+          if (w.at < 1000) half.a += n; else half.b += n;
         });
       }
-      t.eq(bad, 0, 'S4 50シードで §4.7 違反なし（大演出区間を含む）');
+      t.eq(bad, 0, 'S3 50シードで §4.7 違反なし（大演出区間を含む）');
       t.eq(spFound, 50, '50シードすべてに神殿崩壊が入る');
       t.eq(blanks, 0, '空白チャンク（生成の詰まり）は0回');
       t.ok(syncSeen >= 40, '同時スイッチが出る（' + syncSeen + '/50 シード）');
       t.eq(dropSeen, 0, '落ちる天井は失効（契約 v2）');
       t.ok(tips >= 40, '新ギミック（同時スイッチ）の初出に tip が撒かれる（計' + tips + '回 / 50シード）');
       /* 密度（契約§4.7 S4 は 6→10回/100m・±25%） */
-      const dens = In.STAGE_DEFS.S4.density;
+      const dens = In.STAGE_DEFS.S3.density;
       t.eq(dens[0] + '-' + dens[1], '6-10', '密度の目安は 6→10回/100m');
-      const A = half.a / (50 * 600 - half.xa) * 100, B = half.b / (50 * 600 - half.xb) * 100;
+      const A = half.a / (50 * 1000 - half.xa) * 100, B = half.b / (50 * 1000 - half.xb) * 100;
       const wantA = In.U.lerp(dens[0], dens[1], 0.25), wantB = In.U.lerp(dens[0], dens[1], 0.75);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
            'S4 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
@@ -255,10 +254,10 @@
       t.ok(pct('slide') <= 15, 'S4 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
       t.info('S4 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
       /* 「ジャンプ→レーン移動 0.92秒」が S4 の譜面でも効いていること（抜き打ち） */
-      const st2 = In.makeStage('S4');
+      const st2 = In.makeStage('S3');
       const g2 = In.createGenerator(st2, 7);
-      for (let d = 0; d < 1200; d += 20) g2.ensure(d + In.CFG.SPAWN_AHEAD, d);
-      const ws = In.Fair.walls(g2.obstacles.filter((o) => o.at <= 1200), st2.speedAt);
+      for (let d = 0; d < 2000; d += 20) g2.ensure(d + In.CFG.SPAWN_AHEAD, d);
+      const ws = In.Fair.walls(g2.obstacles.filter((o) => o.at <= 2000), st2.speedAt);
       let minJumpToLane = 1e9;
       In.Fair.SIDES.forEach((side) => {
         let prev = null;
@@ -280,20 +279,20 @@
      5. S4: ボット完走
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S4: ボット完走（perfect / delay250 × seed 1〜50）と同時スイッチの踏み分け',
+    name: 'S3（旧S4）: ボット完走（perfect / delay250 × seed 1〜50）と同時スイッチの踏み分け',
     quick: false,
     run(t) {
       let p = 0, d = 0;
       const pf = [], df = [];
       const cnt = { pOk: 0, pMiss: 0, dOk: 0, dMiss: 0 };
       for (let seed = 1; seed <= 50; seed++) {
-        DUO.reset(); DUO.start('S4', seed); DUO.bot('perfect');
+        DUO.reset(); DUO.start('S3', seed); DUO.bot('perfect');
         if (runToEnd() === 'clear') p++;
         else pf.push(seed + '@' + Math.floor(Game.dist) + (Game.killer ? '/' + Game.killer.obstacle : ''));
         Game.gen.syncs.forEach((g) => { if (g.ok === true) cnt.pOk++; else if (g.ok === false) cnt.pMiss++; });
       }
       for (let seed = 1; seed <= 50; seed++) {
-        DUO.reset(); DUO.start('S4', seed); DUO.bot('delay250');
+        DUO.reset(); DUO.start('S3', seed); DUO.bot('delay250');
         if (runToEnd() === 'clear') d++;
         else df.push(seed + '@' + Math.floor(Game.dist) + (Game.killer ? '/' + Game.killer.obstacle : ''));
         Game.gen.syncs.forEach((g) => { if (g.ok === true) cnt.dOk++; else if (g.ok === false) cnt.dMiss++; });
@@ -318,17 +317,17 @@
      6. 大演出「神殿崩壊」
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S4: 大演出「神殿崩壊」（発火・倒れる柱が画面に映る・落ちる天井の連鎖・出口・中断復元）',
+    name: 'S3: 終盤の大演出「神殿崩壊」（発火・倒れる柱が画面に映る・落ちる天井の連鎖・出口・中断復元）',
     quick: false,          // 実描画を伴うので runAll 側へ（runQuick ≤20秒 / 契約§7）
     run(t) {
       const In = I(), W = In.World, Sp = In.Setpieces, T = In.Setpieces.TEMPLE;
       const fogFar0 = W.scene.fog.far, fogCol0 = W.scene.fog.color.getHex();
       W.setViewport(812, 375, 1);
-      DUO.reset(); DUO.start('S4', 7); DUO.bot('perfect');
+      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect');
       /* 演出の少し手前から実ステップで跨ぐ（直行するとイベントを飛ばす） */
-      DUO.skipTo(940);
-      advanceTo(1010);
-      t.eq(DUO.state().setpiece, 'templefall', '1000m で神殿崩壊が始まる');
+      DUO.skipTo(1740);
+      advanceTo(1810);
+      t.eq(DUO.state().setpiece, 'templefall', '1800m で神殿崩壊が始まる');
       t.eq(document.getElementById('cue').classList.contains('on'), true, 'HUD に予告が出る');
       t.ok(document.getElementById('cue-main').textContent.indexOf('COLLAPSE') >= 0, '予告の文字は「COLLAPSE!」');
       const start = Sp.state.startM;
@@ -374,22 +373,22 @@
       t.eq(all.filter((e) => e.type === 'WALLHOLE').length, 1, '最後は崩れる出口を潜り抜ける');
       const exitAt = all.filter((e) => e.type === 'WALLHOLE')[0].at;
       t.ok(exitAt > T.EXIT0, '潜り抜ける出口は「光が差し始めてから」（' + exitAt + 'm > ' + T.EXIT0 + 'm）');
-      const st = In.makeStage('S4');
-      const inst = In.Setpieces.build('templefall', 1000, 0, st.speedAt(1000) / In.CFG.REF_SPEED, null);
+      const st = In.makeStage('S3');
+      const inst = In.Setpieces.build('templefall', 1800, 0, st.speedAt(1800) / In.CFG.REF_SPEED, null);
       const errs = In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any', reactBoth: st.reactBoth });
       t.eq(errs.length, 0, '神殿崩壊の譜面が §4.7 を満たす: ' + errs.slice(0, 2).join(' | '));
       const dens = In.Fair.countDemands(inst.items, st.speedAt).total / def.lengthM * 100;
-      t.ok(dens >= 6, '演出区間の密度 ' + dens.toFixed(1) + ' 回/100m（S4 の下限 6 以上）');
+      t.ok(dens >= 6, '演出区間の密度 ' + dens.toFixed(1) + ' 回/100m（遺跡の下限 6 以上）');
 
       /* --- delay250 でも演出を跨いで完走する（§4.7） --- */
-      DUO.reset(); DUO.start('S4', 12); DUO.bot('delay250'); DUO.skipTo(940);
-      advanceTo(1010);
+      DUO.reset(); DUO.start('S3', 12); DUO.bot('delay250'); DUO.skipTo(1740);
+      advanceTo(1810);
       t.eq(DUO.state().setpiece, 'templefall', '0.25秒遅延のボットでも演出に入る');
       t.eq(runToEnd(), 'clear', '0.25秒遅延のボットも神殿崩壊を抜けてゴールする');
 
       /* --- 中断（リトライ）で完全復元 --- */
-      DUO.reset(); DUO.start('S4', 7); DUO.bot('perfect'); DUO.skipTo(940);
-      advanceTo(1060);
+      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(1740);
+      advanceTo(1860);
       t.eq(DUO.state().setpiece, 'templefall', 'もう一度 神殿崩壊に入る');
       Game.retry();
       t.eq(DUO.state().setpiece, null, 'リトライで演出状態が消える');
@@ -415,48 +414,38 @@
      7. S4 の解放・エンドレスのプール・遺跡ゾーンの「内部」モード
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S4: 解放（S3クリアで解放）・エンドレスのプール・遺跡の「内部」区間',
+    name: 'S3（旧S4）: 遺跡の「内部」区間（巨岩の追跡の後）・エンドレスのプール（同時スイッチ）',
     quick: true,
     run(t) {
-      const In = I(), UI = In.UI, U = In.U, Zs = In.Zones, W = In.World;
+      const In = I(), U = In.U, Zs = In.Zones, W = In.World;
       const snap = U.lsSnapshot();
-      U.lsSet('cleared', ['S1', 'S2']);
-      UI.show('stages');
-      let s4 = document.querySelector('[data-ui="stage-S4"]');
-      t.eq(s4 && s4.getAttribute('data-unlocked'), '0', 'S3 未クリアでは S4 はロック');
-      U.lsSet('cleared', ['S1', 'S2', 'S3']);
-      UI.show('stages');
-      s4 = document.querySelector('[data-ui="stage-S4"]');
-      t.eq(s4 && s4.getAttribute('data-unlocked'), '1', 'S3 をクリアすると S4 が解放される');
-      t.ok(s4 && s4.innerHTML.indexOf('準備中') < 0, 'S4 は「準備中」ではなく遊べる');
-      const s5 = document.querySelector('[data-ui="stage-S5"]');
-      t.eq(s5 && s5.getAttribute('data-unlocked'), '0', 'S5 はまだロック');
-      s4.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      t.eq(DUO.state().stage, 'S4', 'クリックで S4 が始まる');
-      t.near(DUO.state().speed, 24, 0.5, 'S4 は 24 m/s から');
+      /* 契約§4.4 v2（P7c）: 旧S4「内部」は S3 の後半。S3 を始めると距離で外周→内部に替わる */
+      DUO.reset(); DUO.start('S3', 3);
       t.eq(Zs.id(), 'ruins', 'ゾーンは古代遺跡');
-      t.eq(Zs.get('ruins').mode, 'inner', '区間パターンが「内部」に替わる');
-
+      const R0 = Zs.get('ruins');
+      t.eq(R0.modeAt(300), 'outer', '前半（〜1100m）は「外周」');
+      t.eq(R0.modeAt(1500), 'inner', '巨岩の追跡の後（1100m〜）は「内部」');
       /* 内部は壁区間が主体（契約§4.4） */
-      const ratio = (mode) => {
-        Zs.get('ruins').setMode(mode);
-        let n = 0;
-        for (let m = 0; m < 1200; m += 2) if (Zs.get('ruins').isWall(m)) n++;
-        return n / 600;
+      const ratio = (a, b) => {
+        let n = 0, k = 0;
+        for (let m = a; m < b; m += 2) { k++; if (R0.isWall(m)) n++; }
+        return n / k;
       };
-      const inner = ratio('inner'), outer = ratio('outer');
+      const inner = ratio(1100, 2000), outer = ratio(0, 900);
       t.ok(inner >= 0.8, '内部は壁区間が ' + (inner * 100).toFixed(0) + '%（8割以上）');
       t.ok(outer < 0.7, '外周は壁区間が ' + (outer * 100).toFixed(0) + '%（内部より開けている）');
       t.ok(inner > outer, '内部のほうが壁が多い');
-      /* S3 を始めると外周へ戻る */
-      DUO.reset(); DUO.start('S3', 3); DUO.pump(1 / 60);
-      t.eq(Zs.get('ruins').mode, 'outer', 'S3 に戻ると「外周」に戻る');
-      DUO.reset(); DUO.start('S4', 3);
+      /* 別のステージを挟んでも S3 では距離の切替が戻る／単一モードの setMode で切替は消える */
+      DUO.reset(); DUO.start('S2', 3); DUO.pump(1 / 60);
+      R0.setMode('outer');
+      t.eq(R0.modeAt(1500), 'outer', '単一モードに戻すと距離の切替は消える');
+      DUO.reset(); DUO.start('S3', 3);
+      t.eq(R0.modeAt(1500), 'inner', 'S3 を始め直すと距離の切替が入る');
+      DUO.bot('perfect'); DUO.skipTo(1400);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
-      t.eq(Zs.get('ruins').mode, 'inner', 'S4 では内部');
-      t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, 'S4 のドローコール ' + W.drawCalls() + ' ≤ 300');
-      t.ok(Zs.propsAhead() >= 40, '前方60mの小物 ' + Zs.propsAhead() + '個（40個以上 / 契約§3）');
-      /* ゾーン往復でリークしない（S4 の新スキンを含めて） */
+      t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, 'S3 内部のドローコール ' + W.drawCalls() + ' ≤ 300');
+      t.ok(Zs.propsAhead() >= 40, '内部の前方60mの小物 ' + Zs.propsAhead() + '個（40個以上 / 契約§3）');
+      /* ゾーン往復でリークしない */
       const R = W.renderer;
       const cycle = () => {
         Zs.switchTo('neon');
@@ -471,18 +460,18 @@
       t.eq(b.ch, c.ch, 'シーンの要素数が増え続けない（' + b.ch + '）');
       t.eq(c.tex, 0, 'テクスチャは0枚のまま（契約§3）');
 
-      /* エンドレス: S4 クリアで同時スイッチ・落ちる天井が混ざる（契約§4.4） */
+      /* エンドレス: S3 クリアで同時スイッチ（旧S4の顔ぶれ）も混ざる（契約§4.4 v2） */
+      const withS2 = In.endlessPool(['S1', 'S2']);
       const withS3 = In.endlessPool(['S1', 'S2', 'S3']);
-      const withS4 = In.endlessPool(['S1', 'S2', 'S3', 'S4']);
-      t.ok(withS4.pool.length > withS3.pool.length,
-           'S4 クリアでプールが増える（' + withS3.pool.length + '→' + withS4.pool.length + '）');
-      t.eq(withS4.maxRank, 4, 'エンドレスのランク上限が 4 になる');
+      t.ok(withS3.pool.length > withS2.pool.length,
+           'S3 クリアでプールが増える（' + withS2.pool.length + '→' + withS3.pool.length + '）');
+      t.eq(withS3.maxRank, 4, 'エンドレスのランク上限が 4 になる');
       const has = (pool, id) => pool.indexOf(id) >= 0;
       const s4ids = In.CHUNK_DEFS.filter((c) => c.s4).map((c) => c.id);
-      t.eq(s4ids.some((id) => has(withS3.pool, id)), false, 'S4 未クリアのエンドレスに S4 の顔は出ない');
-      t.eq(s4ids.every((id) => has(withS4.pool, id)), true, 'S4 クリア後は S4 の顔が全部混ざる');
-      /* エンドレス（ネオン）でも S4 の新ギミックの見た目が壊れない */
-      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4']);
+      t.eq(s4ids.some((id) => has(withS2.pool, id)), false, 'S3 未クリアのエンドレスに旧S4 の顔は出ない');
+      t.eq(s4ids.every((id) => has(withS3.pool, id)), true, 'S3 クリア後は旧S4 の顔が全部混ざる');
+      /* エンドレス（ネオン）でも同時スイッチの見た目が壊れない */
+      U.lsSet('cleared', ['S1', 'S2', 'S3']);
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
@@ -502,17 +491,17 @@
      8. チュートリアル tip（新ギミックの初出）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S4: 新ギミックの初出にチュートリアル tip（同時スイッチ／落ちる天井は失効）',
+    name: 'S3（旧S4）: 同時スイッチの初出にチュートリアル tip（落ちる天井は失効）',
     quick: true,
     run(t) {
       const In = I(), Tut = In.Tutorial;
       t.ok(!!Tut.TIPS.sync, '同時スイッチの文言がある');
       t.ok(!Tut.TIPS.dropceil, '落ちる天井の文言は失効（契約 v2）');
-      t.eq(In.STAGE_DEFS.S4.tipOnce.sync, 'sync', 'S4 は同時スイッチの初出で tip を出す');
-      t.eq(In.STAGE_DEFS.S4.tipOnce.drop, undefined, 'S4 の tip は同時スイッチだけ');
-      const st = In.makeStage('S4');
+      t.eq(In.STAGE_DEFS.S3.tipOnce.sync, 'sync', 'S3 は同時スイッチの初出で tip を出す');
+      t.eq(In.STAGE_DEFS.S3.tipOnce.drop, undefined, '落ちる天井の tip は無い（失効）');
+      const st = In.makeStage('S3');
       const g = In.createGenerator(st, 3);
-      for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+      for (let d = 0; d < 2000; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
       const tips = g.events.filter((e) => e.type === 'tip');
       const ids = tips.map((e) => e.params.id);
       t.ok(ids.indexOf('sync') >= 0, '同時スイッチの tip が撒かれる');
@@ -522,9 +511,10 @@
       t.ok(tipS.at < firstS.at,
            'tip は同時スイッチより手前（' + tipS.at.toFixed(0) + 'm < ' + firstS.at.toFixed(0) + 'm）');
       /* 実プレイで表示される */
-      DUO.reset(); DUO.start('S4', 3); DUO.bot('perfect');
+      DUO.reset(); DUO.start('S3', 3); DUO.bot('perfect');
+      DUO.skipTo(Math.max(0, tipS.at - 80));
       let shown = null, guard = 0;
-      while (guard++ < 14000 && Game.dist < 1000 && Game.status === 'playing') {
+      while (guard++ < 14000 && Game.dist < 2000 && Game.status === 'playing') {
         DUO.pump(1 / 60);
         if (Tut.current === 'sync') { shown = Tut.current; break; }
       }

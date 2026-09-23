@@ -5,7 +5,7 @@
        ・踏んだ瞬間に大きな赤い警告「崩れる！離れろ」（data-ui="bridge-cue"）。崩落・離脱で消える
        ・隣のレーンへ移れば抜けられる／踏まなければ崩れない／跳んでも穴に着地する（occ）
        ・Fair: 崩落の続く間はそのレーンを塞ぐ（cover）・崩れたレーンは横切れない
-       ・S3/S4 50シードで §4.7・tip 違反0、ボット完走（perfect / delay250）
+       ・S3（旧S3/S4） 50シードで §4.7・tip 違反0、ボット完走（perfect / delay250）
    ============================================================================ */
 'use strict';
 
@@ -129,7 +129,7 @@
   });
 
   DUO.__suites.push({
-    name: 'P7b-1: 崩れる橋の不変条件（崩落の続く間の cover・崩れたレーンは横切れない・S3/S4 50シード）',
+    name: 'P7b-1: 崩れる橋の不変条件（崩落の続く間の cover・崩れたレーンは横切れない・S3（旧S3/S4） 50シード）',
     quick: true,
     run(t) {
       const In = I(), F = In.Fair, sp = () => 10;
@@ -153,8 +153,8 @@
       t.eq(ws[1].demand.floor, 'jump', '要求は増えない（ハードルのジャンプだけ）');
       t.eq(F.laneActs(ws[1], 'floor')[0].run, false, 'cover のレーンは走れない');
 
-      /* S3 / S4 50シード（§4.7・tip の猶予規則・橋の出現・踏み口の手前の空き） */
-      ['S3', 'S4'].forEach((sid) => {
+      /* S3（旧S3/S4）50シード（§4.7・tip の猶予規則・橋の出現・踏み口の手前の空き） */
+      ['S3'].forEach((sid) => {
         let bad = 0, tipBad = 0, seen = 0, blanks = 0, n = 0;
         for (let seed = 1; seed <= 50; seed++) {
           const st = In.makeStage(sid);
@@ -183,12 +183,12 @@
 
   /* ボット完走（契約§4.7）: 橋を実際に踏んで抜ける走行を含む */
   DUO.__suites.push({
-    name: 'P7b-1: S3/S4 ボット完走（perfect / delay250・崩れる橋を踏んで抜ける）',
+    name: 'P7b-1: S3 ボット完走（perfect / delay250・崩れる橋を踏んで抜ける）',
     quick: false,
     run(t) {
       const In = I();
       let stepped = 0, total = 0;
-      [['S3', [11, 12]], ['S4', [11, 12]]].forEach((c) => {
+      [['S3', [11, 12, 13, 14]]].forEach((c) => {   // 旧S3/S4 は S3 へ統合（P7c）
         c[1].forEach((seed) => {
           ['perfect', 'delay250'].forEach((mode) => {
             DUO.reset(); DUO.start(c[0], seed); DUO.bot(mode);
@@ -220,7 +220,7 @@
      ・occ ⇔ 当たり判定 hits の総当り一致（動くレーザーと同じ検査）／要求はジャンプ（高さ 0.6）
      ・±0.5 の到達は2レーンに掛かる／通り過ぎたレーンは素通り／実入力で跳べば生存・走れば死
      ・見た目: 赤茶の球＋白いひび（§4.3 の色）・球は判定と同じ位置／予告の音（SE 'rock'）
-     ・S3/S4 の札（rank3〜4・8本以上）・50シードで §4.7・tip 違反0・出現
+     ・S3（旧S3/S4） の札（rank3〜4・8本以上）・50シードで §4.7・tip 違反0・出現
    ============================================================================ */
 (function () {
   const I = () => DUO.__internal;
@@ -305,7 +305,7 @@
   });
 
   DUO.__suites.push({
-    name: 'P7b-2: 転がる丸岩の見た目（赤茶＋白いひび・球＝判定の位置・影と土煙）・予告の音・S3/S4 の札（50シード）',
+    name: 'P7b-2: 転がる丸岩の見た目（赤茶＋白いひび・球＝判定の位置・影と土煙）・予告の音・S3（旧S3/S4） の札（50シード）',
     quick: true,
     run(t) {
       const In = I(), Ob = In.Obstacles, CFG = In.CFG, MOT = In.MOT;
@@ -361,13 +361,13 @@
       t.eq(heard.filter((n) => n === 'rock').length, 1, '転がる音は1個につき1回');
       DUO.reset();
 
-      /* 札: S3/S4 に rank3〜4 で 8本以上 */
+      /* 札: S3（旧S3/S4） に rank3〜4 で 8本以上 */
       const defs = In.CHUNK_DEFS.filter((c) => c.rock);
       t.ok(defs.length >= 8, '転がる丸岩の札は ' + defs.length + ' 本（8本以上）');
       t.eq(defs.filter((c) => c.difficulty < 3 || c.difficulty > 4).length, 0, 'ランクは 3〜4');
-      t.eq(defs.filter((c) => !(c.s3 || c.s4)).length, 0, 'S3/S4（古代遺跡）の札');
-      t.ok(defs.filter((c) => c.s3).length >= 4 && defs.filter((c) => c.s4).length >= 4, 'S3 と S4 の両方に');
-      [['S3', 40], ['S4', 35]].forEach((c) => {
+      t.eq(defs.filter((c) => !(c.s3 || c.s4)).length, 0, 'S3（旧S3/S4）（古代遺跡）の札');
+      t.ok(defs.filter((c) => c.s3).length >= 4 && defs.filter((c) => c.s4).length >= 4, '旧S3（外周）と旧S4（内部）の両方の札');
+      [['S3', 40]].forEach((c) => {                 // 旧S3/S4 は S3 へ統合（P7c）
         let bad = 0, tipBad = 0, seen = 0, tipped = 0, nPlayed = 0;
         for (let seed = 1; seed <= 50; seed++) {
           const st = In.makeStage(c[0]);
@@ -407,7 +407,7 @@
        抜けたレーンは生存・残ったレーンは死（実経路）／見た目は白×赤の縞・腹が白・目が赤
      ・泡: 踏むと強制ジャンプ（0.55秒・死なない・天井には無い）／自分で跳べば跳ばされない／
        強制ジャンプ中に越えられない物を置くと Fair 違反／跳ばされる瞬間に泡が噴き上がる
-     ・S5 の札（rank3〜4・10本以上）・50シードで §4.7・tip 違反0・出現・ボット完走
+     ・S4 の札（rank3〜4・10本以上）・50シードで §4.7・tip 違反0・出現・ボット完走
    ============================================================================ */
 (function () {
   const I = () => DUO.__internal;
@@ -420,7 +420,7 @@
   }
   function scene(lane) {
     const In = I();
-    DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300);
+    DUO.reset(); DUO.start('S4', 5); DUO.skipTo(300);
     In.clearObstacles();
     Game.runners.forEach((r) => { r.laneFrom = r.laneTo = r.laneVal = lane; r.laneT = In.CFG.LANE_T; });
   }
@@ -552,11 +552,11 @@
   });
 
   DUO.__suites.push({
-    name: 'P7b-3: 深海の見た目（サメ=白×赤の縞・腹が白・目が赤／噴出口=白い円＋泡・跳ばされると噴き上げ）・S5 の札（50シード）',
+    name: 'P7b-3: 深海の見た目（サメ=白×赤の縞・腹が白・目が赤／噴出口=白い円＋泡・跳ばされると噴き上げ）・S4 の札（50シード）',
     quick: true,
     run(t) {
       const In = I(), Ob = In.Obstacles, CFG = In.CFG;
-      DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300); DUO.pump(1 / 60);
+      DUO.reset(); DUO.start('S4', 5); DUO.skipTo(300); DUO.pump(1 / 60);
       ['SHARK', 'VENT'].forEach((ty) => {
         const v = Ob.acquire(ty);
         const bad = [];
@@ -603,14 +603,14 @@
       t.ok(burst > calm + 0.3, '跳ばされた瞬間に泡が噴き上がる（最高 ' + calm.toFixed(2) + ' → ' + burst.toFixed(2) + 'm）');
       DUO.reset();
 
-      /* 札: S5 に rank3〜4 で 10本以上 */
+      /* 札: S4 に rank3〜4 で 10本以上 */
       const defs = In.CHUNK_DEFS.filter((c) => c.shark || c.vent);
       t.ok(defs.length >= 10, 'サメ・泡の札は ' + defs.length + ' 本（10本以上）');
-      t.eq(defs.filter((c) => c.difficulty < 3 || c.difficulty > 4 || !c.s5).length, 0, 'S5 の rank3〜4');
+      t.eq(defs.filter((c) => c.difficulty < 3 || c.difficulty > 4 || !c.s5).length, 0, 'S4 の rank3〜4');
       t.eq(defs.filter((c) => (c.ceil || []).some((e) => e.type === 'VENT')).length, 0, '噴出口は床だけ（天井側には無い）');
       let bad = 0, tipBad = 0, sk = 0, vt = 0, tipped = 0, nPlayed = 0;
       for (let seed = 1; seed <= 50; seed++) {
-        const st = In.makeStage('S5');
+        const st = In.makeStage('S4');
         const g2 = In.createGenerator(st, seed);
         for (let d = 0; d < st.lengthM; d += 20) g2.ensure(d + CFG.SPAWN_AHEAD, d);
         const list = g2.obstacles.filter((o) => o.at <= st.lengthM);
@@ -627,8 +627,8 @@
           if (tip && tip.params.targetAt <= Math.min.apply(null, os.map((o) => o.at)) + 1e-6) tipped++;
         });
       }
-      t.eq(bad, 0, 'S5 50シードで §4.7 違反なし（サメ・噴出口の強制ジャンプ込み）');
-      t.eq(tipBad, 0, 'S5 50シードで tip の猶予規則の違反なし');
+      t.eq(bad, 0, 'S4 50シードで §4.7 違反なし（サメ・噴出口の強制ジャンプ込み）');
+      t.eq(tipBad, 0, 'S4 50シードで tip の猶予規則の違反なし');
       t.ok(sk >= 45, 'サメが出る（' + sk + '/50 シード）');
       t.ok(vt >= 45, '噴出口が出る（' + vt + '/50 シード）');
       t.eq(tipped, nPlayed, '初出は tip つき（' + tipped + '/' + nPlayed + '）');
@@ -636,16 +636,16 @@
   });
 
   DUO.__suites.push({
-    name: 'P7b-3: S5 ボット完走（perfect / delay250・サメと噴出口）',
+    name: 'P7b-3: S4 ボット完走（perfect / delay250・サメと噴出口）',
     quick: false,
     run(t) {
       [21, 22, 23].forEach((seed) => {
         ['perfect', 'delay250'].forEach((mode) => {
-          DUO.reset(); DUO.start('S5', seed); DUO.bot(mode);
+          DUO.reset(); DUO.start('S4', seed); DUO.bot(mode);
           let g = 0;
           while (Game.status === 'playing' && g++ < 60 * 200) DUO.__step(1 / 60);
           t.ok(Game.status === 'goal' || Game.status === 'clear',
-               'S5 seed' + seed + ' ' + mode + ' 完走（' + Game.status + ' @' + Game.dist.toFixed(0) + 'm' +
+               'S4 seed' + seed + ' ' + mode + ' 完走（' + Game.status + ' @' + Game.dist.toFixed(0) + 'm' +
                (Game.killer ? ' 死因 ' + Game.killer.obstacle : '') + '）');
         });
       });
@@ -684,17 +684,17 @@
     quick: true,
     run(t) {
       const In = I(), Game = In.Game;
-      /* 1) 実走: S7 の鏡ゾーン（床側）の入口〜出口をボットで跨ぐ */
+      /* 1) 実走: S6 の鏡ゾーン（床側）の入口〜出口をボットで跨ぐ */
       let m = null, seed = 0;
       for (let s = 1; s <= 20 && !m; s++) {
-        const g = In.createGenerator(In.makeStage('S7'), s);
+        const g = In.createGenerator(In.makeStage('S6'), s);
         g.ensure(1500, 0);
         const f = g.mirrors.filter((r) => r.side === 'floor')[0];
         if (f) { m = f; seed = s; }
       }
-      t.ok(!!m, 'S7 に床側の鏡ゾーンがある（seed ' + seed + '）');
+      t.ok(!!m, 'S6 に床側の鏡ゾーンがある（seed ' + seed + '）');
       if (!m) return;
-      DUO.reset(); DUO.start('S7', seed); DUO.skipTo(Math.max(0, m.from - 60)); DUO.bot('perfect');
+      DUO.reset(); DUO.start('S6', seed); DUO.skipTo(Math.max(0, m.from - 60)); DUO.bot('perfect');
       let g = 0;
       while (Game.dist < m.from - 2 && g++ < 900 && Game.status === 'playing') DUO.pump(1 / 60);
       const flag = document.getElementById('flag-mirror');
@@ -726,7 +726,7 @@
 
       /* 2) 入れ替えワープとの重ね掛け: LUMEN（床）が反転 × 担当が入れ替わる →
             LUMEN を動かすのは上半分 ＝ 縞枠は上半分に出る（画面の位置で分かる） */
-      DUO.reset(); DUO.start('S7', seed); DUO.skipTo(200);
+      DUO.reset(); DUO.start('S6', seed); DUO.skipTo(200);
       In.clearObstacles();
       Game.runners[0].mirrored = true;
       DUO.pump(1 / 60);

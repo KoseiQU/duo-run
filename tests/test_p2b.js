@@ -1,5 +1,6 @@
 /* ============================================================================
    tests/test_p2b.js — P2b（S2 ネオン都市・夜／動くレーザー／ビル間の大ジャンプ）
+     ※ P7c（契約§4.4 v2）: S2 ネオン都市＝旧S1+S2（1800m・中盤に崩落・終盤 1600m〜 大ジャンプ）
 
      ・占有 occ が「唯一の出所」であること（静止型は OBS.safe と完全一致）
      ・動くレーザーの**到達時刻判定**が 判定(hits) / ボット / 不変条件(Fair) で一致する
@@ -203,12 +204,15 @@
     run(t) {
       const In = I();
       const st0 = In.makeStage('S2');
-      t.eq(st0.lengthM, 1200, 'S2 は 1200m');
-      t.near(st0.speedAt(0), 20, 1e-6, '開始 20 m/s');
-      t.near(st0.speedAt(1200), 24, 1e-6, '終了 24 m/s');
-      t.near(st0.checkpoints[0], 400, 1e-6, 'チェックポイント1 は 400m');
-      t.near(st0.checkpoints[1], 800, 1e-6, 'チェックポイント2 は 800m');
-      t.eq(st0.setpiece, 'bigjump', '終盤の大演出は「ビル間の大ジャンプ」');
+      /* 契約§4.4 v2（P7c）: S2 ネオン都市＝旧S1+S2。1800m / 16→24 / 中盤に崩落・終盤に大ジャンプ */
+      t.eq(st0.lengthM, 1800, 'S2 は 1800m');
+      t.near(st0.speedAt(0), 16, 1e-6, '開始 16 m/s');
+      t.near(st0.speedAt(1800), 24, 1e-6, '終了 24 m/s');
+      t.near(st0.checkpoints[0], 600, 1e-6, 'チェックポイント1 は 600m');
+      t.ok(st0.checkpoints[1] > 980 && st0.checkpoints[1] < 1040, 'チェックポイント2 は中盤の崩落の直後（' + st0.checkpoints[1] + 'm）');
+      t.ok(st0.checkpoints[2] > st0.checkpoints[1] && st0.checkpoints[2] < 1600, 'チェックポイント3 は終盤の大ジャンプの手前（' + st0.checkpoints[2] + 'm）');
+      t.eq(st0.setpieces.map((x) => x.id).join(','), 'collapse,bigjump', '大演出は 中盤「連鎖崩落」＋終盤「ビル間の大ジャンプ」');
+      t.eq(st0.setpieces[1].start, 1600, '大ジャンプは終盤 200m（1600m〜）');
 
       /* 動くレーザー入りチャンクが8本以上（契約の要求） */
       const moving = In.CHUNK_DEFS.filter((c) => c.moving);
@@ -227,12 +231,12 @@
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S2');
         const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-        const l = g.obstacles.filter((o) => o.at <= 1200);
+        for (let d = 0; d < 1800; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        const l = g.obstacles.filter((o) => o.at <= 1800);
         const errs = In.Fair.validate(l, st.speedAt, { startLanes: [0] });
         if (errs.length) { bad++; if (bad === 1) t.info('seed' + seed + ': ' + errs.slice(0, 2).join(' | ')); }
         if (In.Fair.checkVisibility(l, st.speedAt).length) bad++;
-        if (g.log.some((c) => c.setpiece)) spFound++;
+        if (g.log.filter((c) => c.setpiece).length === 2) spFound++;
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         if (l.some((o) => In.OBS[o.type].motion || (o.params && o.params.blink))) movingSeen++;
         if (l.some((o) => o.type === 'WALLHOLE')) holeSeen++;
@@ -243,7 +247,7 @@
         agg.lane += cc.lane; agg.jump += cc.jump; agg.slide += cc.slide; agg.total += cc.total;
       }
       t.eq(bad, 0, 'S2 50シードで §4.7 違反なし（大演出区間を含む）');
-      t.eq(spFound, 50, '50シードすべてに大ジャンプが入る');
+      t.eq(spFound, 50, '50シードすべてに崩落と大ジャンプの2本が入る');
       t.eq(movingSeen, 50, '50シードすべてに動く/点滅するレーザーが出る');
       t.ok(holeSeen >= 15, '壁の穴は S2 から登場する（' + holeSeen + '/50 シード）');
       t.ok(kind.LASER_SCAN >= 25 && kind.LASER_ROT >= 25 && kind.blink >= 25,
@@ -267,9 +271,9 @@
       const In = I(), W = In.World, Sp = In.Setpieces, B = In.Setpieces.BJ;
       const fogFar0 = W.scene.fog.far, fogCol0 = W.scene.fog.color.getHex();
       DUO.reset(); DUO.start('S2', 9); DUO.bot('perfect');
-      DUO.skipTo(960);
-      advanceTo(1010);
-      t.eq(DUO.state().setpiece, 'bigjump', '1000m で大ジャンプの演出が始まる');
+      DUO.skipTo(1560);
+      advanceTo(1610);
+      t.eq(DUO.state().setpiece, 'bigjump', '1600m で大ジャンプの演出が始まる');
       t.eq(document.getElementById('cue').classList.contains('on'), true, 'HUD に「JUMP!」の予告が出る');
       const cueCs = getComputedStyle(document.getElementById('cue'));
       t.ok(cueCs.display !== 'none' && cueCs.visibility !== 'hidden', '予告が実際に見えている（display/visibility）');
@@ -334,12 +338,12 @@
       t.eq(Sp.tileHidden(Game.dist + 6), false, '着地したビルの屋上に路面がある');
       /* ゴールまで走り切る */
       t.eq(runToEnd(), 'clear', '大ジャンプを跨いでゴールできる');
-      t.eq(Sp.viewLift(1200), 0, 'ゴール地点の高さは元通り');
+      t.eq(Sp.viewLift(1800), 0, 'ゴール地点の高さは元通り');
 
       /* --- 中断（リトライ / タイトル）で完全復元 --- */
       DUO.reset(); DUO.start('S2', 9); DUO.bot('perfect');
-      DUO.skipTo(960);                       // 演出の手前へ跳んでから実ステップで跨ぐ
-      advanceTo(1000 + B.LIP + 30);
+      DUO.skipTo(1560);                      // 演出の手前へ跳んでから実ステップで跨ぐ
+      advanceTo(1600 + B.LIP + 30);
       t.eq(DUO.state().glide, true, 'もう一度 滑空に入る');
       Game.retry();
       t.eq(DUO.state().setpiece, null, 'リトライで演出状態が消える');
@@ -352,7 +356,7 @@
       t.eq(W.scene.fog.color.getHex(), fogCol0, '霧の色が戻る');
       t.eq(W.trim.visible, true, '路面の縁が戻る');
       t.eq(W.trim.position.y, 0, '路面の縁の高さが戻る');
-      t.eq(Sp.viewLift(1050), 0, '持ち上がりが残らない');
+      t.eq(Sp.viewLift(1650), 0, '持ち上がりが残らない');
       t.eq(W.rampCue.visible, false, '発射台のラインが消える');
       for (let i = 0; i < 90; i++) DUO.pump(1 / 60);      // 画角は時定数で戻る（§4.1）
       t.ok(W.camera.fov <= W._baseFov + In.CFG.CAM.FOV_SPEED_GAIN + 1e-6,
@@ -360,7 +364,7 @@
            (W._baseFov + In.CFG.CAM.FOV_SPEED_GAIN).toFixed(1) + '°）');
       t.ok(Math.abs(W.camera.position.y - In.CFG.CAM.Y) < 0.3, 'カメラの高さが戻る（' + W.camera.position.y.toFixed(2) + '）');
       /* タイトルへ戻しても同じ */
-      DUO.reset(); DUO.start('S2', 9); DUO.skipTo(960); advanceTo(1080);
+      DUO.reset(); DUO.start('S2', 9); DUO.skipTo(1560); advanceTo(1680);
       Game.toTitle();
       t.eq(DUO.state().setpiece, null, 'タイトルへ戻ると演出状態が消える');
       t.eq(In.ZoneNeon._glide, 0, 'タイトルでも滑空演出が消える');
@@ -382,11 +386,11 @@
       t.eq(def.air, true, '自由飛行の区間を持つ演出として印が付いている');
       t.eq(def.landRel, In.Setpieces.BJ.LAND, '着地の位置が定義されている（着地猶予の起点）');
       const st = In.makeStage('S2');
-      const inst = In.Setpieces.build('bigjump', 1000, 0);
+      const inst = In.Setpieces.build('bigjump', 1600, 0);
       t.eq(inst.items.length, 0, '生成しても演出区間に障害物は出ない');
       t.eq(In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any' }).length, 0, '§4.7 の検査も素通り');
       /* 空中は FF の譜面（詳細は test_p2c.js） */
-      const c = In.Setpieces.buildAir(9, 1000, st.speedAt);
+      const c = In.Setpieces.buildAir(9, 1600, st.speedAt);
       t.ok(c.items.length >= 3, '代わりに空中の壁が ' + c.items.length + '本ある');
       t.eq(In.Fair.validateAir(c, st.speedAt, { margin: true }).length, 0, '空中の不変条件（§4.5 断面2D）を満たす');
     }
@@ -416,7 +420,7 @@
       /* 実クリックで S2 が始まる */
       s2.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       t.eq(DUO.state().stage, 'S2', 'クリックで S2 が始まる');
-      t.near(DUO.state().speed, 20, 0.5, 'S2 は 20 m/s から');
+      t.near(DUO.state().speed, 16, 0.5, 'S2 は 16 m/s から');
 
       /* エンドレス: クリア済みゾーンぶんだけ顔ぶれが増える（契約§4.4） */
       const base = In.endlessPool([]);
@@ -611,7 +615,7 @@
      12. P2b-1: 密度の規範（契約§4.7）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P2b-1: 必須動作の密度が距離に比例して上がる（S1/S2 前半・後半 ±25%）',
+    name: 'P2b-1: 必須動作の密度が距離に比例して上がる（S2 前半・後半 ±25%）',
     quick: true,
     run(t) {
       const In = I();
@@ -653,10 +657,9 @@
         t.eq(m.bad, 0, id + ' 密度を上げても §4.7 の下限は守られている');
         t.eq(m.blanks, 0, id + ' 空白チャンク（生成の詰まり）は0回');
       };
-      /* S1 は契約§4.8【2026-09-24 改訂】で導入区間が約520m（900m の過半）に延び、
-         「前半・後半」の比較が成り立たない。S1 は P7c で白空間のチュートリアルに作り直すので、
-         それまでは比例の検査を S2 だけで行う（既知の妥協点）。 */
-      check('S2', 1200, In.STAGE_DEFS.S2.density, 1000);   // 1000m以降は自由飛行の演出
+      /* S1 は白空間のチュートリアル（契約§4.4 v2 / P7c）＝ランダム区間を持たないので対象外。
+         S2（旧S1+S2）は 1800m。1600m 以降は大ジャンプ（自由飛行）の演出。 */
+      check('S2', 1800, In.STAGE_DEFS.S2.density, 1600);
       /* エンドレスは 1000m ごとに +1（上限14） */
       const e = In.makeStage('endless');
       t.eq(!!e.density, true, 'エンドレスにも密度の目安がある');

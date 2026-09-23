@@ -64,7 +64,7 @@ const DUO = {
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
     endlessPool: endlessPool, scaleParams: scaleParams,
     Zones: Zones, ZoneKit: ZoneKit, ZoneNeon: ZoneNeon, ZoneRuins: ZoneRuins, ZoneSea: ZoneSea,
-    ZoneSpace: ZoneSpace, ZoneMirror: ZoneMirror, ZoneCore: ZoneCore,
+    ZoneSpace: ZoneSpace, ZoneMirror: ZoneMirror, ZoneCore: ZoneCore, ZoneWhite: ZoneWhite,
     /* 障害物の見た目の外接箱（**判定外の装飾を除く**）。
        契約§4.3（2026-09-23 P5c）でジャンプ障害物に足した
        「両脇の高い支柱(1.6m)・支柱上端の警告バー・手前の路面の警告帯(4m)」は

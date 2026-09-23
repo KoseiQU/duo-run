@@ -1,12 +1,12 @@
 /* ============================================================================
-   tests/test_p4b.js — P4b（ゾーン4「宇宙ステーション」の造形 ／ S6「宇宙ステーション」）
+   tests/test_p4b.js — P4b（ゾーン4「宇宙ステーション」の造形 ／ S5「宇宙ステーション」）
 
      【P4b-1 造形】
      ・ゾーン切替（neon ⇄ ruins ⇄ sea ⇄ space）でリークしない・パレットと霧が入れ替わる
      ・宇宙スキンの見た目と当たり判定のズレ ±10%
      ・装飾が 2体の走行空間へ食い込まない／小物 20種以上・前方60mに40個以上
      ・ドローコール ≤300・三角形は S1 比 +30% 以内・sync の1フレーム ≤0.8ms
-     【P4b-2 S6】
+     【P4b-2 S5】
      ・重力反転ワープ（面の入れ替え・担当の維持・HUD・戻り・猶予）
      ・無重力ジャンプ（滞空1.5倍を 判定/ボット/Fair が同じ係数で読む）
      ・レーザーネット（到達時刻の判定・斜めビームで床と天井の生存レーンが違う）
@@ -63,11 +63,11 @@
 
       /* 三角形は S1（ネオン都市）比 +30% 以内（契約§3 / ジオラマ規範） */
       const tris = W.renderer.info.render.triangles;
-      DUO.reset(); DUO.start('S1', 3);
+      DUO.reset(); DUO.start('S2', 3);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
       const trisS1 = W.renderer.info.render.triangles;
       t.ok(tris <= trisS1 * 1.30,
-           '宇宙の三角形 ' + tris + ' ≤ S1(' + trisS1 + ') の1.30倍（比 ' + (tris / trisS1).toFixed(2) + '）');
+           '宇宙の三角形 ' + tris + ' ≤ ネオン(S2)(' + trisS1 + ') の1.30倍（比 ' + (tris / trisS1).toFixed(2) + '）');
 
       /* 1フレームの送り出しが 0.8ms 以内 */
       Zs.switchTo('space');
@@ -130,7 +130,7 @@
          この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
          装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
       const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
-                     /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
+                     /* S6: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
                      MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                      LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
                      SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],
@@ -204,10 +204,10 @@
   });
 
   /* ==========================================================================
-     3. 重力反転ワープ（契約§4.5 / S6）
+     3. 重力反転ワープ（契約§4.5 / S5）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 重力反転ワープ（面の入れ替え・担当は画面の位置のまま・戻り・1.0秒の猶予）',
+    name: 'S5: 重力反転ワープ（面の入れ替え・担当は画面の位置のまま・戻り・1.0秒の猶予）',
     quick: true,
     run(t) {
       const In = I(), Wp = In.Warp, CFG = In.CFG;
@@ -227,7 +227,7 @@
       t.eq(Wp.gateNear([reg], reg.from - 5, 10), false, 'ゲートの手前は掛からない');
 
       /* --- 実プレイ: 面が入れ替わる・担当は画面の位置のまま --- */
-      DUO.reset(); DUO.start('S6', 5); DUO.skipTo(300);
+      DUO.reset(); DUO.start('S5', 5); DUO.skipTo(300);
       In.clearObstacles();
       Game.gen.warps.length = 0;
       const its = [];
@@ -271,7 +271,7 @@
 
       /* --- 不変条件: ゲートの直後 1.0秒はウォールを置けない（契約§4.5） --- */
       t.near(CFG.WARP.GRACE_T, 1.00, 1e-9, '猶予は 1.0秒（契約§4.5）');
-      const st = In.makeStage('S6');
+      const st = In.makeStage('S5');
       const its2 = [];
       const r3 = Wp.expand(its2, { lane: 0, type: 'GRAVWARP', params: { warp: { backT: 4 } } },
                            'floor', 500, 0, st.speedAt(500) / CFG.REF_SPEED, null);
@@ -294,10 +294,10 @@
   });
 
   /* ==========================================================================
-     4. 無重力ジャンプ（契約§4.5 / S6）
+     4. 無重力ジャンプ（契約§4.5 / S5）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 無重力ジャンプ（滞空1.5倍を 判定・ボット・Fair が同じ係数で読む）',
+    name: 'S5: 無重力ジャンプ（滞空1.5倍を 判定・ボット・Fair が同じ係数で読む）',
     quick: true,
     run(t) {
       const In = I(), Z = In.Zero, CFG = In.CFG;
@@ -336,7 +336,7 @@
 
       /* --- 実プレイ: 区間の中で跳ぶと滞空が 1.5倍 --- */
       const fly = (inZone) => {
-        DUO.reset(); DUO.start('S6', 4); DUO.skipTo(300);
+        DUO.reset(); DUO.start('S5', 4); DUO.skipTo(300);
         In.clearObstacles();
         Game.gen.zeros.length = 0;
         if (inZone) {
@@ -363,7 +363,7 @@
       t.eq(document.getElementById('flag-zero').style.display, 'none', '区間の外では消える');
 
       /* --- 不変条件: 区間の中では ジャンプ連続／ジャンプ→レーン も 1.5倍で測る --- */
-      const st = In.makeStage('S6');
+      const st = In.makeStage('S5');
       const its2 = [];
       const reg2 = Z.expand(its2, { lane: 0, type: 'ZEROG', params: { zero: { n: 6 } } },
                             'floor', 500, 0, st.speedAt(500) / CFG.REF_SPEED, null);
@@ -388,10 +388,10 @@
   });
 
   /* ==========================================================================
-     5. レーザーネット（契約§4.5 / S6）
+     5. レーザーネット（契約§4.5 / S5）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: レーザーネット（到達時刻で判定・斜めビームは床と天井で避けるレーンが違う）',
+    name: 'S5: レーザーネット（到達時刻で判定・斜めビームは床と天井で避けるレーンが違う）',
     quick: true,
     run(t) {
       const In = I(), Ob = In.Obstacles, MOT = In.MOT, CFG = In.CFG, R = In.Runners;
@@ -471,7 +471,7 @@
 
       /* --- 実プレイ: 斜めビームは片方だけが避ければよい --- */
       const play = (fLane, cLane) => {
-        DUO.reset(); DUO.start('S6', 8); DUO.skipTo(300);
+        DUO.reset(); DUO.start('S5', 8); DUO.skipTo(300);
         In.clearObstacles();
         const o = Ob.make('LASER_DIAG', 'floor', 0, Game.dist + 60, Game.dist, { diag: { f0: -1, c0: 1 } });
         Game.active.push(o);
@@ -492,24 +492,24 @@
   });
 
   /* ==========================================================================
-     6. S6 の定義・不変条件・密度・動作比率（50シード）
+     6. S5 の定義・不変条件・密度・動作比率（50シード）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 定義と不変条件・密度・動作比率（50シード）',
+    name: 'S5: 定義と不変条件・密度・動作比率（50シード）',
     quick: false,
     run(t) {
       const In = I();
-      const st0 = In.makeStage('S6');
-      t.eq(st0.lengthM, 1500, 'S6 は 1500m');
+      const st0 = In.makeStage('S5');
+      t.eq(st0.lengthM, 1600, 'S5 は 1600m');
       t.eq(st0.zone, 'space', 'ゾーンは宇宙ステーション');
       t.near(st0.speedAt(0), 28, 1e-6, '開始 28 m/s');
-      t.near(st0.speedAt(1500), 34, 1e-6, '終了 34 m/s');
-      t.near(st0.checkpoints[0], 500, 1e-6, 'チェックポイント1 は 500m');
-      t.near(st0.checkpoints[1], 1000, 1e-6, 'チェックポイント2 は 1000m');
+      t.near(st0.speedAt(1600), 34, 1e-6, '終了 34 m/s');
+      t.near(st0.checkpoints[0], 1600 / 3, 1e-6, 'チェックポイント1 は 1/3 地点');
+      t.near(st0.checkpoints[1], 3200 / 3, 1e-6, 'チェックポイント2 は 2/3 地点');
       t.eq(st0.setpiece, 'blastout', '終盤の大演出は「区画爆発」');
       t.near(st0.reactBoth, In.CFG.FAIR.REACT_BOTH_LATE, 1e-9, '両者同時要求の余白は 0.45秒（契約§4.7）');
       const s6 = In.CHUNK_DEFS.filter((c) => c.s6);
-      t.ok(s6.length >= 12, 'S6 のチャンクを ' + s6.length + '本 追加（12本以上）');
+      t.ok(s6.length >= 12, 'S5 のチャンクを ' + s6.length + '本 追加（12本以上）');
       t.eq(s6.filter((c) => c.difficulty < 4).length, 0, 'すべて rank4 以上（契約§6 P4b「rank4〜5 中心」）');
       t.ok(s6.filter((c) => c.difficulty === 5).length >= 6,
            'rank5 が ' + s6.filter((c) => c.difficulty === 5).length + '本');
@@ -520,13 +520,13 @@
       let bad = 0, spFound = 0, blanks = 0, warpSeen = 0, zeroSeen = 0, diagSeen = 0, hbeamSeen = 0, tips = 0;
       const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
       const half = { a: 0, b: 0 }, rnd = { a: 0, b: 0 };
-      /* 区画爆発は契約§4.5 緩和 v2 で 324m（ランダム区間は 1500 − 324 = 1176m まで） */
-      const SP0 = 1500 - In.Setpieces.DEFS.blastout.lengthM;
+      /* 区画爆発は契約§4.5 緩和 v2 で 324m（ランダム区間は 1600 − 324 = 1276m まで） */
+      const SP0 = 1600 - In.Setpieces.DEFS.blastout.lengthM;
       for (let seed = 1; seed <= 50; seed++) {
-        const st = In.makeStage('S6');
+        const st = In.makeStage('S5');
         const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 1500; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-        const l = g.obstacles.filter((o) => o.at <= 1500);
+        for (let d = 0; d < 1600; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        const l = g.obstacles.filter((o) => o.at <= 1600);
         const errs = In.Fair.validate(l, st.speedAt,
                                       { startLanes: [0], reactBoth: st.reactBoth,
                                         zeros: g.zeros, warps: g.warps });
@@ -545,15 +545,15 @@
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
-        rnd.xa = (rnd.xa || 0) + In.Fair.tipOverlap(tw, 0, 750);
-        rnd.xb = (rnd.xb || 0) + In.Fair.tipOverlap(tw, 750, SP0);
+        rnd.xa = (rnd.xa || 0) + In.Fair.tipOverlap(tw, 0, 800);
+        rnd.xb = (rnd.xb || 0) + In.Fair.tipOverlap(tw, 800, SP0);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
           if (In.Fair.inTipWindow(tw, w.at)) return;
-          if (w.at < 750) { half.a += n; rnd.a += n; } else { half.b += n; if (w.at < SP0) rnd.b += n; }
+          if (w.at < 800) { half.a += n; rnd.a += n; } else { half.b += n; if (w.at < SP0) rnd.b += n; }
         });
       }
-      t.eq(bad, 0, 'S6 50シードで §4.7 違反なし（大演出区間・ワープの猶予・無重力の滞空を含む）');
+      t.eq(bad, 0, 'S5 50シードで §4.7 違反なし（大演出区間・ワープの猶予・無重力の滞空を含む）');
       t.eq(spFound, 50, '50シードすべてに区画爆発が入る');
       t.eq(blanks, 0, '空白チャンク（生成の詰まり）は0回');
       t.ok(warpSeen >= 20, '重力反転ワープが出る（' + warpSeen + '/50 シード）');
@@ -562,43 +562,43 @@
       t.ok(hbeamSeen >= 20, '横ビームが出る（' + hbeamSeen + '/50 シード）');
       t.ok(tips >= 50, '新ギミックの初出に tip が撒かれる（計' + tips + '回 / 50シード）');
 
-      /* 密度（契約§4.7 S6 は 8→12回/100m・±25%）。
+      /* 密度（契約§4.7 S5 は 8→12回/100m・±25%）。
          **大演出（終盤200m）を除いたランダム区間**で測る: 区画爆発は
          カメラカット(30m)＋自由飛行(76m)＋着地猶予(2.0秒=約67m) が構造的に
          障害物を置けない区間なので、そこを含めると密度の定義が変わってしまう。
          演出込みの実測値も info で残す（既知の妥協点）。 */
-      const dens = In.STAGE_DEFS.S6.density;
+      const dens = In.STAGE_DEFS.S5.density;
       t.eq(dens[0] + '-' + dens[1], '8-12', '密度の目安は 8→12回/100m');
-      const A = rnd.a / (50 * 750 - rnd.xa) * 100, B = rnd.b / (50 * (SP0 - 750) - rnd.xb) * 100;
+      const A = rnd.a / (50 * 800 - rnd.xa) * 100, B = rnd.b / (50 * (SP0 - 800) - rnd.xb) * 100;
       /* 目安はその区間の**真ん中**の進行率で測る（前半 375m／後半のランダム区間の真ん中） */
-      const wantA = In.U.lerp(dens[0], dens[1], 375 / 1500);
-      const wantB = In.U.lerp(dens[0], dens[1], ((750 + SP0) / 2) / 1500);
+      const wantA = In.U.lerp(dens[0], dens[1], 400 / 1600);
+      const wantB = In.U.lerp(dens[0], dens[1], ((800 + SP0) / 2) / 1600);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
-           'S6 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
+           'S5 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
       t.ok(B >= wantB * 0.75 && B <= wantB * 1.25,
-           'S6 後半（演出を除く）の密度 ' + B.toFixed(2) + ' 回/100m（目安 ' + wantB.toFixed(2) + ' ±25%）');
+           'S5 後半（演出を除く）の密度 ' + B.toFixed(2) + ' 回/100m（目安 ' + wantB.toFixed(2) + ' ±25%）');
       /* P7a（契約§4.8 2026-09-24 改訂）: tip の窓が 4.0秒前＋対象後1.0秒に伸び、前半の初出（ゲートで
-         譜面が薄い所）がまとめて測定から外れるので、前半の「窓の外」が相対的に濃く出る（S7 と同じ）。
+         譜面が薄い所）がまとめて測定から外れるので、前半の「窓の外」が相対的に濃く出る（S6 と同じ）。
          後半が前半を −10% より大きく割らないことで見る（目安 ±25% は上で厳密に見る） */
-      t.ok(B >= A * 0.90, 'S6 密度は後半が前半を大きく割らない（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '）');
+      t.ok(B >= A * 0.90, 'S5 密度は後半が前半を大きく割らない（' + A.toFixed(2) + ' → ' + B.toFixed(2) + '）');
       t.info('演出込みの後半密度 ' + (half.b / 50 / 7.5).toFixed(2) + ' 回/100m（区画爆発の200mを含む）');
       /* 動作比率（契約§4.3）。スライドは「壁の穴」だけ＝1チャンクに最大1・連続禁止なので
          実測 1% 未満になり、その余りがレーン移動へ流れる。50/35/15 を
          スライド抜きで正規化すると レーン59% / ジャンプ41% なので、上限を 62% にする。 */
       const pct = (k) => agg[k] / agg.total * 100;
-      t.ok(pct('lane') >= 45 && pct('lane') <= 62, 'S6 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜62%');
-      t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S6 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S6 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S6 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.ok(pct('lane') >= 45 && pct('lane') <= 62, 'S5 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜62%');
+      t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S5 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
+      t.ok(pct('slide') <= 15, 'S5 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
+      t.info('S5 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
       DUO.reset();
     }
   });
 
   /* ==========================================================================
-     7. S6: ボット完走
+     7. S5: ボット完走
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: ボット完走（perfect / delay250 × seed 1〜50）',
+    name: 'S5: ボット完走（perfect / delay250 × seed 1〜50）',
     quick: false,
     run(t) {
       const runToEnd = (limit) => {
@@ -609,18 +609,18 @@
       let p = 0, d = 0;
       const pf = [], df = [];
       for (let seed = 1; seed <= 50; seed++) {
-        DUO.reset(); DUO.start('S6', seed); DUO.bot('perfect');
+        DUO.reset(); DUO.start('S5', seed); DUO.bot('perfect');
         if (runToEnd() === 'clear') p++;
         else pf.push(seed + '@' + Math.floor(Game.dist) + (Game.killer ? '/' + Game.killer.obstacle : ''));
       }
       for (let seed = 1; seed <= 50; seed++) {
-        DUO.reset(); DUO.start('S6', seed); DUO.bot('delay250');
+        DUO.reset(); DUO.start('S5', seed); DUO.bot('delay250');
         if (runToEnd() === 'clear') d++;
         else df.push(seed + '@' + Math.floor(Game.dist) + (Game.killer ? '/' + Game.killer.obstacle : ''));
       }
       DUO.reset();
-      t.eq(p, 50, 'perfect が S6 を 50/50 完走（落ちた種: ' + pf.slice(0, 5).join(',') + '）');
-      t.ok(d >= 45, 'delay250 が S6 を ' + d + '/50 完走（45以上・落ちた種: ' + df.slice(0, 5).join(',') + '）');
+      t.eq(p, 50, 'perfect が S5 を 50/50 完走（落ちた種: ' + pf.slice(0, 5).join(',') + '）');
+      t.ok(d >= 45, 'delay250 が S5 を ' + d + '/50 完走（45以上・落ちた種: ' + df.slice(0, 5).join(',') + '）');
     }
   });
 
@@ -628,7 +628,7 @@
      8. 大演出「区画爆発」
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 大演出「区画爆発」（カメラカット・炎と破片・吹き飛び・着地猶予・中断復元）',
+    name: 'S5: 大演出「区画爆発」（カメラカット・炎と破片・吹き飛び・着地猶予・中断復元）',
     quick: false,          // 実描画とピクセル読み出しを伴うので runAll 側へ（契約§7）
     run(t) {
       const In = I(), W = In.World, Sp = In.Setpieces, B = In.Setpieces.BL;
@@ -659,9 +659,9 @@
         return n / (cv.width * cv.height);
       };
 
-      DUO.reset(); DUO.start('S6', 7); DUO.bot('perfect');
+      DUO.reset(); DUO.start('S5', 7); DUO.bot('perfect');
       /* 演出の少し手前から実ステップで跨ぐ（直行するとイベントを飛ばす） */
-      const SPS = 1500 - In.Setpieces.DEFS.blastout.lengthM;    // 1176m（契約§4.5 緩和 v2 で 324m）
+      const SPS = 1600 - In.Setpieces.DEFS.blastout.lengthM;    // 1276m（契約§4.5 緩和 v2 で 324m）
       DUO.skipTo(SPS - 60);
       let g = 0;
       while (Game.dist < SPS + 2 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
@@ -700,7 +700,7 @@
       const def = In.Setpieces.DEFS.blastout;
       t.eq(def.air, true, '自由飛行の区間を持つ演出');
       t.eq(def.landRel, B.LAND, '着地の位置がキーフレームと一致');
-      const st = In.makeStage('S6');
+      const st = In.makeStage('S5');
       const inst = In.Setpieces.build('blastout', SPS, 0, st.speedAt(SPS) / In.CFG.REF_SPEED, null);
       const errs = In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any', reactBoth: st.reactBoth });
       t.eq(errs.length, 0, '区画爆発の譜面が §4.7 を満たす: ' + errs.slice(0, 2).join(' | '));
@@ -715,14 +715,14 @@
       t.eq(In.Fair.validateAir(course, st.speedAt, { margin: true }).length, 0, '空中の隙間へ必ず到達できる（§4.5）');
 
       /* --- delay250 でも演出を跨いで完走する --- */
-      DUO.reset(); DUO.start('S6', 12); DUO.bot('delay250'); DUO.skipTo(SPS - 60);
+      DUO.reset(); DUO.start('S5', 12); DUO.bot('delay250'); DUO.skipTo(SPS - 60);
       g = 0;
       while (Game.dist < SPS + 2 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'blastout', '0.25秒遅延のボットでも演出に入る');
       t.eq(runToEndPump(), 'clear', '0.25秒遅延のボットも区画爆発を抜けてゴールする');
 
       /* --- 中断（リトライ）で完全復元 --- */
-      DUO.reset(); DUO.start('S6', 7); DUO.bot('perfect'); DUO.skipTo(SPS - 60);
+      DUO.reset(); DUO.start('S5', 7); DUO.bot('perfect'); DUO.skipTo(SPS - 60);
       g = 0;
       while (Game.dist < SPS + 30 && g++ < 6000 && Game.status === 'playing') DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'blastout', 'もう一度 区画爆発に入る');
@@ -751,49 +751,49 @@
   });
 
   /* ==========================================================================
-     9. S6 の解放・エンドレスのプール
+     9. S5 の解放・エンドレスのプール
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 解放（S5クリアで解放）・エンドレスのプール・宇宙ゾーンの選択',
+    name: 'S5: 解放（S4クリアで解放）・エンドレスのプール・宇宙ゾーンの選択',
     quick: true,
     run(t) {
       const In = I(), UI = In.UI, U = In.U, Zs = In.Zones, W = In.World;
       const snap = U.lsSnapshot();
+      U.lsSet('cleared', ['S1', 'S2', 'S3']);
+      UI.show('stages');
+      let s6 = document.querySelector('[data-ui="stage-S5"]');
+      t.eq(s6 && s6.getAttribute('data-unlocked'), '0', 'S4 未クリアでは S5 はロック');
       U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4']);
       UI.show('stages');
-      let s6 = document.querySelector('[data-ui="stage-S6"]');
-      t.eq(s6 && s6.getAttribute('data-unlocked'), '0', 'S5 未クリアでは S6 はロック');
-      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5']);
-      UI.show('stages');
-      s6 = document.querySelector('[data-ui="stage-S6"]');
-      t.eq(s6 && s6.getAttribute('data-unlocked'), '1', 'S5 をクリアすると S6 が解放される');
-      t.ok(s6 && s6.innerHTML.indexOf('準備中') < 0, 'S6 は「準備中」ではなく遊べる');
-      const s7 = document.querySelector('[data-ui="stage-S7"]');
-      t.eq(s7 && s7.getAttribute('data-unlocked'), '0', 'S7 はまだロック');
+      s6 = document.querySelector('[data-ui="stage-S5"]');
+      t.eq(s6 && s6.getAttribute('data-unlocked'), '1', 'S4 をクリアすると S5 が解放される');
+      t.ok(s6 && s6.innerHTML.indexOf('準備中') < 0, 'S5 は「準備中」ではなく遊べる');
+      const s7 = document.querySelector('[data-ui="stage-S6"]');
+      t.eq(s7 && s7.getAttribute('data-unlocked'), '0', 'S6 はまだロック');
       s6.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      t.eq(DUO.state().stage, 'S6', 'クリックで S6 が始まる');
-      t.near(DUO.state().speed, 28, 0.5, 'S6 は 28 m/s から');
+      t.eq(DUO.state().stage, 'S5', 'クリックで S5 が始まる');
+      t.near(DUO.state().speed, 28, 0.5, 'S5 は 28 m/s から');
       t.eq(Zs.id(), 'space', 'ゾーンは宇宙ステーション');
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
-      t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, 'S6 のドローコール ' + W.drawCalls() + ' ≤ 300');
+      t.ok(W.drawCalls() > 0 && W.drawCalls() <= 300, 'S5 のドローコール ' + W.drawCalls() + ' ≤ 300');
       t.ok(Zs.propsAhead() >= 40, '前方60mの小物 ' + Zs.propsAhead() + '個（40個以上 / 契約§3）');
 
-      /* エンドレス: S6 クリアで重力反転・無重力・レーザーネットが混ざる（契約§4.4） */
-      const withS5 = In.endlessPool(['S1', 'S2', 'S3', 'S4', 'S5']);
-      const withS6 = In.endlessPool(['S1', 'S2', 'S3', 'S4', 'S5', 'S6']);
+      /* エンドレス: S5 クリアで重力反転・無重力・レーザーネットが混ざる（契約§4.4） */
+      const withS5 = In.endlessPool(['S1', 'S2', 'S3', 'S4']);
+      const withS6 = In.endlessPool(['S1', 'S2', 'S3', 'S4', 'S5']);
       t.ok(withS6.pool.length > withS5.pool.length,
-           'S6 クリアでプールが増える（' + withS5.pool.length + '→' + withS6.pool.length + '）');
+           'S5 クリアでプールが増える（' + withS5.pool.length + '→' + withS6.pool.length + '）');
       const has = (pool, id) => pool.indexOf(id) >= 0;
       const s6ids = In.CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id);
-      t.eq(s6ids.some((id) => has(withS5.pool, id)), false, 'S6 未クリアのエンドレスに S6 の顔は出ない');
-      t.eq(s6ids.every((id) => has(withS6.pool, id)), true, 'S6 クリア後は S6 の顔が全部混ざる');
-      /* 他のステージへ S6 の顔が漏れない（ゾーンが変わればギミックも変わる / 契約§4.4） */
-      ['S1', 'S2', 'S3', 'S4', 'S5'].forEach((id) => {
+      t.eq(s6ids.some((id) => has(withS5.pool, id)), false, 'S5 未クリアのエンドレスに S5 の顔は出ない');
+      t.eq(s6ids.every((id) => has(withS6.pool, id)), true, 'S5 クリア後は S5 の顔が全部混ざる');
+      /* 他のステージへ S5 の顔が漏れない（ゾーンが変わればギミックも変わる / 契約§4.4） */
+      ['S1', 'S2', 'S3', 'S4'].forEach((id) => {
         const pool = In.makeStage(id).chunkPool;
-        t.eq(s6ids.some((x) => pool.indexOf(x) >= 0), false, id + ' に S6 の顔は混ざらない');
+        t.eq(s6ids.some((x) => pool.indexOf(x) >= 0), false, id + ' に S5 の顔は混ざらない');
       });
-      /* エンドレス（ネオン）でも S6 の新ギミックの見た目が壊れない */
-      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']);
+      /* エンドレス（ネオン）でも S5 の新ギミックの見た目が壊れない */
+      U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5']);
       DUO.reset(); DUO.start('endless', 4);
       for (let i = 0; i < 10; i++) DUO.pump(1 / 60);
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
@@ -814,23 +814,23 @@
      10. チュートリアル tip（新ギミックの初出）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 新ギミックの初出にチュートリアル tip（重力反転・無重力・レーザーネット）',
+    name: 'S5: 新ギミックの初出にチュートリアル tip（重力反転・無重力・レーザーネット）',
     quick: true,
     run(t) {
       const In = I(), Tut = In.Tutorial;
       t.ok(!!Tut.TIPS.gravwarp, '重力反転ワープの文言がある');
       t.ok(!!Tut.TIPS.zerog, '無重力ジャンプの文言がある');
       t.ok(!!Tut.TIPS.lasernet, 'レーザーネットの文言がある');
-      t.eq(In.STAGE_DEFS.S6.tipOnce.warp, 'gravwarp', 'S6 は重力反転の初出で tip を出す');
-      t.eq(In.STAGE_DEFS.S6.tipOnce.zero, 'zerog', 'S6 は無重力の初出で tip を出す');
-      t.eq(In.STAGE_DEFS.S6.tipOnce.net, 'lasernet', 'S6 はレーザーネットの初出で tip を出す');
-      /* 1500m に入るチャンクは10本前後なので、1回の走行で3つ全部が出るとは限らない。
+      t.eq(In.STAGE_DEFS.S5.tipOnce.warp, 'gravwarp', 'S5 は重力反転の初出で tip を出す');
+      t.eq(In.STAGE_DEFS.S5.tipOnce.zero, 'zerog', 'S5 は無重力の初出で tip を出す');
+      t.eq(In.STAGE_DEFS.S5.tipOnce.net, 'lasernet', 'S5 はレーザーネットの初出で tip を出す');
+      /* 1600m に入るチャンクは10本前後なので、1回の走行で3つ全部が出るとは限らない。
          **どのシードでも最低1つ**は出ること、**20シードでは3つとも**出ることを見る。 */
       const seen = {}; let every = 0;
       for (let seed = 1; seed <= 20; seed++) {
-        const st = In.makeStage('S6');
+        const st = In.makeStage('S5');
         const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 1500; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        for (let d = 0; d < 1600; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
         const ids = g.events.filter((e) => e.type === 'tip').map((e) => e.params.id);
         ids.forEach((x) => { seen[x] = (seen[x] || 0) + 1; });
         if (ids.length) every++;
@@ -842,7 +842,7 @@
       t.ok(seen.lasernet > 0, 'レーザーネットの tip が撒かれる（' + (seen.lasernet || 0) + '/20 シード）');
       t.eq(every, 20, 'どのシードでも新ギミックの指示が最低1つは出る');
       /* 実プレイで表示される */
-      DUO.reset(); DUO.start('S6', 5); DUO.bot('perfect');
+      DUO.reset(); DUO.start('S5', 5); DUO.bot('perfect');
       let shown = null, guard = 0;
       while (guard++ < 20000 && Game.dist < 1200 && Game.status === 'playing') {
         DUO.__step(1 / 60);
@@ -859,11 +859,11 @@
      11. 中断・再開（ワープと無重力が取り残されない）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 中断・チェックポイント再開（面は既定へ・片道だけのワープを作らない）',
+    name: 'S5: 中断・チェックポイント再開（面は既定へ・片道だけのワープを作らない）',
     quick: true,
     run(t) {
       const In = I();
-      DUO.reset(); DUO.start('S6', 6);
+      DUO.reset(); DUO.start('S5', 6);
       DUO.skipTo(400);
       for (let i = 0; i < 30; i++) DUO.__step(1 / 60);
       /* 面を強制的に反転させてから再開する */

@@ -35,8 +35,8 @@
     DUO.reset();
     DUO.start('S2', seed === undefined ? 9 : seed);
     DUO.bot('perfect');
-    DUO.skipTo(960);
-    (draw ? advanceDraw : advanceTo)(1000 + I().Setpieces.BJ.LIP + 6);
+    DUO.skipTo(1560);
+    (draw ? advanceDraw : advanceTo)(1600 + I().Setpieces.BJ.LIP + 6);
     if (clearAir) I().FF.setItems([]);
     return DUO.state();
   }
@@ -168,7 +168,7 @@
       let rings = 0, minRings = 99, ringBad = 0, segBad = 0;
       const kinds = {};
       for (let seed = 1; seed <= 50; seed++) {
-        const c = Sp.buildAir(seed, 1000, st.speedAt);
+        const c = Sp.buildAir(seed, 1600, st.speedAt);
         /* 契約§4.5 の不変条件（余裕 FF.REACT 込み＝0.25秒遅れのボットでも間に合う） */
         const errs = In.Fair.validateAir(c, st.speedAt, { margin: true });
         if (errs.length) { bad++; if (!firstErr) firstErr = 'seed' + seed + ': ' + errs[0]; }
@@ -207,14 +207,14 @@
       t.eq(segBad, 0, '輪は壁と壁の間に 1〜2個ずつ置かれる');
       t.ok(minRings >= 1, '輪が1個も無い滑空は無い（平均 ' + (rings / 50).toFixed(1) + '個）');
       /* 輪は隙間の保証に一切関与しない（外しても増やしても検査は同じ） */
-      const cc = Sp.buildAir(17, 1000, st.speedAt);
+      const cc = Sp.buildAir(17, 1600, st.speedAt);
       const e0 = In.Fair.validateAir(cc, st.speedAt, { margin: true }).length;
       cc.rings = [];
       t.eq(In.Fair.validateAir(cc, st.speedAt, { margin: true }).length, e0,
            '輪を全部外しても隙間保証の結果は変わらない（＝輪は避けなくてよい）');
 
       /* 同じシードなら同じ譜面（シード固定） */
-      const a = Sp.buildAir(7, 1000, st.speedAt), b = Sp.buildAir(7, 1000, st.speedAt);
+      const a = Sp.buildAir(7, 1600, st.speedAt), b = Sp.buildAir(7, 1600, st.speedAt);
       t.eq(JSON.stringify(a.items.map((x) => [x.at, x.kind, x.gap.x, x.gap.y])),
            JSON.stringify(b.items.map((x) => [x.at, x.kind, x.gap.x, x.gap.y])), '同じシードなら同じ空中配置');
 
@@ -223,7 +223,7 @@
         const g = { x: x, y: y, hw: FF.HOLE, hh: FF.HOLE, openX: false, openY: false };
         return { at: at, kind: 'sign', gap: g, rects: FF.rects(g), view: null };
       };
-      const bad2 = Sp.buildAir(3, 1000, st.speedAt);
+      const bad2 = Sp.buildAir(3, 1600, st.speedAt);
       bad2.items = [wall(bad2.launchM + 2, FF.X1 - FF.EDGE, FF.Y1 - FF.EDGE),
                     wall(bad2.launchM + 4, FF.X0 + FF.EDGE, FF.Y0 + FF.EDGE)];
       bad2.rings = [];
@@ -380,15 +380,15 @@
       const In = I(), FF = In.FF, Sp = In.Setpieces, B = In.Setpieces.BJ;
       /* --- 合体（発射台の手前 0.4秒で 0→1） --- */
       DUO.reset(); DUO.start('S2', 12); DUO.bot('perfect');
-      DUO.skipTo(960);
-      advanceTo(1000 + B.LIP - Game.speed * 0.42);
+      DUO.skipTo(1560);
+      advanceTo(1600 + B.LIP - Game.speed * 0.42);
       t.eq(Sp.duoK(Game.dist) < 0.15, true, '発射台の 0.4秒手前はまだ合体していない（' + Sp.duoK(Game.dist).toFixed(2) + '）');
       t.eq(DUO.state().inputMode, 'lanes', '合体前の入力は通常モード');
-      advanceTo(1000 + B.LIP - Game.speed * 0.2);
+      advanceTo(1600 + B.LIP - Game.speed * 0.2);
       const mid = Sp.duoK(Game.dist);
       t.ok(mid > 0.2 && mid < 0.9, '合体の途中（' + mid.toFixed(2) + '）＝0.4秒かけて1体になる');
       t.eq(DUO.state().duo.on, false, 'まだ自由飛行は始まっていない');
-      advanceTo(1000 + B.LIP + 2);
+      advanceTo(1600 + B.LIP + 2);
       t.eq(Sp.duoK(Game.dist), 1, '発射の瞬間に完全な DUO体');
       t.eq(DUO.state().duo.on, true, '自由飛行が始まっている');
       t.eq(DUO.state().inputMode, 'free', '入力が自由飛行モードに切り替わる');
@@ -398,7 +398,7 @@
       t.eq(document.getElementById('touchzones').classList.contains('free'), true, '上下の枠・分割線が消える');
 
       /* 指示は1回だけ（少し進むと引っ込む） */
-      advanceTo(1000 + B.LIP + Game.speed * 2.0);
+      advanceTo(1600 + B.LIP + Game.speed * 2.0);
       t.eq(document.getElementById('cue').classList.contains('on'), false, '指示は1回出したら消える');
 
       /* --- 着地の強制分離: DUO体の x に最も近いレーンへ --- */
@@ -406,7 +406,7 @@
         toGlide(12, true);
         FF.body.x = x;
         In.Input.freeAim(x, FF.body.y, 'test');
-        advanceTo(1000 + B.LAND + 4);
+        advanceTo(1600 + B.LAND + 4);
         const s = DUO.state();
         t.eq(s.runners.lumen.lane, wantLane, 'x=' + x + ' → LUMEN は レーン' + wantLane + '（' + s.runners.lumen.lane + '）');
         t.eq(s.runners.umbra.lane, wantLane, 'x=' + x + ' → UMBRA も同じレーン');
@@ -427,24 +427,26 @@
 
       /* --- 着地後 2.0秒（speed×2.0m）は障害物なし --- */
       const st = In.makeStage('S2');
-      const landM = 1000 + B.LAND;
+      const landM = 1600 + B.LAND;
       let worst = 0;
       for (let seed = 1; seed <= 20; seed++) {
         const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        for (let d = 0; d < 1800; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
         worst += In.Fair.landingGrace(g.obstacles, landM, st.speedAt).length;
       }
       t.eq(worst, 0, 'S2 20シードで着地後 ' + (st.speedAt(landM) * FF.GRACE_T).toFixed(1) + 'm に障害物なし');
 
       /* 演出の後にまだ走る長さがあるステージでも守られる（ステージ末尾に頼らない証明） */
+      /* P7c: 大演出の位置は makeStage が決める（stage.setpieces）。大ジャンプ（1600m〜）の後ろに
+         600m 走る区間を足した S2 で見る */
       const st2 = In.makeStage('S2');
-      st2.lengthM = 1800;
-      const spStart = st2.lengthM - In.Setpieces.DEFS.bigjump.lengthM;
+      st2.lengthM = 2400;
+      const spStart = st2.setpieces.filter((x) => x.id === 'bigjump')[0].start;
       const landM2 = spStart + In.Setpieces.DEFS.bigjump.landRel;
       let bad2 = 0, after = 0;
       for (let seed = 1; seed <= 10; seed++) {
         const g = In.createGenerator(st2, seed);
-        for (let d = 0; d < 1800; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        for (let d = 0; d < 2400; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
         bad2 += In.Fair.landingGrace(g.obstacles, landM2, st2.speedAt).length;
         after += g.obstacles.filter((o) => o.at > landM2 + st2.speedAt(landM2) * FF.GRACE_T).length;
       }
@@ -511,7 +513,7 @@
       t.eq(R.CUT_BACK.length, R.LOOKBACK.length, 'カットごとにカメラの引き量が定義されている');
       t.ok(R.CUT_BACK[1] > R.CUT_BACK[0], 'カット2のほうが大きく引く（岩が近いので）');
       const peak = (cut) => {
-        DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(960);
+        DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(860);
         let g = 0, best = 0, bestLb = 0;
         /* カットの手前までは更新だけ（描画は重い）。カットに入ってから描いて測る。 */
         const from = R.LOOKBACK[cut][0] - 6;
@@ -543,7 +545,7 @@
       t.ok(rMax - rMin > R.R * 0.12, '半径が ' + (rMax - rMin).toFixed(2) + 'm ぶら付く＝凹凸と溝が彫られている');
       t.ok(rMax <= R.R + 1e-6, '彫った結果が半径 ' + R.R + 'm を超えない（判定と食い違わない）');
       /* 転がりに合わせて模様が回る（走行距離の関数） */
-      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(960);
+      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(860);
       let g2 = 0;
       while (Sp.id() !== 'rockchase' && g2++ < 9000) DUO.__step(1 / 60);
       const rot0 = Sp.rock.spin.rotation.x;
@@ -621,10 +623,10 @@
       const In = I(), B = In.Setpieces.BJ;
       const cross = (seed, mode) => {
         DUO.reset(); DUO.start('S2', seed); DUO.bot(mode);
-        DUO.skipTo(960);
+        DUO.skipTo(1560);
         let g = 0;
-        while (Game.status === 'playing' && Game.dist < 1000 + B.END && g++ < 20000) DUO.__step(1 / 60);
-        return Game.dist >= 1000 + B.LAND;
+        while (Game.status === 'playing' && Game.dist < 1600 + B.END && g++ < 20000) DUO.__step(1 / 60);
+        return Game.dist >= 1600 + B.LAND;
       };
       let p = 0, d = 0;
       const df = [];

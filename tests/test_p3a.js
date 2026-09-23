@@ -58,7 +58,7 @@
 
       /* 同じゾーンのステージでは作り直さない（runAll が遅くならない・見た目も飛ばない） */
       const zoneObj = Zs.active();
-      DUO.start('S1', 3);
+      DUO.start('S2', 5);
       t.eq(Zs.active(), zoneObj, '同じゾーンのステージ開始ではゾーンを作り直さない');
 
       /* 切替 → 色・霧・路面がまとめて入れ替わる */
@@ -189,13 +189,16 @@
     run(t) {
       const In = I();
       const st0 = In.makeStage('S3');
-      t.eq(st0.lengthM, 1200, 'S3 は 1200m');
+      /* 契約§4.4 v2（P7c）: S3 古代遺跡＝旧S3+S4。2000m / 22→28 / 中盤に巨岩の追跡・終盤に神殿崩壊 */
+      t.eq(st0.lengthM, 2000, 'S3 は 2000m');
       t.eq(st0.zone, 'ruins', 'ゾーンは古代遺跡');
       t.near(st0.speedAt(0), 22, 1e-6, '開始 22 m/s');
-      t.near(st0.speedAt(1200), 26, 1e-6, '終了 26 m/s');
-      t.near(st0.checkpoints[0], 400, 1e-6, 'チェックポイント1 は 400m');
-      t.near(st0.checkpoints[1], 800, 1e-6, 'チェックポイント2 は 800m');
-      t.eq(st0.setpiece, 'rockchase', '終盤の大演出は「巨岩の追跡」');
+      t.near(st0.speedAt(2000), 28, 1e-6, '終了 28 m/s');
+      t.near(st0.checkpoints[0], 2000 / 3, 1e-6, 'チェックポイント1 は 1/3 地点');
+      t.ok(st0.checkpoints[1] > 1100 && st0.checkpoints[1] < 1160, 'チェックポイント2 は中盤の巨岩の追跡の直後（' + st0.checkpoints[1] + 'm）');
+      t.ok(st0.checkpoints[2] > st0.checkpoints[1] && st0.checkpoints[2] < 1800, 'チェックポイント3 は神殿崩壊の手前（' + st0.checkpoints[2] + 'm）');
+      t.eq(st0.setpieces.map((x) => x.id + '@' + x.start).join(','), 'rockchase@900,templefall@1800',
+           '大演出は 中盤「巨岩の追跡」（900m）＋終盤「神殿崩壊」（1800m）');
       t.near(st0.reactBoth, In.CFG.FAIR.REACT_BOTH_LATE, 1e-9,
              '両者同時要求の余白は S3 以降 ' + In.CFG.FAIR.REACT_BOTH_LATE + '秒（契約§4.7）');
 
@@ -205,12 +208,12 @@
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S3');
         const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-        const l = g.obstacles.filter((o) => o.at <= 1200);
+        for (let d = 0; d < 2000; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+        const l = g.obstacles.filter((o) => o.at <= 2000);
         const errs = In.Fair.validate(l, st.speedAt, { startLanes: [0], reactBoth: st.reactBoth });
         if (errs.length) { bad++; if (bad === 1) t.info('seed' + seed + ': ' + errs.slice(0, 2).join(' | ')); }
         if (In.Fair.checkVisibility(l, st.speedAt).length) bad++;
-        if (g.log.some((c) => c.setpiece)) spFound++;
+        if (g.log.filter((c) => c.setpiece).length === 2) spFound++;
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         blanks += g.log.filter((c) => c.id === '(blank)').length;
         if (l.some((o) => o.type === 'BRIDGE')) bridgeSeen++;
@@ -221,23 +224,23 @@
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
-        half.xa = (half.xa || 0) + In.Fair.tipOverlap(tw, 0, 600);
-        half.xb = (half.xb || 0) + In.Fair.tipOverlap(tw, 600, 1200);
+        half.xa = (half.xa || 0) + In.Fair.tipOverlap(tw, 0, 1000);
+        half.xb = (half.xb || 0) + In.Fair.tipOverlap(tw, 1000, 2000);
         In.Fair.walls(l, st.speedAt).forEach((w) => {
           const n = (w.demand.floor ? 1 : 0) + (w.demand.ceil ? 1 : 0);
           if (In.Fair.inTipWindow(tw, w.at)) return;
-          if (w.at < 600) half.a += n; else half.b += n;
+          if (w.at < 1000) half.a += n; else half.b += n;
         });
       }
       t.eq(bad, 0, 'S3 50シードで §4.7 違反なし（大演出区間を含む）');
-      t.eq(spFound, 50, '50シードすべてに巨岩の追跡が入る');
+      t.eq(spFound, 50, '50シードすべてに巨岩の追跡と神殿崩壊の2本が入る');
       t.eq(blanks, 0, '空白チャンク（生成の詰まり）は0回');
       t.ok(bridgeSeen >= 45, '崩れる橋はほぼ毎シード出る（' + bridgeSeen + '/50 シード）');
       t.ok(pendSeen >= 25, '振り子の刃が出る（' + pendSeen + '/50 シード）');
       t.ok(tips >= 50, '新ギミックの初出に tip が撒かれる（計' + tips + '回 / 50シード）');
       /* 密度（契約§4.7 S3 は 6→10回/100m・±25%） */
       const dens = In.STAGE_DEFS.S3.density;
-      const A = half.a / (50 * 600 - half.xa) * 100, B = half.b / (50 * 600 - half.xb) * 100;
+      const A = half.a / (50 * 1000 - half.xa) * 100, B = half.b / (50 * 1000 - half.xb) * 100;
       const wantA = In.U.lerp(dens[0], dens[1], 0.25), wantB = In.U.lerp(dens[0], dens[1], 0.75);
       t.ok(A >= wantA * 0.75 && A <= wantA * 1.25,
            'S3 前半の密度 ' + A.toFixed(2) + ' 回/100m（目安 ' + wantA.toFixed(2) + ' ±25%）');
@@ -290,9 +293,9 @@
       const fogFar0 = W.scene.fog.far, fogCol0 = W.scene.fog.color.getHex();
       W.setViewport(812, 375, 1);
       DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect');
-      DUO.skipTo(960);
-      advanceTo(1010);
-      t.eq(DUO.state().setpiece, 'rockchase', '1000m で巨岩の追跡が始まる');
+      DUO.skipTo(860);
+      advanceTo(910);
+      t.eq(DUO.state().setpiece, 'rockchase', '900m（中盤）で巨岩の追跡が始まる');
       t.eq(document.getElementById('cue').classList.contains('on'), true, 'HUD に予告が出る');
       t.ok(document.getElementById('cue-main').textContent.indexOf('BOULDER') >= 0, '予告の文字は「BOULDER!」');
       const start = Sp.state.startM;
@@ -315,7 +318,14 @@
       t.ok(shadow > 0.2, '前方に巨岩の影が落ちる（濃さ ' + shadow.toFixed(2) + '）');
       t.ok(maxProx > 0.4, '巨岩が迫る（最接近 ' + minGap.toFixed(1) + 'm）');
       t.ok(minGap > R.DEATH, 'ミスがなければ追いつかれない（' + minGap.toFixed(1) + 'm > ' + R.DEATH + 'm）');
-      t.eq(runToEnd(), 'clear', '巨岩の追跡を跨いでゴールできる');
+      /* 中盤の演出は終わったら片付き、走行は続く（P7c） */
+      advanceTo(start + 200 + Sp.MID_END_M + 2);
+      t.eq(DUO.state().status, 'playing', '巨岩の追跡を抜けても走行は続く');
+      t.eq(DUO.state().setpiece, null, '抜けた後で演出状態が片付く');
+      t.eq(Sp.rock.spin.visible, false, '片付けで巨岩が消える');
+      t.eq(In.ZoneRuins.modeAt(Game.dist + 10), 'inner', '巨岩の追跡の後は遺跡の「内部」（壁区間主体）');
+      t.eq(In.ZoneRuins.modeAt(500), 'outer', '前半は「外周」');
+      t.eq(runToEnd(), 'clear', '巨岩の追跡と神殿崩壊を跨いでゴールできる');
 
       /* --- 振り返りカットの区間には必須動作を置かない（§4.7 を崩さない） --- */
       const def = In.Setpieces.DEFS.rockchase;
@@ -326,13 +336,13 @@
       });
       /* カット明けから最初の障害物まで、視認距離ぶん空いている */
       const st = In.makeStage('S3');
-      const spd = st.speedAt(1100);
+      const spd = st.speedAt(1000);
       const first = items.map((e) => e.at).sort((a, b) => a - b)[0];
       t.ok(first - R.LOOKBACK[0][1] >= spd * In.CFG.FAIR.SEE,
            'カット明け（' + R.LOOKBACK[0][1] + 'm）から最初の障害物（' + first + 'm）まで ' +
            (first - R.LOOKBACK[0][1]).toFixed(0) + 'm ≥ 視認距離 ' + (spd * In.CFG.FAIR.SEE).toFixed(0) + 'm');
       /* 譜面そのものが §4.7 を満たす */
-      const inst = In.Setpieces.build('rockchase', 1000, 0);
+      const inst = In.Setpieces.build('rockchase', 900, 0);
       const errs = In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any', reactBoth: st.reactBoth });
       t.eq(errs.length, 0, '巨岩の追跡の譜面が §4.7 を満たす: ' + errs.slice(0, 2).join(' | '));
 
@@ -357,7 +367,7 @@
       t.near(Game.speed / Game.stage.speedAt(Game.dist), 1, 0.01, '時間が経つと速度が戻る');
 
       /* --- 減速が続くと巨岩に追いつかれて死ぬ --- */
-      DUO.reset(); DUO.start('S3', 4); DUO.bot('perfect'); DUO.skipTo(960);
+      DUO.reset(); DUO.start('S3', 4); DUO.bot('perfect'); DUO.skipTo(860);
       let m = 0;
       while (Sp.id() !== 'rockchase' && m++ < 9000) DUO.__step(1 / 60);
       const gap0 = Sp.rockGap();
@@ -370,8 +380,8 @@
       t.eq(Game.killer && Game.killer.obstacle, 'BOULDER', '死因は巨岩（' + gap0.toFixed(1) + 'm → 0）');
 
       /* --- 中断（リトライ / タイトル）で完全復元 --- */
-      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(960);
-      advanceTo(1030);
+      DUO.reset(); DUO.start('S3', 7); DUO.bot('perfect'); DUO.skipTo(860);
+      advanceTo(930);
       t.eq(DUO.state().setpiece, 'rockchase', 'もう一度 巨岩の追跡に入る');
       Game.retry();
       t.eq(DUO.state().setpiece, null, 'リトライで演出状態が消える');
@@ -444,7 +454,7 @@
       /* 生成器が初出の手前に tip を1回だけ撒く */
       const st = In.makeStage('S3');
       const g = In.createGenerator(st, 3);
-      for (let d = 0; d < 1200; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+      for (let d = 0; d < 2000; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
       const tips = g.events.filter((e) => e.type === 'tip');
       const ids = tips.map((e) => e.params.id);
       t.ok(ids.indexOf('bridge') >= 0, '崩れる橋の tip が撒かれる');

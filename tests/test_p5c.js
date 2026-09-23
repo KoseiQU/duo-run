@@ -21,9 +21,10 @@
   /* P5c 前（92c80df）の tip 数（50シード・ゴールより手前）。出現率はこの −10% 以内 */
   /* 契約 v2（P7a）: S1 の「穴」の紹介・S4 の落ちる天井・S5 の3ギミックは失効（tip ごと無い） */
   /* 契約§4.8【2026-09-24 改訂】（P7a）で窓が長くなった（2.5秒 → 4.0秒前＋2.0秒で消える）。
-     S7 は「重ね掛け（dualzone）」の初出が 1/50 シードに減った（rank5・速度34以上の札が
-     大演出の手前の約50mにしか置けない）＝ 基準を 118 → 99 に置き直す（既知の妥協点・P7c で再編） */
-  const TIP_BASE = { S1: 300, S3: 87, S4: 46, S6: 121, S7: 99, S8: 50 };
+     【P7c 7ステージ】ID は新番号。S1＝チュートリアル（6項目×50）、S3＝旧S3+S4（87+46）、
+     S4＝深海（P7b のサメ・泡の噴出口 2種×50 の −10%）、S5＝旧S6、S6＝旧S7（重ね掛けを 800m 以降に
+     強制して P7a 前の 118 へ回収）、S7＝旧S8。S2（ネオン）は新ギミックの tip を持たない（S1 で説明済み）。 */
+  const TIP_BASE = { S1: 300, S3: 133, S4: 90, S5: 121, S6: 118, S7: 50 };
   DUO.__suites.push({
     name: 'P5c→P7a: tip の猶予規則 v2（全ステージ×50シード・4.0秒前に出て2.0秒で消え、消えてから2.0秒・窓内は対象のみ・出現率）',
     quick: true,
@@ -70,12 +71,12 @@
   });
 
   DUO.__suites.push({
-    name: 'P5c→P7a: tip は 2.0秒で消え、消えてから対象まで 2.0秒以上（実走 S1・S6）・窓の中に他の障害物がない',
+    name: 'P5c→P7a: tip は 2.0秒で消え、消えてから対象まで 2.0秒以上（実走 S1・S5）・窓の中に他の障害物がない',
     quick: true,
     run(t) {
       const In = I(), Tut = In.Tutorial, CFG = In.CFG;
       const el = document.getElementById('tip');
-      [['S1', 3], ['S6', 2]].forEach((sp) => {
+      [['S1', 3], ['S5', 2]].forEach((sp) => {
         DUO.reset(); DUO.start(sp[0], sp[1]); DUO.bot('perfect');
         Game.gen.ensure(900, 0);
         const ev0 = Game.gen.events.filter((e) => e.type === 'tip')[0];
@@ -125,14 +126,14 @@
   /* S7 鏡へのカット（§4.4「鏡が主役」）: 実機の画面比（横持ち・縦持ち・iPad）で大鏡が 20% 以上。
      P5c-0 の前出し（3.2→5.6）だけでは横持ちで 11% だったので、カットで画角も絞る（fovAdd −13°） */
   DUO.__suites.push({
-    name: 'P5c: S7 鏡へのカットで大鏡が画面の 20% 以上（812×375・375×812・1024×768）',
+    name: 'P5c: S6 鏡へのカットで大鏡が画面の 20% 以上（812×375・375×812・1024×768）',
     quick: false,
     run(t) {
       const In = I(), Sp = In.Setpieces, W = In.World;
       [[812, 375], [375, 812], [1024, 768]].forEach((v) => {
-        DUO.reset(); DUO.start('S7', 4); DUO.bot('perfect'); DUO.skipTo(1240);
+        DUO.reset(); DUO.start('S6', 4); DUO.bot('perfect'); DUO.skipTo(1340);
         let g = 0;
-        while (Game.dist < 1300 && g++ < 4000) DUO.__step(1 / 60);
+        while (Game.dist < 1400 && g++ < 4000) DUO.__step(1 / 60);
         W.setViewport(v[0], v[1], 1);
         let best = 0, cov = 0;
         while ((Game.status === 'playing' || Game.status === 'goal') && g++ < 9000) {

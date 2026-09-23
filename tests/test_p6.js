@@ -7,7 +7,7 @@
 
 (function () {
   const I = () => DUO.__internal;
-  const ALL = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'];
+  const ALL = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'];
   /* cleared を一時的に差し替えて fn を実行（必ず戻す） */
   function withCleared(list, fn) {
     const U = I().U;
@@ -29,9 +29,9 @@
       t.eq(In.UI._testLock, true, 'テスト中は本来の解放規則（UI._testLock）');
       t.eq(E.plan([]).zones.join(','), 'neon', '未クリアならネオン都市だけ');
       t.eq(E.plan(['S1', 'S2', 'S3']).zones.join(','), 'neon,ruins', 'S3 クリアで遺跡が加わる');
-      t.eq(E.plan(['S1', 'S2', 'S3', 'S4', 'S5']).zones.join(','), 'neon,ruins,sea', 'S5 クリアで深海');
+      t.eq(E.plan(['S1', 'S2', 'S3', 'S4']).zones.join(','), 'neon,ruins,sea', 'S4 クリアで深海');
       t.eq(E.plan(ALL).zones.join(','), 'neon,ruins,sea,space,mirror,core', '全クリアで6ゾーン（契約の順）');
-      t.eq(E.plan(['S6']).zones.join(','), 'neon,space', '飛び地のクリアでも順は保つ');
+      t.eq(E.plan(['S5']).zones.join(','), 'neon,space', '飛び地のクリアでも順は保つ');
       const core = E.plan(ALL).pools.core.pool;
       t.eq(core.filter((id) => (In.CHUNK_DEFS.filter((c) => c.id === id)[0] || {}).merge).length, 0,
            'コアの顔ぶれに合体区間は入れない');
@@ -42,7 +42,7 @@
         t.eq(g.switches.length, 0, '1ゾーンだけなら切替は無い（通路も出さない）');
         t.ok(g.minis.length >= 2, '1ゾーンでもミニ大演出は 1500m ごとに入る（' + g.minis.length + '）');
       });
-      withCleared(['S1', 'S2', 'S3', 'S4'], () => {
+      withCleared(['S1', 'S2', 'S3'], () => {
         const g = In.createGenerator(In.makeStage('endless'), 3);
         g.ensure(4200, 0);
         t.eq(g.switches.map((s) => s.to).join(','), 'ruins,neon,ruins,neon', '2ゾーンなら交互にループ');
@@ -349,7 +349,7 @@
    ============================================================================ */
 (function () {
   const I = () => DUO.__internal;
-  const ALL = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'];
+  const ALL = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7'];
 
   /* Audio の状態を退避して fn を実行（必ず戻す） */
   function isolate(fn) {
@@ -473,11 +473,11 @@
         const r0 = Game.runners[0];
         In.spawnOne('PILLAR', 'floor', r0.laneTo, 3);
         stepUntil(() => Game.status !== 'playing', 120);
-        /* 3) チェックポイント・大演出の予告と轟音・ゴール（S1 をボットで） */
-        DUO.reset(); DUO.start('S1', 3); DUO.bot('perfect');
-        DUO.skipTo(260);
+        /* 3) チェックポイント・大演出の予告と轟音・ゴール（S2 をボットで。600m の CP・780m の崩落・ゴール） */
+        DUO.reset(); DUO.start('S2', 3); DUO.bot('perfect');
+        DUO.skipTo(560);
         stepUntil(() => Game.status !== 'playing' || Game.goalT > 0.1);
-        /* 4) 重力反転・鏡・入れ替え・合体のゲート（S6/S7/S8 の実走） */
+        /* 4) 重力反転・鏡・入れ替え・合体のゲート（S5/S6/S7 の実走） */
         const gateRun = (stage, key, want) => {
           for (let seed = 1; seed <= 40; seed++) {
             const g = In.createGenerator(In.makeStage(stage), seed);
@@ -491,16 +491,16 @@
           }
           return false;
         };
-        gateRun('S6', 'warps', 'gate_grav');
-        gateRun('S7', 'mirrors', 'gate_mirror');
-        gateRun('S7', 'swaps', 'gate_swap');
-        gateRun('S8', 'merges', 'gate_merge');
-        /* 5) 爆発（S6 区画爆発のカット）・鏡が砕ける（S7） */
-        DUO.reset(); DUO.start('S6', 2); DUO.bot('perfect');
-        DUO.skipTo(1150);                 // 区画爆発は 324m（契約§4.5 緩和 v2）＝ 1176m から
+        gateRun('S5', 'warps', 'gate_grav');
+        gateRun('S6', 'mirrors', 'gate_mirror');
+        gateRun('S6', 'swaps', 'gate_swap');
+        gateRun('S7', 'merges', 'gate_merge');
+        /* 5) 爆発（S5 区画爆発のカット）・鏡が砕ける（S6） */
+        DUO.reset(); DUO.start('S5', 2); DUO.bot('perfect');
+        DUO.skipTo(1250);                 // 区画爆発は 324m（契約§4.5 緩和 v2）＝ 1276m から（S5 1600m）
         stepUntil(() => heard.boom || Game.status !== 'playing', 4000);
-        DUO.reset(); DUO.start('S7', 2); DUO.bot('perfect');
-        DUO.skipTo(1270);
+        DUO.reset(); DUO.start('S6', 2); DUO.bot('perfect');
+        DUO.skipTo(1370);
         stepUntil(() => heard.glass || Game.status !== 'playing', 4000);
         /* 5b) 転がる丸岩の予告音（P7b）: 岩が近づくと1回鳴る */
         DUO.reset(); DUO.start('S3', 2); DUO.skipTo(300);
@@ -693,7 +693,7 @@
       try {
         W.setQuality(0);
         W.perf.ema = 16.7; W.perf.slowT = 0;
-        DUO.reset(); DUO.start('S1', 5);
+        DUO.reset(); DUO.start('S2', 5);         // 粒子を持つゾーン（白空間の S1 は粒子なし）
         for (let i = 0; i < 300; i++) W.perfSample(16.7);
         t.eq(W.quality, 0, '16.7ms（60fps）では下げない');
         for (let i = 0; i < 20; i++) W.perfSample(4000);
@@ -731,43 +731,51 @@
   });
 
   DUO.__suites.push({
-    name: 'P6-3: チュートリアルは初回のみ（duorun.tutorialDone・設定で再表示）',
+    name: 'P6-3→P7c: チュートリアル済みは S1 クリアで立つ（duorun.tutorialDone・START の促し・設定で再表示）',
     quick: true,
     run(t) {
       const In = I(), Game = In.Game, Tu = In.Tutorial, U = In.U;
       const snap = U.lsSnapshot();
+      const click = (ui) => document.querySelector('[data-ui="' + ui + '"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
       try {
         t.eq(Tu.isDone(), false, 'はじめは未了（製品の初期状態）');
-        /* ボットの走行では済みにしない */
+        /* 契約§4.4 v2（P7c）: 旧「S1 冒頭の導入区間を最後まで抜けたら済み」は失効。S1 のクリアで済み */
         DUO.reset(); DUO.start('S1', 2); DUO.bot('perfect');
         let g = 0;
-        while (Game.dist < 420 && Game.status === 'playing' && g++ < 3000) DUO.__step(1 / 60);
-        t.eq(Tu.isDone(), false, 'ボットが導入区間を抜けても済みにしない');
-        /* 人の操作で最後の説明（同時に来る！）を抜けると済み */
-        const g1 = In.createGenerator(In.makeStage('S1'), 2);
-        g1.ensure(700, 0);
+        while ((Game.status === 'playing' || Game.status === 'goal') && g++ < 30000) DUO.__step(1 / 60);
+        t.eq(Game.status, 'clear', 'ボットが S1 をクリアする');
+        t.eq(Tu.isDone(), false, 'ボットのクリアでは済みにしない');
+        /* 人の手（実キー経路）で最初の説明の柱を避けて進み、ゴールで済み */
         DUO.reset(); DUO.start('S1', 2);
-        const ev = g1.events.filter((e) => e.type === 'tip' && e.params && e.params.id === 'both')[0];
-        t.ok(!!ev, '導入区間の最後の tip がある');
-        DUO.skipTo(ev.at - 4);
-        DUO.key('KeyA', true); DUO.pump(1 / 60); DUO.key('KeyA', false);   // 床は左へ（床の柵はレーン0）
-        g = 0;
+        const ev = Game.gen.events.filter((e) => e.type === 'tip')[0];
         let shown = false;
-        while (Game.dist < ev.params.untilM + 3 && Game.status === 'playing' && g++ < 600) {
-          DUO.pump(1 / 60);
-          if (Tu.current === 'both') shown = true;
+        g = 0;
+        while (Game.dist < ev.params.targetAt - 8 && Game.status === 'playing' && g++ < 3000) {
+          DUO.__step(1 / 60);
+          if (Tu.current === ev.params.id) shown = true;
         }
-        t.eq(shown, true, '1回目は出る');
-        t.eq(Game.status, 'playing', '（避けて通過）');
-        t.eq(Tu.isDone(), true, '最後の説明を通り抜けたら済み（localStorage duorun.tutorialDone）');
-        /* 2回目の S1: 操作の説明は出さない（障害物の並びは同じ） */
+        t.eq(shown, true, 'S1 の最初の説明（' + ev.params.id + '）が出る');
+        DUO.key('KeyA', true); DUO.pump(1 / 60); DUO.key('KeyA', false);      // 床は左へ
+        DUO.key('ArrowLeft', true); DUO.pump(1 / 60); DUO.key('ArrowLeft', false); // 天井も左へ
+        g = 0;
+        while (Game.dist < ev.params.targetAt + 3 && Game.status === 'playing' && g++ < 600) DUO.pump(1 / 60);
+        t.eq(Game.status, 'playing', '（柱を避けて通過）');
+        t.eq(Tu.isDone(), false, '途中ではまだ未了');
+        /* 残りはゴールまで（ボットに任せ、ゴール演出の前に手へ戻す＝記録は人のクリア） */
+        DUO.bot('perfect');
+        g = 0;
+        while (Game.status === 'playing' && g++ < 30000) DUO.__step(1 / 60);
+        DUO.bot(null);
+        g = 0;
+        while (Game.status === 'goal' && g++ < 600) DUO.__step(1 / 60);
+        t.eq(Game.status, 'clear', 'S1 をクリア');
+        t.eq(Tu.isDone(), true, 'S1 クリアでチュートリアル済み（localStorage duorun.tutorialDone）');
+        /* 済みでも S1 の説明は出す（S1 はそれ自体がチュートリアル） */
         DUO.reset(); DUO.start('S1', 2);
-        const sk0 = Tu.skipped;
         g = 0; shown = false;
-        while (Game.dist < 110 && Game.status === 'playing' && g++ < 600) { DUO.pump(1 / 60); if (Tu.current) shown = true; }
-        t.eq(shown, false, '2回目は操作の説明を出さない');
-        t.ok(Tu.skipped > sk0, '（出さなかった数 ' + (Tu.skipped - sk0) + '）');
-        /* 新ギミックの説明（S3〜）は済みでも出す */
+        while (Game.dist < 40 && Game.status === 'playing' && g++ < 600) { DUO.__step(1 / 60); if (Tu.current) shown = true; }
+        t.eq(shown, true, '済みでも S1 の説明は出る');
+        /* 新ギミックの説明（S3〜）も済みでも出す */
         const g3 = In.createGenerator(In.makeStage('S3'), 1);
         g3.ensure(1000, 0);
         DUO.reset(); DUO.start('S3', 1);
@@ -775,19 +783,22 @@
         t.ok(!!e3, 'S3 に新ギミックの tip');
         Tu.onEvent(e3);
         t.eq(Tu.current, e3.params.id, '新ギミックの tip は出す（' + e3.params.id + '）');
+        /* 済みなら START はモード選択へ */
+        DUO.reset();
+        click('start');
+        t.eq(document.getElementById('screen-mode').classList.contains('on'), true, '済みなら START でモード選択へ');
         /* 設定の「チュートリアルをもう一度」 */
         DUO.reset();
-        document.querySelector('[data-ui="settings"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        click('settings');
         const btn = document.querySelector('[data-ui="tutorial-reset"]');
         t.eq(btn.disabled, false, '済みのときはボタンが押せる');
-        btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        click('tutorial-reset');
         t.eq(Tu.isDone(), false, '押すと未了に戻る');
         t.eq(btn.disabled, true, '未了のときは押せない表示');
-        document.querySelector('[data-ui="settings-close"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        DUO.reset(); DUO.start('S1', 2);
-        g = 0; shown = false;
-        while (Game.dist < 110 && Game.status === 'playing' && g++ < 600) { DUO.pump(1 / 60); if (Tu.current) shown = true; }
-        t.eq(shown, true, 'もう一度出る');
+        click('settings-close');
+        t.ok(document.getElementById('btn-start').textContent.indexOf('チュートリアル') >= 0, '未了に戻すと START がチュートリアルを促す');
+        click('start');
+        t.eq(DUO.state().stage, 'S1', 'START で S1 チュートリアルが始まる');
       } finally {
         U.lsRestore(snap);
         DUO.reset();

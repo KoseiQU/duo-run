@@ -1,15 +1,15 @@
 /* ============================================================================
-   tests/test_p5b.js — P5b（ゾーン6「コア」の造形 ／ S8「コア」）
+   tests/test_p5b.js — P5b（ゾーン6「コア」の造形 ／ S7「コア」）
 
      【P5b-1 造形】
      ・ゾーン切替（6種）でリークしない・パレットと霧・脈動が1本の関数から出る
      ・混在スキン（障害物ごとに寄り親のゾーンが決まる・プールが変種で分かれる）
      ・見た目と当たり判定のズレ ±10%／装飾が走行空間へ食い込まない
      ・小物 20種以上・前方60mに40個以上・ドローコール ≤300・三角形 S1比+30%以内
-     【P5b-2 S8】
+     【P5b-2 S7】
      ・合体区間（入力経路・天井の障害物が当たらない・分離と猶予・ボットも同経路）
-     ・S8 の不変条件・密度・比率・全ギミックの出現・ボット完走
-     ・全崩壊エスケープ（各段階の可視性）・中断復元・S8解放・全クリア保存
+     ・S7 の不変条件・密度・比率・全ギミックの出現・ボット完走
+     ・全崩壊エスケープ（各段階の可視性）・中断復元・S7解放・全クリア保存
    ============================================================================ */
 'use strict';
 
@@ -72,9 +72,9 @@
       t.near(z.pulse(0.37), z.pulse(0.37 + z.BEAT_T), 1e-9, '鼓動は BEAT_T で厳密に周期的');
 
       /* 霧は暗赤だが黒潰れしない（契約§3 / §5） */
-      DUO.reset(); DUO.start('S8', 3);
+      DUO.reset(); DUO.start('S7', 3);
       for (let i = 0; i < 8; i++) DUO.pump(1 / 60);
-      t.eq(Zs.id(), 'core', 'S8 を始めるとコアゾーンになる');
+      t.eq(Zs.id(), 'core', 'S7 を始めるとコアゾーンになる');
       t.eq(W.scene.fog.color.getHex(), z.PAL.fog, '霧がコアの暗赤へ替わる');
       const fogY = (() => { const h = z.PAL.fog;
         return 0.2126 * ((h >> 16) & 255) + 0.7152 * ((h >> 8) & 255) + 0.0722 * (h & 255); })();
@@ -107,11 +107,11 @@
 
       /* 三角形は S1（ネオン都市）比 +30% 以内（契約§3） */
       const tris = W.renderer.info.render.triangles;
-      DUO.reset(); DUO.start('S1', 3);
+      DUO.reset(); DUO.start('S2', 3);
       for (let i = 0; i < 12; i++) DUO.pump(1 / 60);
       const trisS1 = W.renderer.info.render.triangles;
       t.ok(tris <= trisS1 * 1.30,
-           'コアの三角形 ' + tris + ' ≤ S1(' + trisS1 + ') の1.30倍（比 ' + (tris / trisS1).toFixed(2) + '）');
+           'コアの三角形 ' + tris + ' ≤ ネオン(S2)(' + trisS1 + ') の1.30倍（比 ' + (tris / trisS1).toFixed(2) + '）');
 
       /* --- リーク検査: 6ゾーンを3周してもジオメトリが増え続けない ---
          **走行中に測らない**（走っていると障害物の型が増えるたびにジオメトリが
@@ -144,10 +144,10 @@
     quick: false,          // P7a: 共通デザインの検査は test_p7a（quick）。走行での幅照合は runAll で
     run(t) {
       const In = I(), Ob = In.Obstacles, Zs = In.Zones;
-      DUO.reset(); DUO.start('S8', 5);
+      DUO.reset(); DUO.start('S7', 5);
       for (let i = 0; i < 6; i++) DUO.pump(1 / 60);
       const skin = Zs.skin();
-      t.eq(skin.id, 'common', 'S8 の障害物も共通デザイン（契約§4.3 v2）');
+      t.eq(skin.id, 'common', 'S7 の障害物も共通デザイン（契約§4.3 v2）');
       t.eq(Ob.variantOf(Ob.make('PILLAR', 'floor', 0, 123.5, 0)), '', '寄り親（変種）は失効');
 
       /* 判定（OBS）はゾーンによらず不変 */
@@ -158,7 +158,7 @@
            '当たり判定の寸法はスキンを替えても一切変わらない');
 
       /* 見た目と判定のズレ ±10%（走行中の実体で測る） */
-      DUO.reset(); DUO.start('S8', 9);
+      DUO.reset(); DUO.start('S7', 9);
       DUO.bot('perfect');
       let checked = 0, bad = [];
       for (let f = 0; f < 1400; f++) {
@@ -187,7 +187,7 @@
   });
 
   /* ==========================================================================
-     3. 合体区間（契約§4.5「合体区間」/ §4.4 S8）
+     3. 合体区間（契約§4.5「合体区間」/ §4.4 S7）
      ========================================================================== */
   DUO.__suites.push({
     name: 'P5b: 合体区間（入力経路・天井は当たらない・分離と猶予・中断復元）',
@@ -221,14 +221,14 @@
          ゲートまではボットに走らせる（人の手では譜面を抜けられない）。ゲートを
          **実ステップで跨いだ**あとはボットを外し、入力の検査の間だけ障害物を伏せる
          （ここで見たいのは「どの入力がどう効くか」であって譜面ではない）。 */
-      DUO.reset(); DUO.start('S8', 4);
+      DUO.reset(); DUO.start('S7', 4);
       let found = null, guard = 0;
       while (!found && guard++ < 40) {
         const list = Game.gen.merges;
         if (list.length) { found = list[0]; break; }
         Game.gen.ensure(Game.gen.cursor + 200, 0);
       }
-      t.ok(!!found, 'S8 の生成に合体区間がある');
+      t.ok(!!found, 'S7 の生成に合体区間がある');
       /* 障害物を伏せたまま1フレーム進める（生成された先の分も引き取っておく） */
       function stepQ(n) {
         for (let i = 0; i < (n || 1); i++) {
@@ -324,7 +324,7 @@
       }
 
       /* 中断復元: リトライで必ず2体へ戻る */
-      DUO.reset(); DUO.start('S8', 4);
+      DUO.reset(); DUO.start('S7', 4);
       Game.merged = true;
       Game.retry(true);
       t.eq(DUO.state().merged, false, 'リトライで必ず2体へ戻る');
@@ -341,7 +341,7 @@
     name: 'P5b: 合体区間をボットも同じ入力経路で通る',
     quick: true,
     run(t) {
-      DUO.reset(); DUO.start('S8', 12);
+      DUO.reset(); DUO.start('S7', 12);
       DUO.bot('perfect');
       const list = Game.gen.merges;
       Game.gen.ensure(1200, 0);
@@ -368,14 +368,14 @@
   });
 
   /* ==========================================================================
-     5. S8 の不変条件・密度・比率・ギミックの出現（50シード）
+     5. S7 の不変条件・密度・比率・ギミックの出現（50シード）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P5b: S8 の §4.7 不変条件・密度・動作比率・全ギミックの出現（50シード）',
+    name: 'P5b: S7 の §4.7 不変条件・密度・動作比率・全ギミックの出現（50シード）',
     quick: false,
     run(t) {
       const In = I();
-      const st = In.makeStage('S8');
+      const st = In.makeStage('S7');
       const SP = In.Setpieces.DEFS.collapseall;
       const spStart = st.lengthM - SP.lengthM;
       let errs = 0, blanks = 0, spOk = 0, mergeCounts = {}, mergeIn = {};
@@ -394,7 +394,7 @@
         if (e.length) { errs++; if (firstErr.length < 3) firstErr.push('seed' + seed + ': ' + e[0]); }
         blanks += g.log.filter((l) => l.id === '(blank)').length;
         if (g.log.some((l) => l.setpiece)) spOk++;
-        /* 合体区間の回数（契約§4.4「S8で2回」） */
+        /* 合体区間の回数（契約§4.4「S7で2回」） */
         const nm = g.merges.length;
         mergeCounts[nm] = (mergeCounts[nm] || 0) + 1;
         const inStage = g.merges.filter((r) => r.to < spStart);
@@ -437,9 +437,9 @@
       const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
       const dA = avg(densA), dB = avg(densB);
       /* 判定は stage.densityReal（実測できる帯）に対して行う。**既知の妥協点**:
-         S8 は契約が要求する構造そのもの（合体区間2回＝要求を1体ぶんしか置けない／
+         S7 は契約が要求する構造そのもの（合体区間2回＝要求を1体ぶんしか置けない／
          12種のうち5種がゲート・区間型で直後 1.0秒の猶予が要る）のせいで、
-         §4.7 の目安（10→14）どころか S7 の実測（8.8）にも届かない。 */
+         §4.7 の目安（10→14）どころか S6 の実測（8.8）にも届かない。 */
       const want = st.densityReal || st.density;
       t.info('密度 前半 ' + dA.toFixed(2) + ' / 後半 ' + dB.toFixed(2) + ' 回/100m（実測の目安 ' + want.join('→') + '）');
       t.ok(dA >= want[0] * 0.75 && dA <= want[0] * 1.25,
@@ -469,7 +469,7 @@
      6. ボット完走（perfect 50 / delay250 40以上）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P5b: S8 をボットが完走する（perfect 50/50・delay250 40以上）',
+    name: 'P5b: S7 をボットが完走する（perfect 50/50・delay250 40以上）',
     quick: false,
     run(t) {
       const res = { perfect: 0, delay250: 0 };
@@ -477,7 +477,7 @@
       ['perfect', 'delay250'].forEach((mode) => {
         for (let seed = 1; seed <= 50; seed++) {
           DUO.reset();
-          DUO.start('S8', seed);
+          DUO.start('S7', seed);
           DUO.bot(mode);
           let guard = 0;
           while (Game.status === 'playing' && guard++ < 40000) DUO.__step(1 / 60);
@@ -487,8 +487,8 @@
           else if (dead[mode].length < 4) dead[mode].push(seed + '@' + Math.round(Game.dist) + 'm/' + (Game.killer ? Game.killer.obstacle : Game.status));
         }
       });
-      t.eq(res.perfect, 50, 'perfect ボットが S8 を 50/50 完走' + (dead.perfect.length ? (' / 落ち: ' + dead.perfect.join(', ')) : ''));
-      t.ok(res.delay250 >= 40, 'delay250 ボットが S8 を ' + res.delay250 + '/50 完走（40以上）' +
+      t.eq(res.perfect, 50, 'perfect ボットが S7 を 50/50 完走' + (dead.perfect.length ? (' / 落ち: ' + dead.perfect.join(', ')) : ''));
+      t.ok(res.delay250 >= 40, 'delay250 ボットが S7 を ' + res.delay250 + '/50 完走（40以上）' +
            (dead.delay250.length ? (' / 落ち: ' + dead.delay250.join(', ')) : ''));
       DUO.reset();
     }
@@ -530,7 +530,7 @@
            + C.BACK.map((w) => w.join('-')).join(' / ') + '）');
 
       /* 実走: 演出の少し手前から実ステップで跨ぐ */
-      DUO.reset(); DUO.start('S8', 6);
+      DUO.reset(); DUO.start('S7', 6);
       DUO.bot('perfect');
       const stage = Game.stage;
       const sp0 = stage.lengthM - D.lengthM;
@@ -566,7 +566,7 @@
            '演出を抜けてゴールする（' + Game.status + '）');
 
       /* 中断復元: 演出の途中で抜けてもカメラ・霧・崩落が元へ戻る */
-      DUO.reset(); DUO.start('S8', 6);
+      DUO.reset(); DUO.start('S7', 6);
       DUO.skipTo(sp0 + 30);
       for (let i = 0; i < 30; i++) DUO.pump(1 / 60);
       const fogMid = In.World.scene.fog.far;
@@ -580,24 +580,25 @@
   });
 
   /* ==========================================================================
-     8. S8 の解放・全クリア・ステージ選択の印
+     8. S7 の解放・全クリア・ステージ選択の印
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P5b: S8 の解放（S7クリアで）・全クリアの保存と演出・ステージ選択の印',
+    name: 'P5b: S7 の解放（S6クリアで）・全クリアの保存と演出・ステージ選択の印',
     quick: true,
     run(t) {
       const In = I(), U2 = In.U, UI2 = In.UI;
-      t.eq(UI2.STAGES.length, 8, 'ステージは8つ');
-      t.eq(UI2.STAGES[7].id, 'S8', '8番目は S8');
-      t.eq(UI2.STAGES[7].ready, true, 'S8 は実装済み（ready）');
-      t.eq(UI2.STAGES[7].name, 'コア', 'S8 の名前は「コア」');
+      /* 契約§4.4 v2（P7c）: 7ステージ。最後（7番目）が S7 コア */
+      t.eq(UI2.STAGES.length, 7, 'ステージは7つ');
+      t.eq(UI2.STAGES[6].id, 'S7', '7番目は S7');
+      t.eq(UI2.STAGES[6].ready, true, 'S7 は実装済み（ready）');
+      t.eq(UI2.STAGES[6].name, 'コア', 'S7 の名前は「コア」');
 
       const snap = U2.lsSnapshot();
       /* 本来の解放規則（テスト中は _testLock で検証する） */
       U2.lsSet('cleared', []);
-      t.eq(UI2.isUnlocked(7), false, 'S7 未クリアなら S8 はロック');
-      U2.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']);
-      t.eq(UI2.isUnlocked(7), true, 'S7 をクリアすると S8 が解放される');
+      t.eq(UI2.isUnlocked(6), false, 'S6 未クリアなら S7 はロック');
+      U2.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']);
+      t.eq(UI2.isUnlocked(6), true, 'S6 をクリアすると S7 が解放される');
 
       /* 全クリアの保存と印 */
       U2.lsSet('allclear', false);
@@ -605,12 +606,12 @@
       UI2.show('stages');
       t.eq(shown('stages-allclear'), false, 'ステージ選択に全クリアの印は出ていない');
 
-      DUO.reset(); DUO.start('S8', 2);
+      DUO.reset(); DUO.start('S7', 2);
       Game.dist = Game.stage.lengthM;
       Game.onGoal();
       let guard = 0;
       while (Game.status === 'goal' && guard++ < 400) DUO.__step(1 / 60);
-      t.eq(Game.status, 'allclear', 'S8 のゴール後は全クリア演出に入る');
+      t.eq(Game.status, 'allclear', 'S7 のゴール後は全クリア演出に入る');
       t.eq(document.getElementById('allclear').classList.contains('on'), true,
            'ALL CLEAR の演出が表示される');
       t.eq(UI2.allCleared(), true, 'localStorage に全クリアの印（duorun.allclear）が残る');
@@ -618,20 +619,24 @@
       while (Game.status === 'allclear' && guard++ < 800) DUO.__step(1 / 60);
       t.eq(Game.status, 'clear', '全クリア演出のあとリザルトへ');
       t.eq(document.getElementById('allclear').classList.contains('on'), false, '演出が消える');
-      t.ok(UI2.cleared().indexOf('S8') >= 0, 'クリア済みに S8 が入る');
+      t.ok(UI2.cleared().indexOf('S7') >= 0, 'クリア済みに S7 が入る');
 
       UI2.show('stages');
       t.eq(shown('stages-allclear'), true, 'ステージ選択に全クリアの印が出る');
+      t.ok(document.getElementById('stages-allclear').textContent.indexOf('全7ステージ') >= 0,
+           '印の文言は「全7ステージ制覇」: ' + document.getElementById('stages-allclear').textContent);
+      t.ok(document.querySelector('#allclear .ac-sub').textContent.indexOf('7 STAGES') >= 0,
+           'ALL CLEAR の副題は「7 STAGES」');
 
-      /* S1〜S7 のクリアでは全クリアにならない */
+      /* S1〜S6 のクリアでは全クリアにならない */
       U2.lsSet('allclear', false);
-      DUO.reset(); DUO.start('S7', 2);
+      DUO.reset(); DUO.start('S6', 2);
       Game.dist = Game.stage.lengthM;
       Game.onGoal();
       guard = 0;
       while (Game.status === 'goal' && guard++ < 400) DUO.__step(1 / 60);
-      t.eq(Game.status, 'clear', 'S7 のゴールは通常どおりリザルトへ（全クリア演出は出ない）');
-      t.eq(UI2.allCleared(), false, 'S7 では全クリアの印は付かない');
+      t.eq(Game.status, 'clear', 'S6 のゴールは通常どおりリザルトへ（全クリア演出は出ない）');
+      t.eq(UI2.allCleared(), false, 'S6 では全クリアの印は付かない');
 
       U2.lsRestore(snap);
       DUO.reset();
@@ -639,20 +644,20 @@
   });
 
   /* ==========================================================================
-     9. エンドレスのプール（S8 をクリアすると顔ぶれが加わる）
+     9. エンドレスのプール（S7 をクリアすると顔ぶれが加わる）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P5b: エンドレスに S8 の顔ぶれが加わる（合体区間は持ち込まない）',
+    name: 'P5b: エンドレスに S7 の顔ぶれが加わる（合体区間は持ち込まない）',
     quick: true,
     run(t) {
       const In = I(), U2 = In.U;
       const snap = U2.lsSnapshot();
       const base = In.endlessPool([]);
       t.eq(base.pool.filter((id) => (In.CHUNK_DEFS.filter((c) => c.id === id)[0] || {}).s8).length, 0,
-           'クリア前のエンドレスに S8 のチャンクは入らない');
-      const all = In.endlessPool(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8']);
+           'クリア前のエンドレスに S7 のチャンクは入らない');
+      const all = In.endlessPool(['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']);
       const s8n = all.pool.filter((id) => (In.CHUNK_DEFS.filter((c) => c.id === id)[0] || {}).s8).length;
-      t.ok(s8n > 0, 'S8 クリア後は S8 のチャンクが混ざる（' + s8n + '本）');
+      t.ok(s8n > 0, 'S7 クリア後は S7 のチャンクが混ざる（' + s8n + '本）');
       const mg = all.pool.filter((id) => (In.CHUNK_DEFS.filter((c) => c.id === id)[0] || {}).merge).length;
       t.eq(mg, 0, '合体区間はエンドレスに持ち込まない（ゾーン切替と噛み合わないため）');
       t.ok(all.maxRank >= 5, 'エンドレスのランク上限が 5 まで上がる（' + all.maxRank + '）');

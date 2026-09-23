@@ -1,9 +1,9 @@
 /* ============================================================================
-   tests/test_p2a3.js — P2a 段階3（S1本編・崩落演出・UI）
+   tests/test_p2a3.js — P2a 段階3 → P7c（契約 v2: S1＝白空間チュートリアル、崩落は S2 の中盤）
      ・S1 をボットが完走する（perfect / delay250 × seed 1〜50）
-     ・導入区間の順序と、チュートリアル表示の可視性（computed style）
-     ・大演出「連鎖崩落」中も §4.7 の不変条件が成立／中断すると演出が完全に戻る
-     ・UI 遷移（実クリック経路）と保存/復元
+     ・S1 チュートリアルの構成（6項目×tip＋練習）と、tip 表示の可視性（computed style）
+     ・S2 中盤の大演出「連鎖崩落」中も §4.7 の不変条件が成立／中断・片付けで演出が完全に戻る
+     ・UI 遷移（実クリック経路: 初回の START＝S1）と保存/復元
    ============================================================================ */
 'use strict';
 
@@ -47,80 +47,81 @@
   });
 
   DUO.__suites.push({
-    name: 'S1: 導入区間の順序と公平性（契約§4.4 1種ずつ紹介）',
+    name: 'S1: チュートリアルの構成と公平性（契約§4.4 v2 6項目を1つずつ・tip＋練習2〜3回）',
     quick: true,
     run(t) {
       const In = I();
       const stage = In.makeStage('S1');
-      t.eq(stage.lengthM, 900, 'S1 は 900m');
-      t.near(stage.speedAt(0), 16, 1e-6, '開始 16 m/s');
-      t.near(stage.speedAt(900), 20, 1e-6, '終了 20 m/s');
-      t.near(stage.checkpoints[0], 300, 1e-6, 'チェックポイント1 は 300m');
-      t.near(stage.checkpoints[1], 600, 1e-6, 'チェックポイント2 は 600m');
-
-      /* 導入区間の順番: ハードル(床)→ハードル(天井)→ピラー→ローレーザー→ワイド梁→同時（穴は契約 v2 で失効） */
-      const want = [
-        ['ROVER', 'floor'], ['ROVER', 'ceil'], ['PILLAR', 'both'],
-        ['LASER_LOW', 'ceil'], ['WIDEBAR', 'floor']
-      ];
-      const gen = In.createGenerator(stage, 1);
-      for (let d = 0; d < 900; d += 20) gen.ensure(d + In.CFG.SPAWN_AHEAD, d);
-      /* 導入区間の長さ: 契約§4.8【2026-09-24 改訂】の tip の猶予規則（tip は対象の speed×4.0秒手前・
-         対象の通過後 speed×1.0秒 まで空ける）で、6つの紹介は 約 6×5秒×16m/s ≒ 480m＋助走 を要する
-         （P7a で 約325m → 約520m。長くなってよい / 指示）。最後の紹介の対象までを導入区間とする。 */
-      const introTips = gen.events.filter((e) => e.type === 'tip' && In.Tutorial.isIntro(e.params.id));
-      const INTRO_END = Math.max.apply(null, introTips.map((e) => e.params.untilM)) + 1;
-      t.eq(introTips.length, 6, '導入区間の tip は 6つ（穴は契約 v2 で失効）');
-      const intro = gen.obstacles.filter((o) => o.at <= INTRO_END).sort((a, b) => a.at - b.at);
-      want.forEach((w, i) => {
-        const o = intro[i];
-        t.ok(o && o.type === w[0] && o.surface === w[1],
-             (i + 1) + '番目の紹介は ' + w[0] + '(' + w[1] + ')：' + (o ? o.type + '(' + o.surface + ')@' + o.at.toFixed(0) + 'm' : 'なし'));
-      });
-      /* 最後は床と天井の同時 */
-      const both = intro.slice(want.length, want.length + 2);
-      t.ok(both.length === 2 && Math.abs(both[0].at - both[1].at) < 1e-6 && both[0].surface !== both[1].surface,
-           '最後は床と天井が同時に来る');
-      t.eq(intro.length, want.length + 2, '導入区間（〜' + INTRO_END.toFixed(0) + 'm）に ' + (want.length + 2) + '個の紹介障害物（' + intro.length + '個）');
-
-      /* 導入区間はスライディングを要求しない（S1 はスライド0%） */
-      const list = gen.obstacles.filter((o) => o.at <= 900);
-      const c = In.Fair.countDemands(list, stage.speedAt);
-      t.eq(c.slide, 0, 'S1 全体でスライディング要求は0回（' + c.total + '回中）');
-      t.info('S1 の内訳 lane=' + c.lane + ' jump=' + c.jump);
-
-      /* 50シードで不変条件（大演出区間を含む）と動作比率 */
-      let bad = 0, spFound = 0;
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      t.eq(stage.lengthM, 700, 'S1 は 700m');
+      t.near(stage.speedAt(0), 14, 1e-6, '開始 14 m/s');
+      t.near(stage.speedAt(700), 16, 1e-6, '終了 16 m/s');
+      t.eq(stage.zone, 'white', 'ゾーンは白い空間');
+      t.eq(stage.setpieces.length, 0, '大演出なし');
+      /* 項目の順（契約§4.4 S1）: レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー */
+      const ORDER = ['lane', 'jump', 'wide', 'hole', 'both', 'moving'];
+      /* 各項目の「それだけを要求する」型（練習の中身の検査） */
+      const KIND = {
+        lane: (o) => o.type === 'PILLAR',
+        jump: (o) => o.type === 'ROVER' || o.type === 'LASER_LOW',
+        wide: (o) => o.type === 'WIDEBAR',
+        hole: (o) => o.type === 'WALLHOLE' || o.type === 'WALLSOLID',
+        both: (o) => o.type === 'ROVER' || o.type === 'WIDEBAR',
+        moving: (o) => o.type === 'LASER_SCAN'
+      };
+      let bad = 0, badSeq = 0, badDrill = 0, badBoth = 0, noReady = 0, extra = 0;
+      const drillN = {};
       for (let seed = 1; seed <= 50; seed++) {
-        const st = In.makeStage('S1');
-        const g = In.createGenerator(st, seed);
-        for (let d = 0; d < 900; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-        const l = g.obstacles.filter((o) => o.at <= 900);
-        if (In.Fair.validate(l, st.speedAt, { startLanes: [0] }).length) bad++;
-        if (In.Fair.checkVisibility(l, st.speedAt).length) bad++;
-        if (g.log.some((c2) => c2.setpiece)) spFound++;
-        if (g.log.some((c2) => c2.id === '(setpiece-unfair)')) bad++;
-        const cc = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += cc.lane; agg.jump += cc.jump; agg.slide += cc.slide; agg.total += cc.total;
+        const g = In.createGenerator(stage, seed);
+        g.ensure(stage.lengthM, 0);
+        const l = g.obstacles;
+        if (In.Fair.validate(l, stage.speedAt, { startLanes: [0] }).length) bad++;
+        if (In.Fair.checkVisibility(l, stage.speedAt).length) bad++;
+        const tips = g.events.filter((e) => e.type === 'tip').map((e) => e.params.id);
+        if (tips.join(',') !== ORDER.join(',')) badSeq++;
+        /* ランダム区間・大演出は無い（導入の項目と「準備完了」だけ） */
+        if (g.log.some((c) => !c.intro)) extra++;
+        const ready = g.events.filter((e) => e.type === 'tut.ready')[0];
+        if (!ready || ready.at >= stage.lengthM) noReady++;
+        /* 項目ごと: 対象＋練習（次の tip の対象より手前）が、その項目の型だけ */
+        const tev = g.events.filter((e) => e.type === 'tip');
+        tev.forEach((e, i) => {
+          const a = e.params.targetAt - 0.01, b = (i + 1 < tev.length) ? tev[i + 1].params.targetAt - 0.01 : 1e9;
+          const grp = l.filter((o) => o.at >= a && o.at < b);
+          if (!grp.every(KIND[e.params.id])) badDrill++;
+          const ats = {};
+          grp.forEach((o) => { ats[o.at.toFixed(2)] = 1; });
+          const n = Object.keys(ats).length - 1;          // 対象を除いた練習の回数
+          drillN[e.params.id] = Math.min(drillN[e.params.id] === undefined ? 9 : drillN[e.params.id], n);
+          if (n < 1 || n > 3) badDrill++;
+          if (e.params.id === 'both') {
+            /* 両手同時: 床と天井に同時に必須動作 */
+            const tg = grp.filter((o) => Math.abs(o.at - e.params.targetAt) < 0.01);
+            if (!(tg.some((o) => o.surface === 'floor') && tg.some((o) => o.surface === 'ceil'))) badBoth++;
+          }
+        });
       }
-      const pct = (k) => agg[k] / agg.total * 100;
-      t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S1 50シードのレーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
-      t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S1 50シードのジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%（スライド0%のぶんが乗る）');
-      t.eq(agg.slide, 0, 'S1 50シードでスライディングは0回（' + agg.total + '回中）');
-      t.eq(bad, 0, 'S1 50シードで §4.7 違反なし（大演出区間を含む）');
-      t.eq(spFound, 50, '50シードすべてに大演出（連鎖崩落）が入る');
+      t.eq(bad, 0, 'S1 50シードで §4.7 違反・視認距離違反なし');
+      t.eq(badSeq, 0, 'tip の順は ' + ORDER.join('→') + '（50シード）');
+      t.eq(extra, 0, 'ランダム区間・大演出を持たない');
+      t.eq(noReady, 0, '最後に「準備完了」（tut.ready）がゴールより手前');
+      t.eq(badDrill, 0, '各項目は その型だけ・練習は1〜3回（' + JSON.stringify(drillN) + '）');
+      t.ok(ORDER.every((k) => drillN[k] >= 2), '練習はどの項目も2回以上（対象と合わせて3回）: ' + JSON.stringify(drillN));
+      t.eq(badBoth, 0, '「両手同時」の対象は床と天井に同時');
+      /* 壁の穴（唯一のスライド）は床と天井の両方で練習する */
+      const g1 = In.createGenerator(stage, 1);
+      g1.ensure(stage.lengthM, 0);
+      const holes = g1.obstacles.filter((o) => o.type === 'WALLHOLE');
+      t.ok(holes.some((o) => o.surface === 'floor') && holes.some((o) => o.surface === 'ceil'), '壁の穴は床と天井の両方');
+      t.ok(g1.obstacles.some((o) => o.type === 'LASER_SCAN'), '動くレーザー（横スキャン）が出る');
+      /* エンドレスには含めない（S1 のゾーン白空間は順に無い） */
+      t.eq(In.Endless.ORDER.indexOf('white'), -1, 'エンドレスのゾーン順に白空間は無い');
     }
   });
 
   DUO.__suites.push({
     name: 'S1: チュートリアル表示（DOMオーバーレイの可視性）',
     /* 見ているのは **DOM オーバーレイ**（class / computed style / 文言）だけなので、
-       走行は描画なしの DUO.__step で進める（DUO.pump だと 1フレームずつ WebGL を描き、
-       この1本だけで runQuick の上限 20秒（契約§7）の半分を食っていた / 2026-09-22 P4a-0）。
-       Tutorial の表示・消灯は Game.step の中（イベント発火と Tutorial.update）で起きるので、
-       描画を省いてもこのテストの意味は変わらない。描画経路の確認は
-       「S1: 大演出」「P2b-0: tip の位置」など pump を使う他のテストが受け持つ。 */
+       走行は描画なしの DUO.__step で進める（runQuick の上限のため / 2026-09-22 P4a-0）。 */
     quick: true,
     run(t) {
       const In = I();
@@ -128,15 +129,15 @@
       const el = document.getElementById('tip');
       t.ok(!!el, '#tip が存在する');
       t.ok(getComputedStyle(el).opacity === '0' || !el.classList.contains('on'), '開始時は非表示');
-      /* 最初の tip は 30m 手前で出る（= 60-30 = 30m 付近） */
+      const first = Game.gen.events.filter((e) => e.type === 'tip')[0];
       let shown = null, guard = 0;
-      while (Game.dist < 70 && guard++ < 4000) {
+      while (Game.dist < first.params.targetAt + 5 && guard++ < 4000) {
         DUO.__step(1 / 60);
         if (el.classList.contains('on') && !shown) shown = { dist: Game.dist, text: el.textContent };
       }
-      t.ok(!!shown, 'ローバーの手前でチュートリアルが表示される');
+      t.ok(!!shown, '最初の対象（柱）の手前でチュートリアルが表示される');
       if (shown) {
-        t.ok(shown.dist < 60, '障害物（60m）より手前で出る（' + shown.dist.toFixed(0) + 'm）');
+        t.ok(shown.dist < first.params.targetAt, '対象（' + first.params.targetAt.toFixed(0) + 'm）より手前で出る（' + shown.dist.toFixed(0) + 'm）');
         t.ok(shown.text.length > 0, '文言が入っている: ' + shown.text);
       }
       /* 表示中は computed style で見えている */
@@ -147,38 +148,55 @@
       t.ok(parseFloat(cs.opacity) > 0.5 || el.classList.contains('on'), '表示中は opacity が上がる（' + cs.opacity + '）');
       t.ok(cs.display !== 'none' && cs.visibility !== 'hidden', 'display/visibility が隠れていない');
       t.eq(DUO.state().tip !== null, true, 'DUO.state().tip に出ている合図が入る');
-      /* 2.6秒後には消える */
+      /* 2.0秒で消える（§4.8） */
       for (let i = 0; i < 200; i++) DUO.__step(1 / 60);
       t.eq(el.classList.contains('on'), false, '一定時間で自動的に消える');
       /* 文言はタッチ前提（指アイコン＋フリックの言い方） */
-      In.Tutorial.show('jump_l');
+      ['lane', 'jump', 'wide', 'hole', 'both', 'moving'].forEach((id) => {
+        t.ok(!!In.Tutorial.TIPS[id], 'S1 の文言がある: ' + id);
+      });
+      In.Tutorial.show('jump');
       t.ok(el.innerHTML.indexOf('finger') >= 0, '指アイコンが入っている');
       t.ok(el.textContent.indexOf('フリック') >= 0, 'フリックの言い方になっている: ' + el.textContent.slice(0, 24));
-      In.Tutorial.show('jump_r');
       t.ok(el.textContent.indexOf('下へ') >= 0, 'UMBRA は「下へフリックでジャンプ」と案内する');
+      In.Tutorial.show('hole');
+      t.ok(el.textContent.indexOf('潜る') >= 0, '壁の穴は「潜る」と案内する');
       In.Tutorial.hide();
+      /* 最後の「準備完了」 */
+      DUO.reset(); DUO.start('S1', 3); DUO.bot('perfect');
+      Game.gen.ensure(Game.stage.lengthM, 0);
+      const rd = Game.gen.events.filter((e) => e.type === 'tut.ready')[0];
+      DUO.skipTo(rd.at - 20);
+      guard = 0;
+      while (Game.dist < rd.at + 2 && guard++ < 3000) DUO.__step(1 / 60);
+      const cue = document.getElementById('cue');
+      t.eq(cue.classList.contains('on'), true, '最後の練習の後に「準備完了」の合図が出る');
+      t.ok(document.getElementById('cue-sub').textContent.indexOf('準備完了') >= 0, '文言は「準備完了」');
       DUO.reset();
+      t.eq(cue.classList.contains('on'), false, 'タイトルへ戻ると合図が消える');
     }
   });
 
   DUO.__suites.push({
-    name: 'S1: 大演出「連鎖崩落」（発火・不変条件・中断復元）',
+    name: 'S2: 中盤の大演出「連鎖崩落」（発火・不変条件・片付け・中断復元）',
     quick: true,
     run(t) {
       const In = I(), W = In.World, Sp = In.Setpieces;
+      const st0 = In.makeStage('S2');
+      const mid = st0.setpieces[0];
+      t.eq(mid.id + '@' + mid.start, 'collapse@780', 'S2 の中盤は 780m からの連鎖崩落');
+      DUO.reset(); DUO.start('S2', 7); DUO.bot('perfect');
       const fogFar0 = W.scene.fog.far, fogCol0 = W.scene.fog.color.getHex();
-      DUO.reset(); DUO.start('S1', 7); DUO.bot('perfect');
       /* 演出の手前から実ステップで跨ぐ（skipTo で直行すると発火しない） */
-      DUO.skipTo(660);
+      DUO.skipTo(740);
       let guard = 0;
-      while (Game.dist < 720 && guard++ < 6000) DUO.pump(1 / 60);
-      t.eq(DUO.state().setpiece, 'collapse', '700m で連鎖崩落が発火する');
+      while (Game.dist < 800 && guard++ < 6000) DUO.pump(1 / 60);
+      t.eq(DUO.state().setpiece, 'collapse', '780m で連鎖崩落が発火する');
       t.ok(Sp.state && Sp.state.front < Game.dist - Sp.GAP_MIN + 1,
            '崩落前線はプレイヤーより後ろ（' + (Game.dist - (Sp.state ? Sp.state.front : 0)).toFixed(1) + 'm 後方）');
-      /* 追いつかない: 演出の間ずっと前線は後ろ */
       let minGap = 1e9;
       guard = 0;
-      while (Game.dist < 880 && guard++ < 8000) {
+      while (Game.dist < 960 && guard++ < 8000) {
         DUO.pump(1 / 60);
         if (Sp.state) minGap = Math.min(minGap, Game.dist - Sp.state.front);
       }
@@ -186,11 +204,25 @@
       t.ok(W.scene.fog.far < fogFar0, '演出中は霧が濃くなる（' + W.scene.fog.far.toFixed(0) + '）');
       t.ok(W.camera.fov > W._baseFov, '演出中は画角が広がる（+' + (W.camera.fov - W._baseFov).toFixed(1) + '°）');
       t.ok(W.drawCalls() <= 300, '演出中のドローコール ' + W.drawCalls() + ' ≤ 300');
-      /* 崩落タイルが実際に落ちている */
       t.ok(Sp.tileFall(Sp.state.front - 6, 'floor', 0) > 0, '前線の後ろのタイルは落下中');
       t.eq(Sp.tileFall(Game.dist + 20, 'floor', 0), 0, '前方のタイルは落ちない');
+      /* 中盤の演出は終わったら片付く（ゴールが無いので mid.end で）＝ 走行は続く */
+      guard = 0;
+      while (Game.dist < 1016 && Game.status === 'playing' && guard++ < 8000) DUO.pump(1 / 60);
+      t.eq(DUO.state().status, 'playing', '中盤の演出を抜けても走行は続く');
+      t.eq(DUO.state().setpiece, null, '終わりの ' + Sp.MID_END_M + 'm 後で演出状態が片付く');
+      t.near(W.scene.fog.far, fogFar0, 1e-6, '片付けで霧の far が戻る');
+      t.eq(W.scene.fog.color.getHex(), fogCol0, '片付けで霧の色が戻る');
+      t.eq(Sp.tileFall(Game.dist - 30, 'floor', 0), 0, '崩落タイルの状態が消える');
+      guard = 0;
+      while (Game.dist < 1030 && guard++ < 3000) DUO.pump(1 / 60);
+      t.ok(Game.lastCheckpoint > 1000 && Game.lastCheckpoint < 1030, '中盤の演出の直後にチェックポイント（' + Game.lastCheckpoint.toFixed(0) + 'm）');
 
       /* --- 中断（タイトルへ）で完全に戻る --- */
+      DUO.reset(); DUO.start('S2', 7); DUO.bot('perfect');
+      DUO.skipTo(760);
+      guard = 0;
+      while (Game.dist < 820 && guard++ < 6000) DUO.pump(1 / 60);
       Game.toTitle();
       t.eq(DUO.state().setpiece, null, 'タイトルへ戻ると演出状態が消える');
       t.near(W.scene.fog.far, fogFar0, 1e-6, '霧の far が戻る');
@@ -202,10 +234,10 @@
       t.eq(Sp.tileFall(0, 'floor', 0), 0, '崩落タイルの状態が消える');
 
       /* --- 演出中にリトライしても戻る --- */
-      DUO.reset(); DUO.start('S1', 7); DUO.bot('perfect');
-      DUO.skipTo(690);
+      DUO.reset(); DUO.start('S2', 7); DUO.bot('perfect');
+      DUO.skipTo(770);
       guard = 0;
-      while (Game.dist < 730 && guard++ < 6000) DUO.pump(1 / 60);
+      while (Game.dist < 810 && guard++ < 6000) DUO.pump(1 / 60);
       t.eq(DUO.state().setpiece, 'collapse', 'もう一度発火している');
       Game.retry();
       t.eq(DUO.state().setpiece, null, 'リトライで演出状態が消える');
@@ -216,65 +248,69 @@
   });
 
   DUO.__suites.push({
-    name: 'S1: ゴール演出とリザルト（クリア→保存）',
+    name: 'S1: ゴール演出とリザルト（クリア→保存・チュートリアル済み）',
     quick: true,
     run(t) {
-      const snap = I().U.lsSnapshot();
+      const In = I();
+      const snap = In.U.lsSnapshot();
       DUO.reset();
-      try { window.localStorage.removeItem(I().CFG.LS_PREFIX + 'cleared'); } catch (e) { /* noop */ }
-      try { window.localStorage.removeItem(I().CFG.LS_PREFIX + 'best.S1'); } catch (e) { /* noop */ }
+      ['cleared', 'best.S1', 'tutorialDone'].forEach((k) => {
+        try { window.localStorage.removeItem(In.CFG.LS_PREFIX + k); } catch (e) { /* noop */ }
+      });
       DUO.start('S1', 11); DUO.bot('perfect');
       let guard = 0;
       while (Game.status === 'playing' && guard++ < 30000) DUO.__step(1 / 60);
       t.eq(Game.status, 'goal', 'ゴール到達で goal 演出に入る');
-      t.ok(Game.dist >= 900, '900m を走り切っている（' + Game.dist.toFixed(0) + 'm）');
-      /* 演出中は徐々に減速して止まる */
+      t.ok(Game.dist >= 700, '700m を走り切っている（' + Game.dist.toFixed(0) + 'm）');
       for (let i = 0; i < 10; i++) DUO.__step(1 / 60);
       t.eq(Game.status, 'goal', '演出は 1.3 秒ほど続く');
+      /* ここから先は人の手（ボットの走行ではチュートリアル済みを記録しない） */
+      DUO.bot(null);
       guard = 0;
       while (Game.status === 'goal' && guard++ < 600) DUO.__step(1 / 60);
       t.eq(Game.status, 'clear', '演出のあと clear になる');
       t.eq(document.getElementById('screen-clear').classList.contains('on'), true, 'リザルト（CLEAR）が出る');
-      t.ok(document.getElementById('clear-dist').textContent.indexOf('900') >= 0, '距離が表示される');
-      t.eq(I().U.lsGet('cleared', []).indexOf('S1') >= 0, true, 'クリアが localStorage に残る');
-      t.ok(I().U.lsGet('best.S1', 0) >= 900, 'ベスト距離が保存される');
+      t.ok(document.getElementById('clear-dist').textContent.indexOf('準備完了') >= 0, '「準備完了」が表示される');
+      t.eq(In.U.lsGet('cleared', []).indexOf('S1') >= 0, true, 'クリアが localStorage に残る');
+      t.ok(In.U.lsGet('best.S1', 0) >= 700, 'ベスト距離が保存される');
       t.eq(DUO.state().bestUpdated, true, 'ベスト更新フラグが立つ');
-      /* ステージ選択に星が付く */
-      I().UI.show('stages');
+      t.eq(In.U.lsGet('tutorialDone', false), true, 'S1 クリアでチュートリアル済み（duorun.tutorialDone）');
+      In.UI.show('stages');
       const card = document.querySelector('[data-ui="stage-S1"]');
       t.ok(card && card.innerHTML.indexOf('★') >= 0, 'ステージ選択で S1 に星が付く');
-      I().U.lsRestore(snap);
+      /* ボットのクリアでは記録しない */
+      try { window.localStorage.removeItem(In.CFG.LS_PREFIX + 'tutorialDone'); } catch (e) { /* noop */ }
+      DUO.reset(); DUO.start('S1', 12); DUO.bot('perfect');
+      guard = 0;
+      while ((Game.status === 'playing' || Game.status === 'goal') && guard++ < 30000) DUO.__step(1 / 60);
+      t.eq(Game.status, 'clear', 'ボットもクリアする');
+      t.eq(In.U.lsGet('tutorialDone', false), false, 'ボットのクリアではチュートリアル済みにしない');
+      In.U.lsRestore(snap);
       DUO.reset();
     }
   });
 
   DUO.__suites.push({
-    name: 'UI: 実クリック経路（タイトル→モード→ステージ選択→S1→死亡→リトライ）',
+    name: 'UI: 実クリック経路（初回 START＝S1 チュートリアル→死亡→リトライ→スキップ→ステージ選択）',
     quick: true,
     run(t) {
       const In = I();
       const snap = In.U.lsSnapshot();
-      /* 解放状態を既知にする（runAll ではボット完走テストが先に S1 をクリア済みにするため。
-         最後に lsRestore で元へ戻す） */
-      try { window.localStorage.removeItem(In.CFG.LS_PREFIX + 'cleared'); } catch (e) { /* noop */ }
+      /* 解放状態を既知にする（最後に lsRestore で元へ戻す） */
+      ['cleared', 'tutorialDone'].forEach((k) => {
+        try { window.localStorage.removeItem(In.CFG.LS_PREFIX + k); } catch (e) { /* noop */ }
+      });
       DUO.reset();
       t.eq(onScreen('title'), true, 'タイトルが出ている');
+      t.ok(document.getElementById('btn-start').textContent.indexOf('チュートリアル') >= 0, '初回は START がチュートリアルを促す');
+      t.eq(getComputedStyle(document.getElementById('btn-start-skip')).display !== 'none', true, '初回は「スキップ」も出る');
       t.eq(click('start'), true, 'START を押す');
-      t.eq(onScreen('mode'), true, 'モード選択へ');
-      t.eq(click('mode-stage'), true, 'ステージを押す');
-      t.eq(onScreen('stages'), true, 'ステージ選択へ');
-      /* S1 は解放・S2 以降はロック */
-      const s1 = document.querySelector('[data-ui="stage-S1"]');
-      const s2 = document.querySelector('[data-ui="stage-S2"]');
-      t.eq(s1 && s1.getAttribute('data-unlocked'), '1', 'S1 は解放されている');
-      t.eq(s2 && s2.getAttribute('data-unlocked'), '0', 'S2 はロックされている（S1 未クリア時）');
-      t.eq(!!(s2 && s2.hasAttribute('disabled')), true, 'ロックは押せない');
-      t.eq(click('stage-S1'), true, 'S1 を押す');
-      t.eq(DUO.state().stage, 'S1', 'S1 が始まる');
+      t.eq(DUO.state().stage, 'S1', '初回の START で S1 チュートリアルが始まる');
       t.eq(onScreen('title'), false, 'プレイ中はタイトルが消える');
       t.eq(document.getElementById('hud').classList.contains('on'), true, 'HUD が出る');
+      t.eq(document.body.getAttribute('data-zone'), 'white', '白い空間（HUD は暗い文字）');
       /* わざと死ぬ */
-      DUO.skipTo(320);
+      DUO.skipTo(240);
       In.clearObstacles();
       In.spawnOne('PILLAR', 'floor', 0, 12);
       let guard = 0;
@@ -282,17 +318,37 @@
       t.eq(onScreen('dead'), true, '死亡でリザルト（CRASH）が出る');
       t.eq(click('retry'), true, 'リトライを押す');
       t.eq(DUO.state().status, 'playing', 'チェックポイントから再開する');
-      t.near(DUO.state().dist, 300, 1e-6, '300m のチェックポイントから再開');
-      /* タイトルへ戻る */
+      t.near(DUO.state().dist, 700 / 3, 1e-6, '1/3 地点のチェックポイントから再開');
       t.eq(click('title'), true, 'タイトルへを押す');
       t.eq(onScreen('title'), true, 'タイトルに戻る');
       t.eq(DUO.state().status, 'idle', '状態も idle に戻る');
-      /* エンドレス */
-      click('start'); click('mode-endless');
+      /* スキップ → モード → ステージ選択（7枚） */
+      t.eq(click('start-skip'), true, 'スキップを押す');
+      t.eq(onScreen('mode'), true, 'モード選択へ');
+      t.eq(click('mode-stage'), true, 'ステージを押す');
+      t.eq(onScreen('stages'), true, 'ステージ選択へ');
+      t.eq(document.querySelectorAll('#stage-grid .stage-card').length, 7, 'ステージは7枚');
+      const s1 = document.querySelector('[data-ui="stage-S1"]');
+      const s2 = document.querySelector('[data-ui="stage-S2"]');
+      t.eq(s1 && s1.getAttribute('data-unlocked'), '1', 'S1 は解放されている');
+      t.eq(s2 && s2.getAttribute('data-unlocked'), '0', 'S2 はロックされている（S1 未クリア時）');
+      t.eq(!!(s2 && s2.hasAttribute('disabled')), true, 'ロックは押せない');
+      t.eq(click('stage-S1'), true, 'ステージ選択からも S1 を選べる');
+      t.eq(DUO.state().stage, 'S1', 'S1 が始まる');
+      /* チュートリアル済みなら START はモード選択へ */
+      DUO.reset();
+      In.U.lsSet('tutorialDone', true);
+      In.UI.show('title');
+      t.eq(document.getElementById('btn-start').textContent, 'START', '済みなら START だけ');
+      t.eq(getComputedStyle(document.getElementById('btn-start-skip')).display, 'none', '済みならスキップは出ない');
+      click('start');
+      t.eq(onScreen('mode'), true, '済みなら START でモード選択へ');
+      click('mode-endless');
       t.eq(DUO.state().stage, 'endless', 'エンドレスが始まる');
       t.eq(DUO.state().speed >= 16, true, 'エンドレスも 16 m/s から');
       DUO.reset();
       In.U.lsRestore(snap);
+      In.UI.show('title');
     }
   });
 })();

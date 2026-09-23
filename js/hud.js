@@ -265,7 +265,10 @@ const UI = {
   isUnlocked(i) {
     if (i === 0) return true;
     if (UI.UNLOCK_ALL && !UI._testLock) return true;
-    return UI.cleared().indexOf(UI.STAGES[i - 1].id) >= 0;
+    /* 前のステージをクリアしたら解放。**クリア済みのステージ自体も常に選べる**
+       （P7c: 旧保存の移行で S2 がクリア済み・新S1 は未クリア、という組み合わせがあり得る） */
+    const cl = UI.cleared();
+    return cl.indexOf(UI.STAGES[i - 1].id) >= 0 || cl.indexOf(UI.STAGES[i].id) >= 0;
   },
 
   tutorialPending() { return !(typeof Tutorial !== 'undefined' && Tutorial.isDone && Tutorial.isDone()); },

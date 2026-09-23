@@ -339,6 +339,8 @@ const Zones = {
     if (!z) throw new Error('unknown zone: ' + id);
     const scene = Zones.scene;
     const before = scene.children.slice();
+    /* 障害物の露出（白い空間 S1 だけ一段暗く / P7c）。見た目を建てる前に入れる */
+    if (typeof Obstacles !== 'undefined') Obstacles.tone = (z.PAL && z.PAL.obstacleTone) || 1;
     z.scene = scene;
     z.fields = [];
     z.propFields = [];

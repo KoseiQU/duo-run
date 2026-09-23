@@ -1712,6 +1712,7 @@ const INTRO_TUT = [
   /* 3. 2レーン封鎖（空いた1レーンへ。2本目は反対側が空く＝2レーンぶん動く） */
   { tip: 'wide',  floor: [{ lane: -1, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
   { gapT: 1.5,    floor: [{ lane: 0, type: 'WIDEBAR' }],  ceil: [{ lane: 0, type: 'WIDEBAR' }] },
+  { gapT: 1.5,    floor: [{ lane: -1, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
   /* 4. 壁の穴（そのレーンへ移って潜る。床→天井→床） */
   { tip: 'hole',  floor: [{ lane: 0, type: 'WALLHOLE' }] },
   { gapT: 1.6,    ceil:  [{ lane: 1, type: 'WALLHOLE' }] },
@@ -1882,6 +1883,9 @@ const STAGE_DEFS = {
     tipOnce: { bridge: 'bridge', pend: 'pendulum', rock: 'rock', sync: 'sync' },
     tipBoost: true,
     tipMul: 6,
+    /* 同時スイッチ（旧S4 の主役・rank3〜）は 2000m の中で他のギミックと取り合い、重みだけでは
+       38/50 シードにしか出なかった。巨岩の追跡を抜けて「内部」に入ってしばらく（1300m）で必ず同時スイッチにする */
+    forceAt: [{ at: 1300, flag: 'sync' }],
     chunkPool: LEGACY_POOL.ruins1.concat(LEGACY_POOL.ruins2)
   },
   /* S4 深海（旧S5）: 1600m / 26→30 / サメの横断・泡の噴出口・点滅レーザー／終盤: 巨大魚の通過 */
@@ -1924,9 +1928,10 @@ const STAGE_DEFS = {
     tipMul: 40,
     tipOnce: { mir: 'mirrorzone', swap: 'handswap', dual: 'dualzone' },
     /* 重ね掛けの札は後半（34 m/s＝800m〜）しか候補にならず、重みだけでは 1600m の中で
-       20/50 シードしか置けなかった。800m を越えたら「次は必ず重ね掛け」にする（置けるまで持ち越し）。
-       ＝ 50シード中 35 で出る（P7a の既知課題「1/50 に減」の回収 / P7c）。 */
-    forceAt: [{ at: 800, flag: 'dual' }],
+       20/50 シードしか置けなかった。800m を越えたら「次は必ず重ね掛け」にする（置けるまで持ち越し）
+       ＝ ゴールより手前で 37/50 シード（P7a の既知課題「1/50 に減」の回収 / P7c）。
+       重ね掛けの札は長い（約360実m）ぶんレーザーネットの札の置き場を食うので、ネットは 500m で先に出す。 */
+    forceAt: [{ at: 500, flag: 'net' }, { at: 800, flag: 'dual' }],
     chunkPool: LEGACY_POOL.mirror
   },
   /* S7 コア（旧S8）: 1800m / 32→44 / 全部混在＋合体区間2回／終盤: 全崩壊エスケープ→ALL CLEAR。
