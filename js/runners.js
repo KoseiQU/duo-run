@@ -93,6 +93,7 @@ const Runners = {
       const dur = wasJump ? (r.jumpT || CFG.JUMP_T) : CFG.SLIDE_T;
       if (r.actT >= dur) {
         r.act = 'run'; r.actT = 0;
+        if (wasJump) U.sfx('land', { who: r.id });
         /* 着地の瞬間に、空中で入っていた横入力を1回だけ実行する（§4.2） */
         if (wasJump && r.laneBuf) {
           const target = U.clamp(r.laneTo + r.laneBuf, -1, 1);

@@ -58,7 +58,7 @@ const DUO = {
     CFG: CFG, OBS: OBS, Game: Game, Obstacles: Obstacles, Runners: Runners,
     Fair: Fair, World: World, Input: Input, Bot: Bot, U: U,
     Setpieces: Setpieces, Tutorial: Tutorial, UI: UI, HUD: HUD, FF: FF, Sync: Sync, Current: Current,
-    Warp: Warp, Zero: Zero, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless,
+    Warp: Warp, Zero: Zero, Mirror: Mirror, Swap: Swap, Merge: Merge, Endless: Endless, Audio: Audio,
     expandEntry: expandEntry,
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
@@ -122,7 +122,9 @@ const DUO = {
         const t = DUO._mkT();
         const st = (performance && performance.now) ? performance.now() : Date.now();
         try {
-          s.run(t);
+          /* 非同期のテスト（音のオフライン描画など / P6）は Promise を返してよい */
+          const pr = s.run(t);
+          if (pr && typeof pr.then === 'function') await pr;
         } catch (e) {
           t.res.fail++;
           t.res.msgs.push('EX: ' + (e && e.stack ? e.stack : e));
@@ -162,6 +164,8 @@ const DUO = {
 
       U.lsRestore(lsSnap);
       DUO.reset();
+      /* 音の設定（メモリ上）も保存値へ戻す（P6） */
+      if (typeof Audio !== 'undefined' && Audio.SE && Audio.loadSettings) Audio.loadSettings();
       report.sec = +((((performance && performance.now) ? performance.now() : Date.now()) - t0) / 1000).toFixed(2);
       report.ok = (report.fail === 0);
       DUO.__lastReport = report;

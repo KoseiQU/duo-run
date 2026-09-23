@@ -338,3 +338,271 @@
     }
   });
 })();
+
+/* ============================================================================
+   P6-2: 音（WebAudio 全生成）
+   ・監査環境では鳴らせない前提。スタブ・偽の AudioContext・オフライン描画・API 状態で検証する。
+   ============================================================================ */
+(function () {
+  const I = () => DUO.__internal;
+  const ALL = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8'];
+
+  /* Audio の状態を退避して fn を実行（必ず戻す） */
+  function isolate(fn) {
+    const A = I().Audio;
+    const keep = { ctx: A.ctx, unlocked: A.unlocked, ov: A._acOverride, hid: A._hiddenOverride,
+                   master: A.master, bgmBus: A.bgmBus, seBus: A.seBus, comp: A.comp, play: A.play };
+    const snap = I().U.lsSnapshot();
+    try { return fn(A); }
+    finally {
+      I().U.lsRestore(snap);
+      A.loadSettings();
+      A.ctx = keep.ctx; A.unlocked = keep.unlocked; A._acOverride = keep.ov; A._hiddenOverride = keep.hid;
+      A.master = keep.master; A.bgmBus = keep.bgmBus; A.seBus = keep.seBus; A.comp = keep.comp; A.play = keep.play;
+    }
+  }
+  /* 偽の AudioContext（ノードを作る関数を持たない＝合成に入ると必ず例外になる最悪の実装） */
+  function FakeAC() {
+    this.state = 'suspended'; this.currentTime = 0; this.destination = {};
+    this.nResume = 0; this.nSuspend = 0; this.stuck = false;
+    const self = this;
+    this.resume = function () { self.nResume++; if (!self.stuck) self.state = 'running'; return Promise.resolve(); };
+    this.suspend = function () { self.nSuspend++; self.state = 'suspended'; return Promise.resolve(); };
+  }
+
+  DUO.__suites.push({
+    name: 'P6-2: 無音環境でも Audio.* が落ちない（AudioContext なし／suspended／壊れた実装）',
+    quick: true,
+    run(t) {
+      isolate((A) => {
+        const names = A.SE_NAMES();
+        const all = () => {
+          names.forEach((n) => A.play(n, { who: 'umbra' }));
+          A.tick(); A.update(I().Game); A.watch(); A.onVisibility(); A.applySettings();
+          A.setVolume('bgm', 0.4); A.setVolume('se', 0.6); A.setMute(true); A.setMute(false);
+          return true;
+        };
+        /* 1) AudioContext の無い環境 */
+        A.ctx = null; A.unlocked = false; A._acOverride = null;
+        let ok = true;
+        try { t.eq(A.unlock(), false, 'AudioContext が無ければ unlock は false'); all(); } catch (e) { ok = false; }
+        t.eq(ok, true, 'AudioContext が無い環境で例外が出ない');
+        t.eq(A.ctx, null, '作られない');
+        t.eq(names.map((n) => A.play(n)).some((x) => x), false, '無い環境では1つも鳴らさない（false を返す）');
+        /* 2) suspended のまま（解錠されない） */
+        A.ctx = null; A.unlocked = false; A._acOverride = FakeAC;
+        ok = true;
+        try {
+          A.unlock();
+          A.ctx.stuck = true; A.ctx.state = 'suspended';
+          all();
+        } catch (e) { ok = false; }
+        t.eq(ok, true, 'suspended のままでも例外が出ない');
+        t.eq(names.map((n) => A.play(n)).some((x) => x), false, 'suspended の間は鳴らさない');
+        t.eq(A.tick(), 0, 'suspended の間は BGM を予約しない');
+        /* 3) running だがノードを作れない壊れた実装 */
+        ok = true;
+        try { A.ctx.state = 'running'; A.seBus = {}; A.bgmBus = {}; all(); } catch (e) { ok = false; }
+        t.eq(ok, true, '合成で例外が出ても外へ漏らさない');
+        /* 4) 読み込み前・別物の Audio（HTMLAudioElement）でも U.sfx は落ちない */
+        t.eq(typeof I().U.sfx('jump'), 'boolean', 'U.sfx は常に真偽値を返す');
+      });
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-2: visibilitychange で suspend/resume・毎秒の再試行・操作フック（偽の AudioContext）',
+    quick: true,
+    run(t) {
+      isolate((A) => {
+        A.ctx = null; A.unlocked = false; A._acOverride = FakeAC;
+        /* 合成イベント（dispatchEvent）では作らない＝自動再生ポリシーの警告を出さない */
+        A._gesture({ isTrusted: false });
+        t.eq(A.ctx, null, '信頼されない操作では AudioContext を作らない');
+        A._gesture({ isTrusted: true });
+        t.ok(!!A.ctx, '最初のユーザー操作で AudioContext を作る');
+        t.eq(A.ctx.state, 'running', 'その場で resume する（iOS の解錠）');
+        t.eq(A.unlocked, true, '解錠済み');
+        A._hiddenOverride = true;
+        A.onVisibility();
+        t.eq(A.ctx.state, 'suspended', 'hidden で suspend');
+        t.eq(A.watch(), false, '隠れている間は再試行しない');
+        A._hiddenOverride = false;
+        A.onVisibility();
+        t.eq(A.ctx.state, 'running', 'visible で resume');
+        /* 戻っても無音のまま（resume が効かない実例）→ 毎秒の再試行と操作フック */
+        A.ctx.stuck = true; A.ctx.state = 'suspended';
+        const n0 = A.ctx.nResume;
+        A.watch(); A.watch();
+        t.eq(A.ctx.nResume, n0 + 2, '毎秒の再試行で resume を呼び続ける');
+        A._gesture({ isTrusted: true });
+        t.eq(A.ctx.nResume, n0 + 3, '解錠後もユーザー操作のたびに resume を試す（フックを外さない）');
+        A.ctx.stuck = false;
+        A.watch();
+        t.eq(A.ctx.state, 'running', '再試行で復帰する');
+        t.eq(A._inited, true, '起動時にフックとタイマーを張っている');
+        t.ok(A._timers.length >= 2, '再試行（1秒）とシーケンサ（40ms）のタイマー');
+      });
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-2: 効果音の網羅（各イベントで Audio.play が呼ばれる・スタブで検証）',
+    quick: true,
+    run(t) {
+      const In = I(), Game = In.Game, U = In.U;
+      const heard = {};
+      isolate((A) => {
+        A.play = function (name) { heard[name] = (heard[name] || 0) + 1; return false; };
+        const stepUntil = (cond, cap) => { let g = 0; while (!cond() && g++ < (cap || 20000)) DUO.__step(1 / 60); return cond(); };
+        /* 1) 操作: ジャンプ・着地・スライド・レーン移動（キーとタッチの実経路） */
+        DUO.reset(); DUO.start('S0', 11);
+        DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
+        stepUntil(() => Game.runners[0].act === 'run', 120);
+        DUO.touch('bottom', 'down'); DUO.pump(1 / 60);
+        DUO.touch('top', 'right'); DUO.pump(1 / 60);
+        /* 2) 被弾 */
+        In.clearObstacles();
+        const r0 = Game.runners[0];
+        In.spawnOne('PILLAR', 'floor', r0.laneTo, 3);
+        stepUntil(() => Game.status !== 'playing', 120);
+        /* 3) チェックポイント・大演出の予告と轟音・ゴール（S1 をボットで） */
+        DUO.reset(); DUO.start('S1', 3); DUO.bot('perfect');
+        DUO.skipTo(260);
+        stepUntil(() => Game.status !== 'playing' || Game.goalT > 0.1);
+        /* 4) 重力反転・鏡・入れ替え・合体のゲート（S6/S7/S8 の実走） */
+        const gateRun = (stage, key, want) => {
+          for (let seed = 1; seed <= 40; seed++) {
+            const g = In.createGenerator(In.makeStage(stage), seed);
+            g.ensure(1300, 0);
+            const r = g[key][0];
+            if (!r) continue;
+            DUO.reset(); DUO.start(stage, seed); DUO.bot('perfect');
+            DUO.skipTo(Math.max(0, r.from - 90));
+            stepUntil(() => heard[want] || Game.status !== 'playing' || Game.dist > r.from + 30, 3000);
+            if (heard[want]) return true;
+          }
+          return false;
+        };
+        gateRun('S6', 'warps', 'gate_grav');
+        gateRun('S7', 'mirrors', 'gate_mirror');
+        gateRun('S7', 'swaps', 'gate_swap');
+        gateRun('S8', 'merges', 'gate_merge');
+        /* 5) 爆発（S6 区画爆発のカット）・鏡が砕ける（S7） */
+        DUO.reset(); DUO.start('S6', 2); DUO.bot('perfect');
+        DUO.skipTo(1270);
+        stepUntil(() => heard.boom || Game.status !== 'playing', 4000);
+        DUO.reset(); DUO.start('S7', 2); DUO.bot('perfect');
+        DUO.skipTo(1270);
+        stepUntil(() => heard.glass || Game.status !== 'playing', 4000);
+        /* 6) 光の輪（ブースト）: 取ったときの入口 */
+        In.FF.boost(); In.FF.reset();
+        /* 7) エンドレスの光のゲート */
+        const snap = U.lsSnapshot();
+        U.lsSet('cleared', ALL);
+        const ge = In.createGenerator(In.makeStage('endless'), 4);
+        ge.ensure(1200, 0);
+        DUO.reset(); DUO.start('endless', 4); DUO.bot('perfect');
+        DUO.skipTo(ge.switches[0].t0 - 30);
+        stepUntil(() => heard.gate || Game.status !== 'playing', 1200);
+        U.lsRestore(snap);
+        /* 8) ボタンの手応え */
+        DUO.reset();
+        const b = document.querySelector('[data-ui="settings"]');
+        b.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.querySelector('[data-ui="settings-close"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      DUO.reset();
+      const want = I().Audio.SE_NAMES();
+      const miss = want.filter((n) => !heard[n]);
+      t.eq(miss.length, 0, '全効果音 ' + want.length + ' 種がイベントから呼ばれる（未発火: ' + (miss.join(',') || 'なし') + '）');
+      ['jump', 'land', 'slide', 'lane', 'hit', 'checkpoint', 'goal', 'warn', 'rumble',
+       'gate_grav', 'gate_mirror', 'gate_swap', 'gate_merge', 'boost', 'boom', 'gate'].forEach((n) => {
+        t.ok(!!heard[n], n + ' が鳴る（' + (heard[n] || 0) + '回）');
+      });
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-2: 音の設定の保存/復元（duorun.audio）と設定パネル',
+    quick: true,
+    run(t) {
+      const In = I(), A = In.Audio, U = In.U;
+      const snap = U.lsSnapshot();
+      try {
+        A.setVolume('bgm', 0.3); A.setVolume('se', 0.45); A.setMute(true);
+        const v = U.lsGet('audio', null);
+        t.ok(v && Math.abs(v.bgm - 0.3) < 1e-9 && Math.abs(v.se - 0.45) < 1e-9 && v.mute === true,
+             'localStorage duorun.audio に保存（' + JSON.stringify(v) + '）');
+        A.settings = { bgm: 1, se: 1, mute: false };
+        A.loadSettings();
+        t.ok(A.settings.bgm === 0.3 && A.settings.se === 0.45 && A.settings.mute === true, '読み込みで復元');
+        U.lsSet('audio', { bgm: 'x', se: 9, mute: 0 });
+        A.loadSettings();
+        t.ok(A.settings.bgm === A.DEFAULTS.bgm && A.settings.se === 1 && A.settings.mute === false,
+             '壊れた値は既定・範囲内に丸める');
+        try { window.localStorage.removeItem('duorun.audio'); } catch (e) { /* noop */ }
+        A.loadSettings();
+        t.eq(JSON.stringify(A.settings), JSON.stringify(A.DEFAULTS), '保存が無ければ既定値');
+        /* 設定パネル（タイトル）: 実クリック経路 */
+        DUO.reset();
+        const click = (sel) => document.querySelector('[data-ui="' + sel + '"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        click('settings');
+        const p = document.getElementById('settings');
+        t.eq(p.classList.contains('on'), true, '設定パネルが開く');
+        t.eq(document.getElementById('btn-start').offsetParent, null, '開いている間は START を伏せる');
+        const sl = document.querySelector('[data-ui="audio-bgm"]');
+        t.eq(sl.value, String(Math.round(A.DEFAULTS.bgm * 100)), 'スライダーは現在値');
+        sl.value = '40'; sl.dispatchEvent(new Event('input', { bubbles: true }));
+        t.ok(Math.abs(A.settings.bgm - 0.4) < 1e-9 && Math.abs(U.lsGet('audio', {}).bgm - 0.4) < 1e-9, 'BGM スライダー → 設定と保存');
+        const se = document.querySelector('[data-ui="audio-se"]');
+        se.value = '0'; se.dispatchEvent(new Event('input', { bubbles: true }));
+        t.eq(A.settings.se, 0, '効果音スライダー 0');
+        click('audio-mute');
+        t.eq(A.settings.mute, true, 'ミュートのトグル');
+        t.ok(document.getElementById('set-mute').textContent.indexOf('OFF') >= 0, 'ボタンの表示がミュートに変わる');
+        click('audio-mute');
+        t.eq(A.settings.mute, false, 'もう一度押すと戻る');
+        const hit = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return Math.min(r.width, r.height); };
+        t.ok(hit('set-mute') >= 44, 'ボタンは親指で押せる大きさ（' + hit('set-mute').toFixed(0) + 'px ≥ 44）');
+        click('settings-close');
+        t.eq(p.classList.contains('on'), false, '閉じる');
+      } finally {
+        U.lsRestore(snap);
+        A.loadSettings();
+        DUO.reset();
+      }
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P6-2: 合成の実音（オフライン描画: 全効果音・6ゾーンの BGM）とテンポ',
+    quick: true,
+    run(t) {
+      const A = I().Audio;
+      t.eq(Object.keys(A.ZONES).sort().join(','), 'core,mirror,neon,ruins,sea,space', '6ゾーンの BGM 定義');
+      Object.keys(A.ZONES).forEach((z) => t.eq(typeof A.PATTERN[z], 'function', z + ' に専用のパターン'));
+      t.near(A.tempoFor(16), 1.0, 1e-9, '16 m/s はテンポそのまま');
+      t.near(A.tempoFor(44), 1.2, 1e-9, '44 m/s でテンポ +20%');
+      t.near(A.stepDur('neon', 1) * 16 * A.BARS, 8 * 4 * 60 / A.ZONES.neon.bpm, 1e-9, '8小節ループ');
+      /* ゾーンが変われば BGM もそのゾーンへ */
+      const Zs = I().Zones, keep = Zs.id();
+      Zs.switchTo('sea', true);
+      A.update(I().Game);
+      t.eq(A.bgm.zone, 'sea', 'ゾーンに合わせて BGM が替わる');
+      Zs.switchTo(keep, true);
+      A.update(I().Game);
+      const jobs = [];
+      A.SE_NAMES().forEach((n) => jobs.push(A.renderOffline('se', n, (n === 'rumble' || n === 'boom') ? 2.6 : 1.2)
+        .then((r) => ({ k: 'se:' + n, r: r }))));
+      Object.keys(A.ZONES).forEach((z) => jobs.push(A.renderOffline('bgm', z, 4).then((r) => ({ k: 'bgm:' + z, r: r }))));
+      return Promise.all(jobs).then((res) => {
+        const silent = res.filter((x) => !x.r || x.r.rms < (x.k.indexOf('bgm') === 0 ? 0.01 : 0.001)).map((x) => x.k);
+        const clip = res.filter((x) => x.r && x.r.peak > 1.5).map((x) => x.k);
+        t.eq(silent.length, 0, '全部が音になる（無音: ' + (silent.join(',') || 'なし') + '）');
+        t.eq(clip.length, 0, '極端な音割れなし（' + (clip.join(',') || 'なし') + '）');
+        t.info(res.map((x) => x.k + '=' + (x.r ? x.r.rms.toFixed(3) : '-')).join(' '));
+      });
+    }
+  });
+})();

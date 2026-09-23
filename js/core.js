@@ -310,18 +310,18 @@ const Game = {
       Current.update(Game);
       /* 重力反転ワープ（契約§4.5 / S6）: prevDist → dist の間に跨いだゲートを実行する。
          判定（collide）より先に置く＝入れ替わった面で当たり判定される。 */
-      Warp.update(Game);
+      if (Warp.update(Game)) U.sfx('gate_grav');
       /* 鏡ゾーン（§4.5 / S7）: 跨いだ面のキャラの左右を反転する。
          入力の適用（applyInput）より後・判定より前に置くと、そのフレームの入力が
          古い向きで処理されてしまう。**入力より先**に置くのが正しい…が、
          ゲートは距離で跨ぐので prevDist→dist の更新後でなければ判定できない。
          直後 1.0秒は障害物が無いため、1フレームのズレは公平性に影響しない。 */
-      Mirror.update(Game);
+      if (Mirror.update(Game)) U.sfx('gate_mirror');
       /* 入れ替えワープ（§4.5 / S7）: 上下の担当を入れ替える */
-      Swap.update(Game);
+      if (Swap.update(Game)) U.sfx('gate_swap');
       /* 合体区間（§4.5 / S8）: 跨いだゲートで合体／分離する。
          判定（collide）より先に置く＝そのフレームから「1体ぶんの判定」になる。 */
-      Merge.update(Game);
+      if (Merge.update(Game)) U.sfx('gate_merge');
       Game.syncMerged();
       if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
       Game.fireEvents();
@@ -371,7 +371,7 @@ const Game = {
           if (it.hand === 'left') act = (it.act === 'left' || it.act === 'right') ? it.act : null;
           else act = (it.act === 'jump' || it.act === 'slide') ? it.act : null;
         }
-        if (act) Runners.input(r, act);
+        if (act && Runners.input(r, act)) Game.sfxAct(r, act);
       }
       Game.syncMerged();
       return;
@@ -382,13 +382,18 @@ const Game = {
         /* タッチ: 担当は画面の上下、動作は「足場から離れる向き＝ジャンプ」で決まる */
         const r = Game.runnerForZone(it.zone);
         if (!r) continue;
-        Runners.input(r, Input.actFromDir(it.dir, r.surface));
+        const act = Input.actFromDir(it.dir, r.surface);
+        if (Runners.input(r, act)) Game.sfxAct(r, act);
       } else {
         const r = Game.runnerForHand(it.hand);
         if (!r) continue;
-        Runners.input(r, it.act);
+        if (Runners.input(r, it.act)) Game.sfxAct(r, it.act);
       }
     }
+  },
+  /* 受け付けた動作の効果音（§3 音 / P6）。人間もボットも同じ1か所を通る */
+  sfxAct(r, act) {
+    return U.sfx((act === 'jump') ? 'jump' : (act === 'slide') ? 'slide' : 'lane', { who: r.id });
   },
 
   /* チャンクの events（P2以降のギミック用フック。P1は記録するだけ） */
@@ -456,6 +461,7 @@ const Game = {
     Game.status = 'dying';                 // スロー0.6秒（§4.8）
     Game.dyingT = 0;
     Game.killer = { runner: runner.id, obstacle: obstacle.type, lane: obstacle.lane, at: obstacle.at };
+    U.sfx('hit');
     Game.runners.forEach((r) => { r.alive = true; });   // 演出中は表示を残す（共有ライフ＝2体とも終了）
   },
   onDead() {
@@ -478,6 +484,7 @@ const Game = {
     if (Game.status !== 'playing') return;
     Game.status = 'goal';
     Game.goalT = 0;
+    U.sfx('goal');
     Tutorial.hide();
   },
   /* ゴール演出のあと。最終ステージ（S8）なら **全クリア演出**を挟む（§6 P5b） */
@@ -509,7 +516,9 @@ const Game = {
   },
   updateCheckpoint() {
     const cps = Game.stage.checkpoints;
-    for (let i = 0; i < cps.length; i++) if (Game.dist >= cps[i] && cps[i] > Game.lastCheckpoint) Game.lastCheckpoint = cps[i];
+    for (let i = 0; i < cps.length; i++) {
+      if (Game.dist >= cps[i] && cps[i] > Game.lastCheckpoint) { Game.lastCheckpoint = cps[i]; U.sfx('checkpoint'); }
+    }
   },
   /* 戻り値: ベストを更新したか */
   saveBest(cleared) {
@@ -540,6 +549,7 @@ const Game = {
     World.syncCamera(Game.runners, Game.status === 'dying' ? Game.dyingT : 0, Game.speed, Game._lastDt);
     World.render();
     HUD.update(Game);
+    if (typeof Audio !== 'undefined' && Audio.update && Audio.SE) Audio.update(Game);
   },
   pump(dt) { Game.step(dt); Game.render(); },
 

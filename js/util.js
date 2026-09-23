@@ -28,6 +28,13 @@ const U = {
            U.overlap1(a.z0, a.z1, b.z0, b.z1);
   },
 
+  /* 効果音（audio.js / P6）。読み込み前・無音環境でも落ちない窓口。
+     window.Audio（HTMLAudioElement）と取り違えないよう、SE 表を持つ方だけを呼ぶ。 */
+  sfx(name, o) {
+    if (typeof Audio === 'undefined' || !Audio || !Audio.SE || !Audio.play) return false;
+    return Audio.play(name, o);
+  },
+
   /* localStorage（file:// で例外が出る環境もあるので必ず包む） */
   lsGet(key, fallback) {
     try {

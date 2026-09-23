@@ -624,6 +624,19 @@ const Setpieces = {
   active() { return !!Setpieces.state; },
   id() { return Setpieces.state ? Setpieces.state.id : null; },
 
+  /* 大演出の音（§3 音 / P6）: 予告の警告音、崩落・爆発の轟音、鏡が砕ける音 */
+  SFX: {
+    'collapse.start': ['warn', 'rumble'], 'bigjump.start': ['warn'], 'rock.start': ['warn', 'rumble'],
+    'temple.start': ['warn', 'rumble'], 'fish.start': ['warn', 'rumble'], 'blast.start': ['warn'],
+    'blast.cut': ['boom'], 'shatter.start': ['warn'], 'shatter.break': ['glass'],
+    'fall.start': ['warn', 'rumble'], 'fall.launch': ['boom']
+  },
+  sfxFor(type) {
+    const l = Setpieces.SFX[type];
+    if (!l) return 0;
+    l.forEach((n) => U.sfx(n));
+    return l.length;
+  },
   /* イベント（Game.onEvent から） */
   onEvent(e) {
     /* ミニ大演出（エンドレス / P6）の片付け: ゴールが無いので演出を残さない */
@@ -633,6 +646,7 @@ const Setpieces = {
       if (s0 && s0.mini) Setpieces.reset();
       return;
     }
+    Setpieces.sfxFor(e.type);
     if (e.type === 'collapse.start') {
       Setpieces.state = Setpieces._markMini({ id: 'collapse', startM: e.at, t: 0, front: e.at - 40 }, e);
     } else if (e.type === 'collapse.end') {

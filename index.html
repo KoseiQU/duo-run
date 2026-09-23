@@ -100,6 +100,18 @@
   button[data-ui]{position:relative;}
   button.ghost{border-color:rgba(255,255,255,.18); color:rgba(232,236,255,.75); font-size:13px; padding:9px 18px;}
 
+  /* 設定パネル（タイトル / P6） */
+  #settings{display:none; flex-direction:column; gap:12px; min-width:min(86vw,340px); text-align:left;}
+  #settings.on{display:flex;}
+  .set-row{display:flex; align-items:center; gap:12px; font-size:13px;}
+  .set-row span{width:4.5em; opacity:.8;}
+  .set-row b{width:2.6em; text-align:right; font-size:12px; opacity:.75; font-variant-numeric:tabular-nums;}
+  .set-row input[type=range]{flex:1; height:44px; accent-color:#ffb347;}
+  .set-btns{display:flex; gap:10px; flex-wrap:wrap;}
+  .set-btns button{min-height:44px;}
+  #set-mute.off{color:#ff9bb0; border-color:rgba(255,120,150,.55);}
+  #screen-title.set-open > .sub, #screen-title.set-open > .btns{display:none;}
+
   /* ステージ選択 */
   #stage-grid{display:grid; grid-template-columns:repeat(4,minmax(96px,1fr)); gap:10px; max-width:560px; width:100%;}
   @media (max-width:560px){ #stage-grid{grid-template-columns:repeat(2,1fr);} }
@@ -265,8 +277,22 @@
     </div>
     <div class="btns">
       <button class="primary" id="btn-start" data-ui="start">START</button>
+      <button class="ghost" id="btn-settings" data-ui="settings">設定</button>
     </div>
     <div class="label" id="title-best"></div>
+    <!-- 設定（音量・ミュート・チュートリアルの再表示 / §6 P6）。localStorage duorun.audio / duorun.tutorialDone -->
+    <div class="panel" id="settings" data-ui="settings-panel">
+      <div class="set-title label">SETTINGS</div>
+      <label class="set-row"><span>BGM</span>
+        <input type="range" min="0" max="100" step="5" id="set-bgm" data-ui="audio-bgm"><b id="set-bgm-v"></b></label>
+      <label class="set-row"><span>効果音</span>
+        <input type="range" min="0" max="100" step="5" id="set-se" data-ui="audio-se"><b id="set-se-v"></b></label>
+      <div class="set-btns">
+        <button class="ghost" id="set-mute" data-ui="audio-mute">音: ON</button>
+        <button class="ghost" id="set-tut" data-ui="tutorial-reset">チュートリアルをもう一度</button>
+      </div>
+      <button class="ghost" data-ui="settings-close">閉じる</button>
+    </div>
   </div>
 
   <div class="screen" id="screen-mode" data-ui="screen-mode">
@@ -319,6 +345,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/util.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/zones.js"></script>
 <script src="js/obstacles.js"></script>
 <script src="js/chunks.js"></script>
@@ -364,6 +391,7 @@
     // iPhone/iPad 専用（契約§1）。タッチ領域は常時表示する
     function updateTouchUI(){ document.body.classList.add('touch'); }
     updateTouchUI();
+    Audio.init();
     Game.init(document.getElementById('gl'));
     UI.init(Game);
     window.addEventListener('resize', function(){ World.resize(); updateTouchUI(); });

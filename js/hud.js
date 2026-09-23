@@ -269,12 +269,50 @@ const UI = {
     });
   },
 
+  /* 設定パネル（§6 P6）: 音量・ミュート・チュートリアルの再表示 */
+  settingsOpen(on) {
+    const p = document.getElementById('settings');
+    const title = document.getElementById('screen-title');
+    if (!p) return false;
+    p.classList.toggle('on', !!on);
+    if (title) title.classList.toggle('set-open', !!on);
+    UI.renderSettings();
+    return !!on;
+  },
+  renderSettings() {
+    if (typeof Audio === 'undefined' || !Audio.SE) return false;
+    const s = Audio.settings;
+    const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = String(Math.round(v * 100)); };
+    const txt = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+    set('set-bgm', s.bgm); set('set-se', s.se);
+    txt('set-bgm-v', Math.round(s.bgm * 100)); txt('set-se-v', Math.round(s.se * 100));
+    const m = document.getElementById('set-mute');
+    if (m) { m.textContent = s.mute ? '音: OFF（ミュート）' : '音: ON'; m.classList.toggle('off', !!s.mute); }
+    const tb = document.getElementById('set-tut');
+    if (tb && typeof Tutorial !== 'undefined' && Tutorial.isDone) tb.disabled = !Tutorial.isDone();
+    return true;
+  },
+
   init(game) {
     UI.game = game;
     const on = (sel, fn) => {
       document.querySelectorAll('[data-ui="' + sel + '"]').forEach((e) => e.addEventListener('click', fn));
     };
-    on('start', () => UI.show('mode'));
+    /* ボタンの手応え（小さなクリック音）。data-ui の付いたボタンすべて */
+    document.querySelectorAll('button[data-ui]').forEach((e) => e.addEventListener('click', () => U.sfx('ui')));
+    on('settings', () => UI.settingsOpen(true));
+    on('settings-close', () => UI.settingsOpen(false));
+    on('audio-mute', () => { if (typeof Audio !== 'undefined' && Audio.SE) Audio.toggleMute(); UI.renderSettings(); });
+    on('tutorial-reset', () => { if (typeof Tutorial !== 'undefined' && Tutorial.resetDone) Tutorial.resetDone(); UI.renderSettings(); });
+    ['bgm', 'se'].forEach((k) => {
+      const e = document.querySelector('[data-ui="audio-' + k + '"]');
+      if (e) e.addEventListener('input', () => {
+        if (typeof Audio !== 'undefined' && Audio.SE) Audio.setVolume(k, (+e.value || 0) / 100);
+        UI.renderSettings();
+      });
+    });
+    UI.renderSettings();
+    on('start', () => { UI.settingsOpen(false); UI.show('mode'); });
     on('mode-stage', () => UI.show('stages'));
     on('mode-endless', () => game.start('endless'));
     on('back-title', () => UI.show('title'));

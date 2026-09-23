@@ -279,6 +279,7 @@ const FF = {
   boost() {
     FF.boostT = FF.BOOST_T;
     FF.boostN++;
+    U.sfx('boost');
     FF._fxPop();
     return FF.boostT;
   },
