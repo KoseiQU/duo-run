@@ -6,7 +6,7 @@
      ・動くレーザーの**到達時刻判定**が 判定(hits) / ボット / 不変条件(Fair) で一致する
      ・点滅レーザー: OFF 中は通れる／ON 中は死ぬ
      ・S2 をボットが完走する（perfect / delay250 × seed 1〜50）
-     ・S2 の不変条件・動作比率・壁の穴
+     ・S2 の不変条件・動作比率（壁の穴は 2026-09-27 失効）
      ・大ジャンプ: 発火・滑空中はジャンプ/スライド無効・眼下の構図・中断復元
      ・S2 の解放ロジック（S1クリアで解放）とエンドレスのプール
      ・P2b-0: チュートリアル tip の語中改行なし・2体に被らない
@@ -46,7 +46,7 @@
           const safe = OBS[type].safe;
           t.eq(!a.run, true, OBS[type].label + '(' + surface + '): 立ったままは当たる');
           t.eq(a.jump, safe.indexOf('jump') >= 0, OBS[type].label + '(' + surface + '): ジャンプの可否が OBS.safe と一致');
-          t.eq(a.slide, safe.indexOf('slide') >= 0, OBS[type].label + '(' + surface + '): スライドの可否が OBS.safe と一致');
+          t.ok(!('slide' in a), OBS[type].label + '(' + surface + '): 占有の表にスライドの列が無い（2026-09-27 失効）');
           /* 隣のレーンは（span を超えていれば）素通りできる */
           const far = (OBS[type].span >= 2) ? 1 : 1;
           const b = Ob.occ(o)[side].lanes[far + (OBS[type].span - 1)] || Ob.occ(o)[side].lanes[1];
@@ -73,7 +73,7 @@
       const In = I(), Ob = In.Obstacles, CFG = In.CFG, R = In.Runners;
       /* occ が「安全」と言った動作は、通過窓を 0.01m 刻みでなめても**絶対に当たらない**。
          逆に「危険」と言った動作は、どこかで必ず当たる。 */
-      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
+      const probe = { run: 0, jump: CFG.OCC.JUMP_T };
       const cases = [];
       [0, 0.125, 0.25, 0.37, 0.5, 0.62, 0.75, 0.88].forEach((ph) => {
         cases.push({ type: 'LASER_SCAN', surface: 'floor', lane: 0, params: { scan: { from: -1, to: 1, phase: ph, periodM: 52 } } });
@@ -88,11 +88,11 @@
       cases.forEach((c) => {
         const o = Ob.make(c.type, c.surface, c.lane, 500, 0, c.params);
         const occ = Ob.occ(o);
-        const W = (In.OBS[c.type].depth + CFG.SLIDE_D) / 2 + 0.2;
+        const W = (In.OBS[c.type].depth + CFG.BODY_D) / 2 + 0.2;
         ['floor', 'ceil'].forEach((side) => {
           let anySafe = false;
           CFG.LANES.forEach((lane) => {
-            ['run', 'jump', 'slide'].forEach((act) => {
+            ['run', 'jump'].forEach((act) => {
               const want = occ[side].lanes[lane][act];
               let hit = false;
               for (let d = -W; d <= W; d += 0.01) {
@@ -119,13 +119,13 @@
       t.ok(Math.abs(In.MOT.scanLane(o3, 300 - 13) - 1) > 0.3, '手前では別の位置にいる（＝動いている）');
       const o4 = Ob.make('LASER_ROT', 'floor', 0, 300, 0, { rot: { phase: 0.25, periodM: 60 } });
       t.near(In.MOT.rotTheta(o4, 300), Math.PI / 2, 1e-9, 'phase 0.25 の到達角度は真上');
-      /* 回転レーザーは「低い所はジャンプ／立っている所はレーン移動」＝潜る要求は作らない */
-      let slideDemands = 0;
+      /* 回転レーザーは「低い所はジャンプ／立っている所はレーン移動」＝要求はこの2種だけ */
+      let otherDemands = 0;
       for (let i = 0; i <= 40; i++) {
         const oo = Ob.make('LASER_ROT', 'floor', (i % 3) - 1, 300, 0, { rot: { phase: i / 40, periodM: 60 } });
-        if (Ob.demand(oo, 'floor') === 'slide') slideDemands++;
+        if (['none', 'jump', 'lane'].indexOf(Ob.demand(oo, 'floor')) < 0) otherDemands++;
       }
-      t.eq(slideDemands, 0, '回転レーザーはスライディングを要求しない（契約§4.3 の動作比率を守る）');
+      t.eq(otherDemands, 0, '回転レーザーの要求はジャンプかレーン移動だけ（契約§4.3）');
     }
   });
 
@@ -196,7 +196,7 @@
   });
 
   /* ==========================================================================
-     5. S2: 定義・不変条件・動作比率・壁の穴
+     5. S2: 定義・不変条件・動作比率（壁の穴は出ない）
      ========================================================================== */
   DUO.__suites.push({
     name: 'S2: 定義と不変条件・動作比率（50シード）',
@@ -225,9 +225,9 @@
       }));
       t.eq(!!(kinds.scan && kinds.rot && kinds.blink), true, '横スキャン・回転・点滅の3種すべてが譜面に入っている');
 
-      let bad = 0, spFound = 0, movingSeen = 0, holeSeen = 0;
+      let bad = 0, spFound = 0, movingSeen = 0, holeSeen = 0;   // holeSeen: 壁の穴は失効＝ 0 のまま
       const kind = { LASER_SCAN: 0, LASER_ROT: 0, blink: 0 };
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const agg = { lane: 0, jump: 0, total: 0 };
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S2');
         const g = In.createGenerator(st, seed);
@@ -239,25 +239,24 @@
         if (g.log.filter((c) => c.setpiece).length === 2) spFound++;
         if (g.log.some((c) => c.id === '(setpiece-unfair)')) bad++;
         if (l.some((o) => In.OBS[o.type].motion || (o.params && o.params.blink))) movingSeen++;
-        if (l.some((o) => o.type === 'WALLHOLE')) holeSeen++;
+        if (l.some((o) => /^WALL/.test(o.type))) holeSeen++;
         if (l.some((o) => o.type === 'LASER_SCAN')) kind.LASER_SCAN++;
         if (l.some((o) => o.type === 'LASER_ROT')) kind.LASER_ROT++;
         if (l.some((o) => o.params && o.params.blink)) kind.blink++;
         const cc = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += cc.lane; agg.jump += cc.jump; agg.slide += cc.slide; agg.total += cc.total;
+        agg.lane += cc.lane; agg.jump += cc.jump; agg.total += cc.total;
       }
       t.eq(bad, 0, 'S2 50シードで §4.7 違反なし（大演出区間を含む）');
       t.eq(spFound, 50, '50シードすべてに崩落と大ジャンプの2本が入る');
       t.eq(movingSeen, 50, '50シードすべてに動く/点滅するレーザーが出る');
-      t.ok(holeSeen >= 15, '壁の穴は S2 から登場する（' + holeSeen + '/50 シード）');
+      t.eq(holeSeen, 0, '壁の穴は出ない（2026-09-27 失効 / ' + holeSeen + '/50 シード）');
       t.ok(kind.LASER_SCAN >= 25 && kind.LASER_ROT >= 25 && kind.blink >= 25,
            '3種とも十分な頻度で出る（横スキャン ' + kind.LASER_SCAN + ' / 回転 ' + kind.LASER_ROT +
            ' / 点滅 ' + kind.blink + ' /50シード）');
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S2 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
       t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S2 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S2 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S2 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.info('S2 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' 計' + agg.total);
     }
   });
 
@@ -318,12 +317,11 @@
       const before = { l: Game.runners[0].act, u: Game.runners[1].act, lane: Game.runners[0].laneTo };
       DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
       DUO.key('ArrowUp', true); DUO.pump(1 / 60); DUO.key('ArrowUp', false);
-      DUO.key('KeyS', true); DUO.pump(1 / 60); DUO.key('KeyS', false);
       t.eq(Game.runners[0].act, 'run', '滑空中はジャンプ入力が無効（LUMEN）');
       t.eq(Game.runners[1].act, 'run', '滑空中はジャンプ入力が無効（UMBRA）');
       DUO.touch('bottom', 'up'); DUO.touch('top', 'down'); DUO.touch('bottom', 'right'); DUO.pump(1 / 60);
-      t.eq(Game.runners[0].act, 'run', '滑空中はタッチのジャンプ/スライドも無効（LUMEN）');
-      t.eq(Game.runners[1].act, 'run', '滑空中はタッチのジャンプ/スライドも無効（UMBRA）');
+      t.eq(Game.runners[0].act, 'run', '滑空中はタッチのジャンプも無効（LUMEN）');
+      t.eq(Game.runners[1].act, 'run', '滑空中はタッチのジャンプも無効（UMBRA）');
       t.eq(Game.runners[0].laneTo, before.lane, '滑空中はレーン移動も起きない（自由飛行 / 契約§4.5 改訂）');
       t.eq(DUO.state().inputMode, 'free', '入力は自由飛行モード（詳細は test_p2c.js）');
       t.info('入力前の状態: ' + before.l + '/' + before.u);
@@ -574,13 +572,11 @@
       t.eq(moved, 0, '滞空中に横位置が動いたフレームは0');
       t.eq(r.laneTo, lane0 + 1, '着地の瞬間にバッファぶんが1回だけ実行される');
       t.eq(r.laneBuf, 0, 'バッファは消費される');
-      /* スライド中は横に動ける／レーン補間中のジャンプは可 */
+      /* レーン補間中のジャンプは可（スライディングは 2026-09-27 失効） */
       DUO.reset(); DUO.start('S1', 3); In.clearObstacles();
       const r2 = Game.runners[0];
-      DUO.key('KeyS', true); DUO.pump(1 / 60); DUO.key('KeyS', false);
-      t.eq(r2.act, 'slide', 'スライド中');
       DUO.key('KeyD', true); DUO.pump(1 / 60); DUO.key('KeyD', false);
-      t.eq(r2.laneTo, 1, 'スライド中の横移動はできる');
+      t.eq(r2.laneTo, 1, '横移動を始める');
       DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
       t.eq(r2.act, 'jump', 'レーン補間中でもジャンプできる');
       const to = r2.laneTo;

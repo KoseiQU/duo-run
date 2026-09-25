@@ -129,7 +129,7 @@
          判定 0.6m の柵に対して見た目 1.72m・奥行き 4.25m を比べてしまうと
          この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
          装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
+      const skip = { GAP: ['y', 'z'], LASER_SCAN: ['x', 'z'],
                      /* S6: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
                      MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                      LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
@@ -412,7 +412,6 @@
       t.eq(Ob.demand(mid, 'ceil'), 'none', '〃');
       t.eq(Ob.occ(mid).floor.lanes[0].jump, true, '中央のビームは跳んでも当たらない（跳躍帯を塞がない）');
       t.eq(Ob.occ(mid).ceil.lanes[0].jump, true, '〃 天井側も');
-      t.eq(Ob.occ(low).floor.lanes[0].slide, false, '床寄りのビームは潜っても抜けられない（跳ぶしかない）');
       t.eq(Ob.occ(low).floor.lanes[-1].run, false, '全幅なのでどのレーンでも当たる');
 
       /* --- 斜めビーム: **床と天井で避けるレーンが違う**（契約§4.5 の主題） --- */
@@ -420,7 +419,6 @@
       const occ = Ob.occ(dg);
       t.eq(occ.floor.lanes[-1].run, false, '床側はレーン -1 が塞がる');
       t.eq(occ.floor.lanes[-1].jump, false, '〃 跳んでも越えられない');
-      t.eq(occ.floor.lanes[-1].slide, false, '〃 潜っても抜けられない');
       t.eq(occ.floor.lanes[1].run, true, '床側はレーン +1 が空いている');
       t.eq(occ.ceil.lanes[1].run, false, '天井側はレーン +1 が塞がる');
       t.eq(occ.ceil.lanes[1].jump, false, '〃 跳んでも越えられない');
@@ -440,14 +438,14 @@
       t.near(MOT.diagLanes(dg2, 500 - 30).f, -1, 1e-6, '半周期ぶん手前では逆の端');
 
       /* --- occ ⇔ hits の総当り一致（判定とボットが同じ数字を見ている） --- */
-      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
+      const probe = { run: 0, jump: CFG.OCC.JUMP_T };
       let bad = 0, over = 0;
       [low, high, mid, dg].forEach((o) => {
         const oc = Ob.occ(o);
-        const W = (In.OBS[o.type].depth + CFG.SLIDE_D) / 2 + 0.2;
+        const W = (In.OBS[o.type].depth + CFG.BODY_D) / 2 + 0.2;
         ['floor', 'ceil'].forEach((side) => {
           CFG.LANES.forEach((lane) => {
-            ['run', 'jump', 'slide'].forEach((act) => {
+            ['run', 'jump'].forEach((act) => {
               const want = oc[side].lanes[lane][act];
               let hit = false;
               for (let d = -W; d <= W; d += 0.01) {
@@ -518,7 +516,7 @@
       t.ok(s6.filter((c) => c.net).length >= 3, 'レーザーネットのチャンクが ' + s6.filter((c) => c.net).length + '本');
 
       let bad = 0, spFound = 0, blanks = 0, warpSeen = 0, zeroSeen = 0, diagSeen = 0, hbeamSeen = 0, tips = 0;
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const agg = { lane: 0, jump: 0, total: 0 };
       const half = { a: 0, b: 0 }, rnd = { a: 0, b: 0 };
       /* 区画爆発は契約§4.5 緩和 v2 で 324m（ランダム区間は 1600 − 324 = 1276m まで） */
       const SP0 = 1600 - In.Setpieces.DEFS.blastout.lengthM;
@@ -541,7 +539,7 @@
         if (l.some((o) => o.type === 'LASER_H')) hbeamSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        agg.lane += c.lane; agg.jump += c.jump; agg.total += c.total;
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
@@ -588,8 +586,7 @@
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 62, 'S5 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜62%');
       t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S5 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S5 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S5 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.info('S5 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' 計' + agg.total);
       DUO.reset();
     }
   });

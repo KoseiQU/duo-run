@@ -168,7 +168,7 @@
           const o = Game.active[i];
           if (!o.view || !o.view.visible) continue;
           const T = In.OBS[o.type];
-          if (T.ghost || T.pad || T.motion || T.fish || o.type === 'BRIDGE' || o.type === 'WALLSOLID') continue;
+          if (T.ghost || T.pad || T.motion || T.fish || o.type === 'BRIDGE') continue;
           /* P5c: 判定外の標示（支柱・警告バー・路面の警告帯）は外して測る
              ＝ ここで見たいのは「当たり判定と実体の幅が食い違っていないか」だけ */
           const box = In.viewBox(o.view);
@@ -270,14 +270,14 @@
         stepQ();
         t.eq(lead.laneTo, lane0, '下半分の左フリックで戻る');
 
-        /* 上半分の上フリック＝ジャンプ／下フリック＝スライド */
+        /* 上半分の上フリック＝ジャンプ／下フリック＝何も起きない（スライディング失効 2026-09-27） */
         flick(73, 'top', 0, -90);
         stepQ();
         t.eq(lead.act, 'jump', '上半分の上フリックでジャンプ');
         stepQ(45);
         flick(74, 'top', 0, 90);
         stepQ();
-        t.eq(lead.act, 'slide', '上半分の下フリックでスライディング');
+        t.eq(lead.act, 'run', '上半分の下フリックは何も起きない（スライディング失効）');
         stepQ(40);
 
         /* 下半分の上下・上半分の横は効かない（1体を両手で操作するため） */
@@ -287,8 +287,11 @@
         t.eq(lead.act, 'run', '下半分の上フリックは効かない（移動専用）');
         flick(76, 'top', 90, 0);
         stepQ();
-        t.eq(lead.laneTo, laneA, '上半分の横フリックは効かない（跳ぶ/潜る専用）');
+        t.eq(lead.laneTo, laneA, '上半分の横フリックは効かない（跳ぶ専用）');
         t.eq(DUO.state().merged, true, 'ここまでずっと合体区間の中に居る');
+        I().HUD.update(Game);
+        t.eq(document.getElementById('hand-left-keys').textContent, '下半分 ←→移動', 'HUD（合体）: 下半分は「←→移動」');
+        t.eq(document.getElementById('hand-right-keys').textContent, '上半分 ↑跳ぶ', 'HUD（合体）: 上半分は「↑跳ぶ」だけ（潜るは失効）');
 
         /* 天井側の障害物には当たらない（**合体体と同じレーン**の天井に置く） */
         I().clearObstacles();
@@ -380,7 +383,7 @@
       const spStart = st.lengthM - SP.lengthM;
       let errs = 0, blanks = 0, spOk = 0, mergeCounts = {}, mergeIn = {};
       const mergeLen = [];
-      const densA = [], densB = [], ratio = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const densA = [], densB = [], ratio = { lane: 0, jump: 0, total: 0 };
       const gimmick = { bridge: 0, pend: 0, sync: 0,
                         warp: 0, zero: 0, net: 0, mir: 0, swap: 0, merge: 0 };
       const firstErr = [];
@@ -419,7 +422,7 @@
         densB.push(In.Fair.countDemands(inB, st.speedAt, opt).total /
                    (spStart - half - In.Fair.tipOverlap(tw, half, spStart)) * 100);
         const c = In.Fair.countDemands(g.obstacles, st.speedAt, opt);
-        ratio.lane += c.lane; ratio.jump += c.jump; ratio.slide += c.slide; ratio.total += c.total;
+        ratio.lane += c.lane; ratio.jump += c.jump; ratio.total += c.total;
       }
       t.eq(errs, 0, '50シードで §4.7 の違反なし' + (firstErr.length ? (' / ' + firstErr.join(' | ')) : ''));
       t.eq(blanks, 0, '50シードで空白チャンクなし');
@@ -449,11 +452,9 @@
       t.ok(dB <= 10.5, '密度は決定ログの実質上限（約10回/100m）を超えない: ' + dB.toFixed(2));
 
       const pl = ratio.lane / ratio.total * 100, pj = ratio.jump / ratio.total * 100;
-      const ps = ratio.slide / ratio.total * 100;
-      t.info('動作比率 レーン ' + pl.toFixed(1) + '% / ジャンプ ' + pj.toFixed(1) + '% / スライド ' + ps.toFixed(1) + '%');
+      t.info('動作比率 レーン ' + pl.toFixed(1) + '% / ジャンプ ' + pj.toFixed(1) + '%');
       t.ok(pl <= 62, 'レーン移動は 62% 以下: ' + pl.toFixed(1) + '%');
       t.ok(pj >= 30, 'ジャンプは 30% 以上: ' + pj.toFixed(1) + '%');
-      t.ok(ps <= 15, 'スライディングは 15% 以下（契約§4.3）: ' + ps.toFixed(1) + '%');
 
       /* 全ギミックの出現（50シードで各ギミックが 60% 以上のシードに出る） */
       const weak = [];

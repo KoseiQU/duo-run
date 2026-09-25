@@ -228,7 +228,8 @@ const HUD = {
        どちらを担当しているかは Game.runnerForZone の1か所だけが決める。
        フリックの案内は「足場が画面のどちらに見えているか」（Game.screenSurface）で決まる。 */
     /* 合体区間（§4.5 / S8）: 2体は1体。両手で1体を動かすので、チップは
-       「下半分＝移動／上半分＝跳ぶ・潜る」に差し替える（名前は合体体の名前）。 */
+       「下半分＝移動／上半分＝跳ぶ」に差し替える（名前は合体体の名前）。
+       スライディングは失効（2026-09-27）＝案内は「跳ぶ」の向きだけ。 */
     const mg = !!g.merged;
     [['left', 'bottom', '下半分'], ['right', 'top', '上半分']].forEach((c) => {
       const r = mg ? (g.mergeLead ? g.mergeLead() : null)
@@ -239,9 +240,9 @@ const HUD = {
       if (box) box.setAttribute('data-char', r.id);
       HUD._set('hand-' + c[0] + '-name', mg ? 'DUO' : r.id.toUpperCase());
       HUD._set('hand-' + c[0] + '-keys',
-               mg ? (c[2] + (c[0] === 'left' ? ' ←→移動' : ' ↑跳ぶ ↓潜る'))
+               mg ? (c[2] + (c[0] === 'left' ? ' ←→移動' : ' ↑跳ぶ'))
                   : (c[2] + (((g.screenSurface ? g.screenSurface(r) : r.surface) === 'floor')
-                              ? ' ↑跳ぶ ↓潜る' : ' ↓跳ぶ ↑潜る')));
+                              ? ' ↑跳ぶ' : ' ↓跳ぶ')));
     });
     /* S6: 重力反転中／無重力区間（契約§4.5）。どちらも「今どうなっているか」を面と
        滞空倍率（Zero.cur）から引くだけ＝表示と判定が必ず一致する。 */

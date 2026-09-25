@@ -127,7 +127,8 @@
       t.ok(!!types.HANDSWAP, '世界反転ゲートは採用（§4.5b）');
       t.eq(In.makeStage('endless').p8b, true, 'エンドレスは P8b の生成（stage.p8b）');
       t.eq(EK.available([]).join(','), 'hurdle,lowl,pillar,wide,laserv', '未クリアは基本障害物だけ');
-      t.ok(EK.available(['S1', 'S2']).indexOf('wallhole') >= 0 && EK.available(['S1', 'S2']).indexOf('bridge') < 0, 'S2 クリアで壁の穴・動くレーザー');
+      t.ok(EK.available(['S1', 'S2']).indexOf('scan') >= 0 && EK.available(['S1', 'S2']).indexOf('bridge') < 0, 'S2 クリアで動くレーザー');
+      t.ok(EK.GIMMICKS.indexOf('wallhole') < 0, '壁の穴は採用ギミックに無い（2026-09-27 スライディング失効）');
       t.ok(EK.available(ALL.slice(0, 5)).indexOf('flip') < 0 && EK.available(ALL).indexOf('flip') >= 0, '世界反転は S6 クリアで解放');
       t.eq(EK.available(ALL).length, EK.GIMMICKS.length, '全クリアで ' + EK.GIMMICKS.length + '種');
       /* 未クリアで生成しても解放していないギミックは出ない */

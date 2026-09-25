@@ -54,7 +54,7 @@ DUO.__suites.push({
 
     /* 反応窓の違反: 同じキャラに 2.5m（0.25秒）間隔で2回要求
        ※ speed*0.15=1.5m 以内は「同時（＝1つのウォール）」として扱うので、それより広く取る */
-    let bad = [mk('ROVER', 'floor', 0, 100), mk('WALLHOLE', 'floor', 0, 102.5)];
+    let bad = [mk('ROVER', 'floor', 0, 100), mk('PILLAR', 'floor', 0, 102.5)];
     t.ok(I.Fair.validate(bad, speedAt, { startLanes: [0] }).some((e) => e.indexOf('反応窓') >= 0), '近すぎる連続要求を違反として検出する');
 
     /* ジャンプ連続の違反: 0.45秒は空いているが 0.70秒には足りない */

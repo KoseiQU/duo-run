@@ -464,16 +464,16 @@ const Game = {
       return { hand: h.hand, act: h.act };
     });
     /* 合体〜自由飛行〜分離の間（契約§4.5 改訂）は、2体は1体（DUO体）になっている。
-       レーン移動もジャンプ／スライドも無く、操作は Input の自由飛行モードが受ける。
+       レーン移動もジャンプも無く、操作は Input の自由飛行モードが受ける。
        ＝ ここへ流れてきた1動作ずつの入力は捨てる（人間もボットも同じ1か所）。 */
     if (Setpieces.duoLocked()) return;
     /* 合体区間（契約§4.5 / S8）: 2体は1体（合体体）。**両手で1体を動かす**。
        本作のタッチは「画面の上下＝担当」（§4.2）なので、契約の
-       「左手=移動・右手=ジャンプ/スライド」を上下へ読み替える:
+       「左手=移動・右手=ジャンプ」を上下へ読み替える:
          下半分の横フリック → レーン移動（上下フリックは効かない）
-         上半分の上フリック → ジャンプ ／ 上半分の下フリック → スライディング
-       キーボード（開発・テスト用・ボット）は契約のまま
-         左手 A/D = 移動 ／ 右手 ↑ = ジャンプ・↓ = スライド。
+         上半分の上フリック → ジャンプ（下フリックは無効＝スライディング失効 2026-09-27）
+       キーボード（開発・テスト用・ボット）は
+         左手 A/D = 移動 ／ 右手 ↑ = ジャンプ。
        世界反転中は上の変換で「世界の上下」に直してから読む（合体体は床＝世界の下半分の側）。 */
     if (Game.merged) {
       const r = Game.mergeLead();
@@ -482,10 +482,10 @@ const Game = {
         let act = null;
         if (it.zone) {
           if (it.zone === 'bottom') act = (it.dir === 'left' || it.dir === 'right') ? it.dir : null;
-          else act = (it.dir === 'up') ? 'jump' : (it.dir === 'down') ? 'slide' : null;
+          else act = (it.dir === 'up') ? 'jump' : null;
         } else {
           if (it.hand === 'left') act = (it.act === 'left' || it.act === 'right') ? it.act : null;
-          else act = (it.act === 'jump' || it.act === 'slide') ? it.act : null;
+          else act = (it.act === 'jump') ? it.act : null;
         }
         if (act && Runners.input(r, act)) Game.sfxAct(r, act);
       }
@@ -500,7 +500,7 @@ const Game = {
         const r = Game.runnerForWorldZone(it.zone);
         if (!r) continue;
         const act = Input.actFromDir(it.dir, r.surface);
-        if (Runners.input(r, act)) Game.sfxAct(r, act);
+        if (act && Runners.input(r, act)) Game.sfxAct(r, act);
       } else {
         const r = Game.runners.filter((x) => x.hand === it.hand)[0] || null;
         if (!r) continue;
@@ -510,7 +510,7 @@ const Game = {
   },
   /* 受け付けた動作の効果音（§3 音 / P6）。人間もボットも同じ1か所を通る */
   sfxAct(r, act) {
-    return U.sfx((act === 'jump') ? 'jump' : (act === 'slide') ? 'slide' : 'lane', { who: r.id });
+    return U.sfx((act === 'jump') ? 'jump' : 'lane', { who: r.id });
   },
 
   /* チャンクの events（P2以降のギミック用フック。P1は記録するだけ） */
@@ -573,7 +573,7 @@ const Game = {
     return true;
   },
   /* 泡の噴出口を踏んだ（契約§4.5 新・深海 / P7b）: その体のジャンプを強制発動する
-     （滞空 0.55秒＝人間のジャンプと同じ Runners.input の1か所。スライド中ならキャンセルして跳ぶ）。
+     （滞空 0.55秒＝人間のジャンプと同じ Runners.input の1か所）。
      噴き上げの見た目は o.ventM（跳ばされた距離）から。同じ噴出口では1体につき1回 */
   onVent(runner, o) {
     const k = '_vent_' + runner.id;

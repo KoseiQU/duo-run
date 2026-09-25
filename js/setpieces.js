@@ -52,11 +52,11 @@ const Setpieces = {
          0    予告（HUD「JUMP!」＋発射台の点滅ライン）／路面が上り勾配になり始める
          6〜46 上り勾配（コリドーごと RAMP_H まで持ち上がる）
          46〜52 ジャンプ台の先端（蹴り上げ）
-         52   **発射** → 滑空区間へ（ジャンプ／スライド入力は無効。レーン移動だけ）
+         52   **発射** → 滑空区間へ（ジャンプ入力は無効。レーン移動だけ）
          52〜192 滑空 140m ＝ 速度 23〜24 m/s で約6.0秒（契約「約6〜8秒相当」）
          192  隣のビルの屋上へ**着地**（衝撃・カメラ揺れ）
          192〜200 走り抜けてゴール
-       空中の障害物は全て「跳べない／潜れない」型（§4.7 の生存経路はレーン移動で満たす）。
+       空中の障害物は全て「跳べない」型（§4.7 の生存経路はレーン移動で満たす）。
        ==================================================================== */
     bigjump: {
       id: 'bigjump',
@@ -124,7 +124,7 @@ const Setpieces = {
          58〜  **落ちてくる瓦礫の間の光柱**（LASER_V・両者レーン移動。旧「落ちる天井」は契約 v2 で失効）
          108   瓦礫（PILLAR）で通路が狭まる
          176   出口が見え始める（霧が晴れて光が差す）
-         190   **崩れる出口を潜り抜ける**（WALLHOLE）
+         190   **崩れる出口の真ん中を抜ける**（左右の瓦礫＝床の ADPANEL×2。壁の穴は契約§4.3 2026-09-27 で失効）
          200   外へ抜けてゴール
        §4.7 は通常どおり（演出でも理不尽な死を作らない）。
        ==================================================================== */
@@ -139,7 +139,8 @@ const Setpieces = {
         { at: 128, lane: -1, type: 'COLUMN' },
         { at: 156, lane: 0,  type: 'LASER_V' },
         { at: 176, lane: -1, type: 'WIDEBAR' },    // 瓦礫の隙間を抜ける
-        { at: 190, lane: 0,  type: 'WALLHOLE' }    // 崩れる出口を潜り抜ける
+        { at: 190, lane: -1, type: 'ADPANEL' },    // 崩れる出口（左右が崩れて真ん中だけ開く）
+        { at: 190, lane: 1,  type: 'ADPANEL' }
       ],
       ceil: [
         { at: 30,  lane: 0,  type: 'ROVER' },
@@ -691,7 +692,7 @@ const Setpieces = {
     } else if (e.type === 'temple.cue') {
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();
     } else if (e.type === 'temple.exit') {
-      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('EXIT', '崩れる出口を潜り抜けろ');
+      if (typeof HUD !== 'undefined' && HUD.cue) HUD.cue('EXIT', '崩れる出口の真ん中を抜けろ');
     } else if (e.type === 'temple.end') {
       if (Setpieces.state) Setpieces.state.ending = true;
       if (typeof HUD !== 'undefined' && HUD.cueHide) HUD.cueHide();

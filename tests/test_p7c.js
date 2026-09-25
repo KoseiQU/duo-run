@@ -15,7 +15,7 @@
     run(t) {
       const In = I();
       const WANT = [
-        ['S1', 'white', 700, 14, 16, ''],
+        ['S1', 'white', 600, 14, 16, ''],
         ['S2', 'neon', 1800, 16, 24, 'collapse,bigjump'],
         ['S3', 'ruins', 2000, 22, 28, 'rockchase,templefall'],
         ['S4', 'sea', 1600, 26, 30, 'megafish'],
@@ -143,12 +143,7 @@
       t.ok(0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2] < 90, '白い空間では HUD の文字が暗い（' + col + '）');
       t.eq(Ob.tone, Zs.get('white').PAL.obstacleTone, '白い空間の障害物の露出 ' + Ob.tone);
       t.ok(Ob.tone < 1, '（白に溶けないよう一段暗く）');
-      const lum = (hex) => { const c = new THREE.Color(hex); return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; };
-      const v = Ob.acquire('WALLSOLID');
-      let wall = 0;
-      v.traverse((q) => { if (q.isMesh) wall = Math.max(wall, lum(q.material.color.getHex())); });
-      Ob.release('WALLSOLID', v);
-      t.ok(wall < lum(Zs.get('white').PAL.fog) * 0.8, '白い壁は白い霧より暗く描く（' + wall.toFixed(2) + '）');
+      /* 旧「白い壁は白い霧より暗く描く」は壁の穴の失効（2026-09-27）で対象が無くなった */
       DUO.reset(); DUO.start('S2', 2); DUO.pump(1 / 60);
       t.eq(Ob.tone, 1, 'ネオンへ移ると露出は 1 に戻る');
       t.eq(document.body.getAttribute('data-zone'), 'neon', 'body[data-zone=neon]');

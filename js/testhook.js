@@ -6,7 +6,7 @@
      DUO.key(code, down)                     キー入力（e.code）
      DUO.touch(zone, dir)                    'bottom'|'top' × 'left'|'right'|'up'|'down'
                                              （dir はスクリーン方向。担当キャラの足場で
-                                               jump/slide に変換される＝§4.2 改訂）
+                                               jump に変換される。足場へ向かう向きは無効＝§4.2 2026-09-27）
      DUO.state()                             速度・距離・2体の状態・生存・現在チャンク
      DUO.skipTo(m)                           指定距離へ跳ぶ
      DUO.bot(mode)                           null | 'perfect' | 'delay250'

@@ -23,7 +23,7 @@
   const I = () => DUO.__internal;
   const ZONES = ['neon', 'ruins', 'sea', 'space', 'mirror', 'core', 'white'];
   /* 見た目を検査する「障害物」（ゲート・帯などの目印は障害物ではない） */
-  const HAZ = ['ROVER', 'LASER_LOW', 'PILLAR', 'WIDEBAR', 'LASER_V', 'WALLHOLE', 'WALLSOLID',
+  const HAZ = ['ROVER', 'LASER_LOW', 'PILLAR', 'WIDEBAR', 'LASER_V',
                'LASER_SCAN', 'LASER_ROT', 'COLUMN', 'FISH_TOOTH', 'FISH_FIN', 'FISH_TAIL'];
 
   /* 色が「赤〜橙」か「無彩色（白・灰・黒）」か */
@@ -112,7 +112,7 @@
       const In = I(), Game = In.Game, W = In.World;
       /* P7c: 7ステージの新ID。S1 の白空間は「白背景に対して暗い/赤い」方向で満たす＝符号なしの絶対差（契約§5 / P7c 指示） */
       const SPEC = [['neon', 'S2'], ['ruins', 'S3'], ['sea', 'S4'], ['space', 'S5'], ['mirror', 'S6'], ['core', 'S7'], ['white', 'S1']];
-      const TYPES = ['ROVER', 'LASER_LOW', 'PILLAR', 'WIDEBAR', 'LASER_V', 'WALLHOLE'];
+      const TYPES = ['ROVER', 'LASER_LOW', 'PILLAR', 'WIDEBAR', 'LASER_V'];
       const w = 812, h = 375;
       const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
       const cx = cv.getContext('2d', { willReadFrequently: true });
@@ -126,9 +126,7 @@
         W.setViewport(w, h, 1);
         TYPES.forEach((ty) => {
           In.clearObstacles();
-          const list = (ty === 'WALLHOLE')
-            ? [-1, 0, 1].map((l) => In.spawnOne(l === 0 ? 'WALLHOLE' : 'WALLSOLID', 'floor', l, 40))
-            : [In.spawnOne(ty, 'floor', ty === 'WIDEBAR' ? -1 : 0, 40)];
+          const list = [In.spawnOne(ty, 'floor', ty === 'WIDEBAR' ? -1 : 0, 40)];
           const A = grab().slice();
           const B = (function () {
             /* 障害物だけを消して同じ絵を描く（syncObstacles が visible を戻すので描画の直前に消す） */

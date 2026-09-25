@@ -24,14 +24,9 @@ const OBS = {
   WIDEBAR:   { span: 2, depth: 0.60, y0: 0.00, y1: 2.20,   both: false, safe: [],        label: 'ワイド梁' },
   /* ローレーザー: 面の近くを走る水平光線（0〜0.6を塞ぐ） → ジャンプ */
   LASER_LOW: { span: 1, depth: 0.24, y0: 0.00, y1: 0.60,   both: false, safe: ['jump'],  label: 'ローレーザー' },
-  /* 縦レーザー（光柱）: 1レーン全高。両者に効く → レーン移動のみ（潜れない） */
+  /* 縦レーザー（光柱）: 1レーン全高。両者に効く → レーン移動のみ */
   LASER_V:   { span: 1, depth: 0.30, y0: 0.00, y1: CFG.H,  both: true,  safe: [],        label: '縦レーザー' },
-  /* 壁の穴: 全幅の壁のうち「穴のあるレーン」。下端0.5の梁 → そのレーンでスライディング
-     （唯一のスライディング要素 / 契約§4.3改訂）。上端 2.30 は跳んでも届かない高さ＝
-     そのキャラにとっての「全高」。反対側の面は空いているので相手は上を通れる。 */
-  WALLHOLE:  { span: 1, depth: 0.55, y0: 0.50, y1: 2.30,   both: false, safe: ['slide'], label: '壁の穴' },
-  /* 壁（穴のないレーン）: 生成器が WALLHOLE を展開するとき自動で置く。チャンク定義には書かない */
-  WALLSOLID: { span: 1, depth: 0.55, y0: 0.00, y1: 2.30,   both: false, safe: [],        label: '壁' },
+  /* 壁の穴（WALLHOLE / WALLSOLID）は失効（契約§4.3 2026-09-27 スライディング概念の廃止） */
 
   /* ------------------------------------------------------------------------
      動くレーザー（S2〜 / 契約§4.3「§4.5で横にスキャンする」・§4.4 S2の新ギミック）
@@ -42,12 +37,12 @@ const OBS = {
   LASER_SCAN: { span: 1, depth: 0.30, y0: 0.00, y1: CFG.H, both: true,  safe: [], motion: 'scan', label: '横スキャン光柱' },
   /* 回転レーザー: 面に据えた発振器から腕が首を振る。腕の下は光のカーテン（面に接地）。
      低い所はジャンプで越えられ、立っている所はレーン移動で避ける（契約§4.3の比率を守るため
-     「浮いた帯（＝潜って避ける形）」は作らない）。 */
+     「浮いた帯」は作らない）。 */
   LASER_ROT:  { span: 1, depth: 0.34, y0: 0.00, y1: CFG.H, both: false, safe: [], motion: 'rot',  label: '回転レーザー' },
 
   /* ------------------------------------------------------------------------
      滑空区間の空中障害物（§4.4 S2「ビル間の大ジャンプ」）
-     空中なのでジャンプ／スライドは無効＝**レーン移動だけで避ける**。
+     空中なのでジャンプは無効＝**レーン移動だけで避ける**。
      そのため全高（0〜H）を塞ぐ both 型にそろえる（§4.7 の不変条件はそのまま適用）。
      ------------------------------------------------------------------------ */
   DRONE:    { span: 1, depth: 0.62, y0: 0.00, y1: CFG.H, both: true, safe: [], label: '広告ドローン' },
@@ -143,7 +138,7 @@ const OBS = {
   NETGATE: { span: 1, depth: 0.45, y0: 0.00, y1: 0.02, both: false, safe: [],
              ghost: true, harmless: true, gate: true, net: true, label: 'レーザーネットの枠' },
   /* 横ビーム（全幅・上下スキャン / 契約§4.5）。**到達時刻の高さ**で役割が変わる:
-       床寄り（CFG.NET.Y_LOW）  … 床の体（走る 0〜0.90／潜る 0〜0.40）に当たり、
+       床寄り（CFG.NET.Y_LOW）  … 床の体（走る 0〜0.90）に当たり、
                                   跳んだ体（1.30〜2.20）には当たらない → LUMEN がジャンプ
        天井寄り（CFG.NET.Y_HIGH）… 同じことが天井側で起きる → UMBRA がジャンプ
        中央（CFG.NET.Y_MID / Y_MID2）… どの姿勢にも当たらない → **どちらも無関係**
@@ -803,8 +798,8 @@ const Swap = {
 
    ■ 操作（契約§4.5 を本作の上下タッチ規則（§4.2）で読んだ形）
        下半分の横フリック  → レーン移動
-       上半分の上フリック  → ジャンプ ／ 上半分の下フリック → スライディング
-       キーボード（開発・テスト用）は契約のまま 左手 A/D＝移動・右手 ↑/↓
+       上半分の上フリック  → ジャンプ（下フリックは無効＝スライディング失効 2026-09-27）
+       キーボード（開発・テスト用）は 左手 A/D＝移動・右手 ↑
      ＝ 読み手は Game.applyInput の1か所だけ（人間もキーもボットも同じ経路）。
 
    ■ 判定
@@ -1225,12 +1220,12 @@ const Obstacles = {
     const t = OBS[o.type];
     const moving = !!(t.motion || (o.params && o.params.blink));
     const K = moving ? CFG.OCC.SAMPLES : 1;
-    const W = (t.depth + CFG.SLIDE_D) / 2 + CFG.OCC.PAD;
-    const ACTS = [['run', 0], ['jump', CFG.OCC.JUMP_T], ['slide', CFG.SLIDE_T / 2]];
+    const W = (t.depth + CFG.BODY_D) / 2 + CFG.OCC.PAD;
+    const ACTS = [['run', 0], ['jump', CFG.OCC.JUMP_T]];
     const res = {};
     Obstacles.SIDES.forEach((side) => {
       const lanes = {};
-      CFG.LANES.forEach((l) => { lanes[l] = { run: true, jump: true, slide: true }; });
+      CFG.LANES.forEach((l) => { lanes[l] = { run: true, jump: true }; });
       res[side] = { lanes: lanes, any: false, safe: [] };
     });
     const bands = [];
@@ -1248,8 +1243,7 @@ const Obstacles = {
             const a = ACTS[ai][0];
             if (!acts[a]) continue;
             /* その動作の体の奥行きで、通過窓の中かどうかを正確に見る */
-            const bodyD = (a === 'slide') ? CFG.SLIDE_D : CFG.BODY_D;
-            if (K > 1 && Math.abs(dz) >= (t.depth + bodyD) / 2) continue;
+            if (K > 1 && Math.abs(dz) >= (t.depth + CFG.BODY_D) / 2) continue;
             const rb = Runners.boxOf(side, lane, a, ACTS[ai][1]);
             for (let bi = 0; bi < bands.length; bi++) {
               const b = bands[bi];
@@ -1260,12 +1254,12 @@ const Obstacles = {
       }
     }
     /* pit 型（崩れる橋）: 帯は穴で、跳んでも穴の中へ着地する（崩落は 1.0秒続く）。
-       ＝ 跳躍・スライドは逃げ道にならない（通過の瞬間だけ見ると跳べば当たらないが、それは錯覚） */
+       ＝ 跳躍は逃げ道にならない（通過の瞬間だけ見ると跳べば当たらないが、それは錯覚） */
     if (t.pit) {
       Obstacles.SIDES.forEach((side) => {
         CFG.LANES.forEach((l) => {
           const a = res[side].lanes[l];
-          if (!a.run) { a.jump = false; a.slide = false; }
+          if (!a.run) a.jump = false;
         });
       });
     }
@@ -1276,7 +1270,6 @@ const Obstacles = {
         if (!a.run) {
           r.any = true;
           if (a.jump && r.safe.indexOf('jump') < 0) r.safe.push('jump');
-          if (a.slide && r.safe.indexOf('slide') < 0) r.safe.push('slide');
         }
       });
     });
@@ -1287,13 +1280,12 @@ const Obstacles = {
   laneActs(o, side, lane) { return Obstacles.occ(o)[side].lanes[lane]; },
   /* そのレーンを塞いでいるか（到達時） */
   blocksLane(o, side, lane) { return !Obstacles.occ(o)[side].lanes[lane].run; },
-  /* この面に対して要求する動作。'none' | 'jump' | 'slide' | 'lane' */
+  /* この面に対して要求する動作。'none' | 'jump' | 'lane' */
   demand(o, side) {
     if (!Obstacles.affects(o, side)) return 'none';
     const r = Obstacles.occ(o)[side];
     if (!r.any) return 'none';
     if (r.safe.indexOf('jump') >= 0) return 'jump';
-    if (r.safe.indexOf('slide') >= 0) return 'slide';
     return 'lane';
   },
   /* そのレーンに居たまま生き残れる動作の一覧（[] なら必ずレーン移動） */

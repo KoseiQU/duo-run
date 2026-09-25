@@ -375,9 +375,10 @@
         t.eq(Game.runners[0].act, 'jump', '実タッチ: 上半分の下フリック → LUMEN がジャンプ（画面の上の足場から下へ離れる）');
         t.ok(cy(rect('lumen')) > ly + 10, 'LUMEN は画面の下へ跳ぶ（y ' + ly.toFixed(0) + ' → ' + cy(rect('lumen')).toFixed(0) + '）');
         pumpN(Math.round(CFG.JUMP_T * 60));
-        flick(75, 'bottom', 0, 90);            // 下半分の下フリック＝スライディング
+        flick(75, 'bottom', 0, 90);            // 下半分の下フリック（足場へ向かう向き）＝何も起きない
         pumpN(1);
-        t.eq(Game.runners[1].act, 'slide', '実タッチ: 下半分の下フリック → UMBRA はスライディング');
+        t.eq(Game.runners[1].act, 'run', '実タッチ: 世界反転中の下半分の下フリック → UMBRA は何もしない（スライディング失効）');
+        t.eq(Game.runners[0].act, 'run', '〃 LUMEN にも届かない');
       } else {
         t.info('この環境では TouchEvent を合成できないので実タッチ経路は省略');
       }

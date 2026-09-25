@@ -122,7 +122,7 @@ const World = {
   buildRunner(id) {
     const isL = (id === 'lumen');
     const g = new THREE.Group();          // 足元が原点
-    const body = new THREE.Group();       // 姿勢（前傾・スライドの倒れ）の親
+    const body = new THREE.Group();       // 姿勢（前傾・ジャンプの抱え込み）の親
     g.add(body);
 
     /* 2体とも「発光体の子ども」。環境光が寒色なので、自発光を主にして色を保つ */
@@ -510,7 +510,7 @@ const World = {
 
   /* ==========================================================================
      死角の予告線（契約§4.5b / P8b・エンドレスだけ）
-     遮蔽物（ピラー・ワイド梁・壁の穴）の奥（通過後 1.0〜2.0秒）に障害物がある時、
+     遮蔽物（ピラー・ワイド梁）の奥（通過後 1.0〜2.0秒）に障害物がある時、
      遮蔽物の speed×1.5秒 手前から、その面・レーンの路面に **細い白の線＋小さな矢印**を出す。
      線は遮蔽物の手前 0.8〜10.8m に寝かせる（遮蔽物の後ろに引くと隠れて見えないため）。矢印は奥向き。
      Game.gen.hints（生成器が Fair.hints で作る）を読むだけ。1本 = 1ドローコール、最大 HINT_MAX 本。
@@ -672,21 +672,6 @@ const World = {
         arms[0].rotation.x = 1.55 * tuck; arms[1].rotation.x = 1.25 * tuck;
         arms[0].rotation.z = -0.35 * tuck; arms[1].rotation.z = 0.35 * tuck;
         v.parts.head.rotation.x = -0.12 * tuck;
-      } else if (r.act === 'slide') {
-        /* スライディング: 膝を畳みながら後ろへ倒す。
-           倒し角1.0rad＋脚の畳みで、見た目の高さ≒0.42・奥行き≒0.75（判定 0.40 / 0.70）。
-           body を z 方向に引いて、見た目の塊を判定ボックスの中心に合わせる。 */
-        /* 判定（高さ SLIDE_H=0.40 / 奥行き SLIDE_D）に収まるよう、
-           倒す・首をすくめる・体を少し縮める の3つで作る。 */
-        const u = U.smooth(U.clamp(r.actT / 0.12, 0, 1));
-        v.body.rotation.x = 1.26 * u;
-        v.body.position.z = -0.31 * u;                // 判定ボックスの中心に寄せる
-        v.body.scale.setScalar(1 - 0.10 * u);         // 体を丸める（一様スケール）
-        v.parts.head.position.y = 0.665 - 0.19 * u;   // 首をすくめる
-        legs[0].rotation.x = 0.95 + 0.2 * u; legs[1].rotation.x = 0.78;
-        arms[0].rotation.x = 0.95; arms[1].rotation.x = 0.72;   // 腕は前へ（路面より下に出さない）
-        arms[0].rotation.z = 0; arms[1].rotation.z = 0;
-        v.parts.head.rotation.x = -0.55 * u;
       } else {
         /* 走り: 腕振り・脚の前後・体の上下揺れ */
         v.body.rotation.x = -0.12 + Math.sin(t * 30) * 0.02;
@@ -698,7 +683,7 @@ const World = {
         v.parts.head.rotation.x = -sw * 0.05;
       }
       if (r.act !== 'run') v.body.position.y = 0;
-      if (r.act !== 'slide') { v.body.position.z = 0; v.body.scale.setScalar(1); v.parts.head.position.y = 0.665; }
+      v.body.position.z = 0; v.body.scale.setScalar(1); v.parts.head.position.y = 0.665;
       if (v.parts.cape) v.parts.cape.rotation.x = -0.12 - Math.sin(t * 9) * 0.12 - (r.act === 'jump' ? 0.45 : 0);
 
       /* 丸影は常に面の上。跳ぶほど小さく薄く（DUO体の間は足場が無いので消す） */
@@ -719,7 +704,7 @@ const World = {
         gm.opacity = darkSh ? 0.5 : 0.42;
         gm.needsUpdate = true;
       }
-      v.light.position.set(0, (r.act === 'slide') ? 0.3 : 0.55, 0);
+      v.light.position.set(0, 0.55, 0);
 
       /* 鏡の光（銀の粒）: 反転している間だけ、体のまわりを螺旋に舞う（体の上下の向きに従う） */
       const mir = !!r.mirrored && r.alive && duoK < 0.02;

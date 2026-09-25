@@ -119,7 +119,7 @@
       DUO.reset(); DUO.start('S3', 2); DUO.pump(1 / 60);
       t.eq(In.Obstacles.skinId(), 'common', '障害物の見た目は全ゾーン共通（契約§4.3 v2）');
       /* 例外（意図的に判定の外へ出る装飾。test_p2a と同じ考え方）:
-         GAP/WALLHOLE/LASER_SCAN/LASER_ROT … ネオンと同じ理由
+         GAP/LASER_SCAN/LASER_ROT … ネオンと同じ理由
          BRIDGE … 板（判定の外＝乗っている間は無害）と谷が前後・下へ伸びる */
       /* P4a で足した S5 の新ギミック:
            CURRENT/CURGATE … 当たり判定を持たない（流れの矢印とゲートだけ）
@@ -134,7 +134,7 @@
          判定 0.6m の柵に対して見た目 1.72m・奥行き 4.25m を比べてしまうと
          この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
          装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
+      const skip = { GAP: ['y', 'z'], LASER_SCAN: ['x', 'z'],
                      /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
                      MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                     WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
@@ -203,7 +203,7 @@
              '両者同時要求の余白は S3 以降 ' + In.CFG.FAIR.REACT_BOTH_LATE + '秒（契約§4.7）');
 
       let bad = 0, spFound = 0, blanks = 0, bridgeSeen = 0, pendSeen = 0, tips = 0;
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const agg = { lane: 0, jump: 0, total: 0 };
       const half = { a: 0, b: 0 };
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S3');
@@ -220,7 +220,7 @@
         if (l.some((o) => o.type === 'LASER_SCAN')) pendSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        agg.lane += c.lane; agg.jump += c.jump; agg.total += c.total;
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
@@ -251,8 +251,7 @@
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S3 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
       t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S3 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S3 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S3 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.info('S3 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' 計' + agg.total);
       DUO.reset();
     }
   });

@@ -7,8 +7,8 @@
        片面だけ（床だけ跳ぶ／天井だけ跳ぶ）か、
        片面ジャンプ＋片面レーン移動（縦レーザー／柱／サメ＋片面のハードル）
      で書く。両面が同じ動作になるのは 2レーン封鎖のゲート（全高）・同時スイッチ・斜めビームだけ。
-   ・**死角の禁止**（§4.5b）: 遮蔽物（ピラー・ワイド梁・壁の穴）の直後 1.0秒（10.6 基準m）には
-     同じレーン（ワイド梁・壁の穴は全レーン）に何も置かない＝札の中で守り、札の継ぎ目は Fair.blind が見る。
+   ・**死角の禁止**（§4.5b）: 遮蔽物（ピラー・ワイド梁）の直後 1.0秒（10.6 基準m）には
+     同じレーン（ワイド梁は全レーン）に何も置かない＝札の中で守り、札の継ぎ目は Fair.blind が見る。
    ・除外（§4.5b）: 鏡の反転・重力反転ワープ・合体区間は札にしない。世界反転ゲートは採用
      （区画 8.6秒・再通過で戻る・直後 1.0秒は障害物なし・1000m に最大1回 / 生成器が数える）。
 
@@ -23,16 +23,16 @@
 const EndlessKit = (function () {
   /* ---- 採用ギミック（§4.5b）。basic は相方として常に出る基本障害物 ---------- */
   const GIMMICKS = ['hurdle', 'lowl', 'pillar', 'wide', 'laserv',
-                    'wallhole', 'scan', 'rot', 'blink', 'net', 'sync', 'bridge', 'rock', 'shark', 'vent', 'zero', 'flip'];
+                    'scan', 'rot', 'blink', 'net', 'sync', 'bridge', 'rock', 'shark', 'vent', 'zero', 'flip'];
   const BASIC = { hurdle: 1, lowl: 1, pillar: 1, wide: 1, laserv: 1 };
   /* 相方としてほぼ全部の札に出る基本障害物（均等化の「重い順」で後回しにしてよい） */
   const COMMON = { hurdle: 1, lowl: 1 };
   const LABEL = { hurdle: 'ハードル', lowl: 'ローレーザー', pillar: 'ピラー', wide: 'ワイド梁', laserv: '縦レーザー',
-                  wallhole: '壁の穴', scan: '横スキャン（振り子）', rot: '回転レーザー', blink: '点滅レーザー',
+                  scan: '横スキャン（振り子）', rot: '回転レーザー', blink: '点滅レーザー',
                   net: 'レーザーネット', sync: '同時スイッチ', bridge: '崩れる橋', rock: '転がる丸岩', shark: 'サメ',
                   vent: '泡の噴出口', zero: '無重力ジャンプ', flip: '世界反転ゲート' };
   /* クリアで解放（エンドレスは「クリア済みのステージが持ち込んだギミック」だけ / 契約§4.4・§4.6） */
-  const UNLOCK = { S2: ['wallhole', 'scan', 'rot', 'blink'], S3: ['sync', 'bridge', 'rock'],
+  const UNLOCK = { S2: ['scan', 'rot', 'blink'], S3: ['sync', 'bridge', 'rock'],
                    S4: ['shark', 'vent'], S5: ['net', 'zero'], S6: ['flip'] };
   /* 世界反転の区画（秒）。契約「speed×8秒 以上」＋速度の上昇ぶんの余裕 */
   const FLIP_T = 8.6;
@@ -67,8 +67,6 @@ const EndlessKit = (function () {
   const fBR = (l) => f('BRIDGE', l);
   const fW = (l) => f('WIDEBAR', l);
   const cW = (l) => c('WIDEBAR', l);
-  const fH = (l) => f('WALLHOLE', l);
-  const cH = (l) => c('WALLHOLE', l);
   const VENT = (l) => f('VENT', l);
   const flat = (a) => [].concat.apply([], a.map((x) => (Array.isArray(x) ? x : [x])));
 
@@ -90,9 +88,7 @@ const EndlessKit = (function () {
     /* --- ワイド梁（直後 1.0秒は全レーン空ける）。w2 は全高のゲート（両面が同じ動き） --- */
     { id: 'w1', eg: 'wide', w: [w(0, fW(-1), cj(0, 1)), w(10.6, cW(0), fj(1))] },
     { id: 'w2', eg: 'wide', w: [w(0, fW(0), cW(0)), w(10.6, cL(-1, 0, 1)), w(15.4, fj(-1))] },
-    /* --- 壁の穴（唯一のスライド。直後 1.0秒は全レーン空ける） --- */
-    { id: 'wh1', eg: 'wallhole', wallhole: 1, w: [w(0, fH(0), cj(-1, 0, 1)), w(10.6, V(0), fj(-1, 1))] },
-    { id: 'wh2', eg: 'wallhole', wallhole: 1, w: [w(0, cH(-1), fL(0, 1)), w(10.6, fj(-1, 0)), w(15.4, cj(0, 1))] },
+    /* 壁の穴（wh1 / wh2 / x6 / y7）は失効（契約§4.3・§4.5b 2026-09-27 スライディング廃止） */
     /* --- 動くレーザー3種（横スキャン＝振り子と同じ型・回転・点滅） --- */
     { id: 'sc1', eg: 'scan', w: [w(0, S(-1, 1, 0), fj(0, 1)), w(9.7, cj(-1, 0)), w(14.5, fj(-1))] },
     { id: 'sc2', eg: 'scan', w: [w(0, S(-1, 0, 0.5), cL(-1, 1)), w(9.7, fj(-1, 0, 1)), w(14.5, cj(0))] },
@@ -129,7 +125,6 @@ const EndlessKit = (function () {
     { id: 'x3', eg: 'vent', noSwap: 1, w: [w(0, VENT(0), S(0, 1, 0.5)), w(9.7, cj(-1, 0)), w(14.5, VENT(-1), VENT(1))] },
     { id: 'x4', eg: 'bridge', w: [w(20, fBR(-1), fBR(0)), w(2, NETG()), w(6, Hhigh()), w(13.4, Hhigh()), w(25, cj(1))] },
     { id: 'x5', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, fK(0, 1)), w(24.2, cK(1, -1))] },
-    { id: 'x6', eg: 'wallhole', wallhole: 1, w: [w(0, fH(1), cLon(-1, 0, 1)), w(10.6, V(0, ON), fj(-1, 1))] },
     { id: 'x7', eg: 'zero', rigid: 1, w: [w(0, ZG(2.4)), w(2, NETG()), w(4, Hlow()), w(10, Hhigh()), w(15, fj(-1, 0, 1))] },
     { id: 'x8', eg: 'shark', noSwap: 1, w: [w(0, SH(-1, 0, 0), VENT(1)), w(9.7, cj(1)), w(19.4, SH(0, -1, 0), VENT(-1))] },
     { id: 'x9', eg: 'rot', w: [w(0, fR(0, 0.25), cj(-1, 1)), w(9.7, S(-1, 1, 0), fj(0, 1))] },
@@ -141,7 +136,6 @@ const EndlessKit = (function () {
     { id: 'y3', eg: 'vent', noSwap: 1, w: [w(0, VENT(0)), w(4.8, Hhigh()), w(9.6, fLon(-1, 0, 1))] },
     { id: 'y5', eg: 'shark', w: [w(0, SH(-1, 0, 0), fj(1)), w(9.7, S(-1, 1, 0), cj(0, 1)), w(19.4, P(1), fj(-1, 0))] },
     { id: 'y6', eg: 'wide', w: [w(0, fW(-1), cK(1, -1)), w(10.6, S(-1, 1, 0), fj(0, 1))] },
-    { id: 'y7', eg: 'wallhole', wallhole: 1, noSwap: 1, w: [w(0, fH(0), cj(-1, 0, 1)), w(10.6, SH(0, -1, 0), VENT(-1))] },
     { id: 'y8', eg: 'pillar', w: [w(0, P(0), fLon(-1, 1)), w(10.6, cR(1, 0.25), fj(0))] },
     { id: 'y9', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cK(-1, 1)), w(13.4, Hhigh()), w(27, cLon(-1, 0, 1), V(0))] },
     { id: 'y10', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, SH(-1, 0, 0), cj(1)), w(26, fK(0, 1))] },
@@ -151,14 +145,15 @@ const EndlessKit = (function () {
 
     /* --- 四つ組の札（ミニ大演出の入った速い 1000m でも、5〜6枚で採用ギミックが一巡する） --- */
     { id: 'q2', eg: 'sync', noSwap: 1, w: [w(0, SY(0, 0, 0, 0)), w(19.4, SH(0, -1, 0), VENT(-1)), w(29.1, cR(1, 0.25))] },
-    { id: 'q3', eg: 'zero', rigid: 1, w: [w(0, ZG(2.4)), w(4, fH(0), cLon(-1, 0, 1)), w(14.6, fK(0, 1)), w(20, cK(1, -1))], wallhole: 1 },
+    /* q3: 4 の床の壁の穴は失効＝取り除いただけ（天井の点滅ローレーザーだけが残る＝上下非対称のまま） */
+    { id: 'q3', eg: 'zero', rigid: 1, w: [w(0, ZG(2.4)), w(4, cLon(-1, 0, 1)), w(14.6, fK(0, 1)), w(20, cK(1, -1))] },
     { id: 'q4', eg: 'wide', w: [w(0, fW(-1), cK(1, -1)), w(10.6, S(-1, 1, 0), fj(0, 1)), w(20.3, P(1), cj(-1, 0)), w(30.9, fR(-1, 0.25))] },
     { id: 'q5', eg: 'shark', noSwap: 1, w: [w(0, SH(-1, 0, 0), VENT(1)), w(9.7, Hhigh()), w(14.5, fLon(-1, 0, 1))] },
-    /* --- 五つ組の札（無重力の中で崩れる橋／同時スイッチ→サメ＋噴出口→壁の穴＋回転） --- */
+    /* --- 五つ組の札（無重力の中で崩れる橋／同時スイッチ→サメ＋噴出口→回転） --- */
     { id: 'z5', eg: 'zero', rigid: 1, w: [w(0, ZG(3.0)), w(2, NETG()), w(22, fBR(0), fBR(1)), w(6, cK(-1, 1)),
                                          w(16.3, cLon(-1, 0, 1)), w(28, Hhigh(), V(0))] },
-    { id: 'q6', eg: 'sync', noSwap: 1, wallhole: 1, w: [w(0, SY(0, 0, 0, 0)), w(19.4, SH(0, -1, 0), VENT(-1)),
-                                                       w(29.1, fH(-1), cR(-1, 0.25))] }
+    { id: 'q6', eg: 'sync', noSwap: 1, w: [w(0, SY(0, 0, 0, 0)), w(19.4, SH(0, -1, 0), VENT(-1)),
+                                          w(29.1, cR(-1, 0.25))] }
   ];
 
   /* ---- 変種（鏡写し・床天井の入れ替え） ------------------------------------ */
@@ -206,14 +201,13 @@ const EndlessKit = (function () {
                 ex: 1, eg: u.eg, base: u.id, floor: floor, ceil: ceil, events: [] };
     if (u.rigid) d.rigid = 1;
     if (u.flip) d.flip = 1;
-    if (u.wallhole) d.wallhole = 1;
     d.gset = gimmicksOfDef(d);
     return d;
   }
 
   /* ---- 札・障害物 → ギミック -------------------------------------------- */
   const TYPE_G = { ROVER: ['hurdle'], LASER_LOW: ['lowl'], PILLAR: ['pillar'], WIDEBAR: ['wide'], LASER_V: ['laserv'],
-                   WALLHOLE: ['wallhole'], WALLSOLID: ['wallhole'], LASER_SCAN: ['scan'], LASER_ROT: ['rot'],
+                   LASER_SCAN: ['scan'], LASER_ROT: ['rot'],
                    LASER_H: ['net'], LASER_DIAG: ['net'], NETGATE: ['net'], SYNCSW: ['sync'], SYNCPAD: ['sync'],
                    BRIDGE: ['bridge'], ROCK: ['rock'], SHARK: ['shark'], VENT: ['vent'], ZEROG: ['zero'],
                    ZEROGATE: ['zero'], HANDSWAP: ['flip'], SWAPGATE: ['flip'] };

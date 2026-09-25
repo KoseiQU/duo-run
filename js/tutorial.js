@@ -29,9 +29,6 @@ const Tutorial = {
     /* S1 チュートリアル（契約§4.4 v2 / P7c） */
     jump:   { ph: ['<span class="finger">👆</span><b class="k">下半分</b>は<b class="k">上へ</b>',
                    '<b class="k2">上半分</b>は<b class="k2">下へ</b>', 'フリックでジャンプ'] },
-    hole:   { ph: ['<span class="finger">👇</span>壁の穴は<b>潜る</b>',
-                   '<b class="k">下半分</b>は<b class="k">下へ</b>・<b class="k2">上半分</b>は<b class="k2">上へ</b>',
-                   '（先に穴のレーンへ）'] },
     moving: { ph: ['<span class="finger">👀</span>赤い光は<b>動く</b>', '来る瞬間に<b>空いたレーン</b>へ'] },
     /* S3 の新ギミック（契約§4.4）。初出のときだけ短く出す */
     /* 契約§4.5 改訂 v2: 踏んで 2.0秒で崩落・抜け方はレーン移動だけ */
@@ -61,7 +58,7 @@ const Tutorial = {
     /* S8 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     mergerun: { ph: ['<span class="finger">🤝</span>2人が<b>1体</b>になった',
                      '<b class="k">下半分</b>で<b>横へ移動</b>',
-                     '<b class="k2">上半分</b>で<b>↑跳ぶ ↓潜る</b>'] }
+                     '<b class="k2">上半分</b>で<b>↑跳ぶ</b>'] }
   },
   /* ---- チュートリアル済み（契約§4.4 v2 / P7c）: **S1 をクリアしたら** duorun.tutorialDone を立てる
      （Game.onClear から。ボットの走行では記録しない）。未了のあいだはタイトルの START が S1 を促す。

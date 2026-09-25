@@ -277,9 +277,6 @@ const Audio = {
       Audio.tone(c, out, t, { type: (o.who === 'umbra') ? 'triangle' : 'square', f: 330 * k, f2: 780 * k,
                               glide: 0.11, dur: 0.16, vol: 0.13, lp: 2600 });
     },
-    slide(c, out, t, o) {
-      Audio.noise(c, out, t, { dur: 0.24, vol: 0.2, f: 2200, f2: 420, ft: 'bandpass', q: 1.4, off: 0.3 });
-    },
     lane(c, out, t, o) {
       Audio.noise(c, out, t, { dur: 0.09, vol: 0.12, f: 1400, f2: 4200, ft: 'bandpass', q: 1.1, off: 0.6 });
       Audio.tone(c, out, t, { type: 'sine', f: (o.who === 'umbra') ? 620 : 880, dur: 0.05, vol: 0.05 });

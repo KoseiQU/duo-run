@@ -94,7 +94,7 @@
       t.eq(Sy.settle(g3, 500.5), null, 'パッドの上ではまだ決まらない');
       t.eq(Sy.settle(g3, g3.deadM + 0.1), false, 'パッドを通り過ぎたら失敗');
 
-      /* --- 判定: 成功なら無害／失敗なら跳んでも潜っても抜けられない（＝迂回のみ） --- */
+      /* --- 判定: 成功なら無害／失敗なら跳んでも抜けられない（＝迂回のみ） --- */
       const gap = items.filter((o) => o.type === 'SYNCGAP' && o.surface === 'floor')[0];
       t.ok(Ob.bands(gap, gap.at, []).length > 0, '未確定のあいだは谷（＝最悪値で見える）');
       grp.ok = true;
@@ -108,7 +108,6 @@
       const occ = Ob.occ(gap);
       t.eq(occ.floor.lanes[gap.lane].run, false, 'occ は成功していても「踏み損ねた側」で測る');
       t.eq(occ.floor.lanes[gap.lane].jump, false, '谷は跳んでも越えられない（折れた橋脚）');
-      t.eq(occ.floor.lanes[gap.lane].slide, false, '潜っても抜けられない');
       t.eq(Ob.demand(gap, 'floor'), 'lane', '要求はレーン移動＝契約§4.5「レーン移動で迂回路あり」');
       t.eq(occ.floor.lanes[0].run, true, '迂回レーン(0)はそのまま走れる');
       t.eq(occ.ceil.lanes[gap.lane].run, true, '床の谷は天井には効かない');
@@ -203,7 +202,7 @@
       t.ok(s4.filter((c) => c.sync).length >= 3, '同時スイッチのチャンクが ' + s4.filter((c) => c.sync).length + '本');
 
       let bad = 0, spFound = 0, blanks = 0, syncSeen = 0, dropSeen = 0, tips = 0;
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const agg = { lane: 0, jump: 0, total: 0 };
       const half = { a: 0, b: 0 };
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S3');
@@ -219,7 +218,7 @@
         if (l.some((o) => o.type === 'SYNCGAP')) syncSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        agg.lane += c.lane; agg.jump += c.jump; agg.total += c.total;
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
@@ -251,8 +250,7 @@
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S4 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
       t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S4 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S4 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S4 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.info('S4 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' 計' + agg.total);
       /* 「ジャンプ→レーン移動 0.92秒」が S4 の譜面でも効いていること（抜き打ち） */
       const st2 = In.makeStage('S3');
       const g2 = In.createGenerator(st2, 7);
@@ -370,9 +368,13 @@
            '旧 落ちる天井の位置は縦レーザー（' + all.filter((e) => e.type === 'LASER_V').length + '本）');
       t.ok(all.filter((e) => e.type === 'COLUMN').length >= 2,
            '倒れた柱が横断する（' + all.filter((e) => e.type === 'COLUMN').length + '本）');
-      t.eq(all.filter((e) => e.type === 'WALLHOLE').length, 1, '最後は崩れる出口を潜り抜ける');
-      const exitAt = all.filter((e) => e.type === 'WALLHOLE')[0].at;
-      t.ok(exitAt > T.EXIT0, '潜り抜ける出口は「光が差し始めてから」（' + exitAt + 'm > ' + T.EXIT0 + 'm）');
+      /* 最後は崩れる出口の真ん中を抜ける（左右の瓦礫＝床の ADPANEL×2。壁の穴は 2026-09-27 失効） */
+      t.eq(all.filter((e) => /^WALL/.test(e.type)).length, 0, '壁の穴は無い');
+      const ex = all.filter((e) => e.type === 'ADPANEL');
+      t.eq(ex.map((e) => e.lane).sort().join(','), '-1,1', '出口は左右の2レーンを塞ぎ、真ん中だけが開く');
+      const exitAt = ex.length ? ex[0].at : 0;
+      t.ok(ex.every((e) => e.at === exitAt), '出口の左右は同じ位置');
+      t.ok(exitAt > T.EXIT0, '出口は「光が差し始めてから」（' + exitAt + 'm > ' + T.EXIT0 + 'm）');
       const st = In.makeStage('S3');
       const inst = In.Setpieces.build('templefall', 1800, 0, st.speedAt(1800) / In.CFG.REF_SPEED, null);
       const errs = In.Fair.validate(inst.items, st.speedAt, { startLanes: 'any', reactBoth: st.reactBoth });

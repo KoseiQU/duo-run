@@ -1,7 +1,7 @@
 /* ============================================================================
    tests/test_p2a.js — P2a 段階2で足した規範の検証
-     ・動作比率（契約 §4.3: レーン移動 50%前後／ジャンプ 35%前後／スライド 15%以下）
-     ・壁の穴のルール（rank3以上・1チャンク最大1・連続禁止・全幅に展開される）
+     ・動作比率（契約 §4.3: レーン移動／ジャンプの2種。スライディングは 2026-09-27 失効）
+     ・壁の穴の失効（定義のどこにも残っていない）
      ・カメラ対称性 camSym（横1280×720・縦375×812 とも 0.8〜1.25）
      ・見た目と当たり判定のズレ（±10%以内）
      ・速度（§4.1 2026-09-21 2倍化）
@@ -22,102 +22,97 @@
   }
 
   DUO.__suites.push({
-    name: '動作比率（契約§4.3: レーン移動/ジャンプ主体・スライドは15%以下）',
+    name: '動作比率（契約§4.3: レーン移動／ジャンプの2種・スライディング失効）',
     quick: true,
     run(t) {
       const In = I();
-      const sum = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const sum = { lane: 0, jump: 0, total: 0 };
+      let other = 0;
       for (let seed = 1; seed <= 50; seed++) {
         const g = genStage(seed);
         const c = In.Fair.countDemands(g.list, g.stage.speedAt);
-        sum.lane += c.lane; sum.jump += c.jump; sum.slide += c.slide; sum.total += c.total;
+        sum.lane += c.lane; sum.jump += c.jump; sum.total += c.total;
+        other += c.total - c.lane - c.jump;
       }
       const pct = (k) => sum.total ? sum[k] / sum.total * 100 : 0;
       t.ok(sum.total > 500, 'S0 50シードで必須動作が十分に集まる（' + sum.total + '回）');
-      /* 契約§4.3「レーン移動50%前後／ジャンプ35%前後／スライド15%以下」。
-         スライドは壁の穴だけ（S1は0%）なので、その余りはジャンプ側に乗る。
-         ＝ レーン 45〜60% を主基準、ジャンプは残り（28〜55%）で見る。 */
+      /* 契約§4.3（2026-09-27）: 回避は「横に避ける」と「飛び越える」の2種だけ。
+         レーン 45〜60% を主基準、ジャンプは残り（40〜55%）で見る。 */
       t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
-      t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('内訳 lane=' + sum.lane + ' jump=' + sum.jump + ' slide=' + sum.slide);
-
-      /* S1相当（ランク1〜2のみ）はスライド0% */
-      const s12 = { slide: 0, total: 0 };
-      for (let seed = 1; seed <= 50; seed++) {
-        const g = genStage(seed, 2);
-        const c = In.Fair.countDemands(g.list, g.stage.speedAt);
-        s12.slide += c.slide; s12.total += c.total;
-      }
-      t.eq(s12.slide, 0, 'S1相当（ランク1〜2）ではスライディングが0回（' + s12.total + '回中）');
+      t.ok(pct('jump') >= 40 && pct('jump') <= 55, 'ジャンプ ' + pct('jump').toFixed(1) + '% が 40〜55%');
+      t.eq(other, 0, '要求はレーン移動とジャンプの2種だけ（それ以外 ' + other + '回）');
+      t.ok(!('slide' in In.Fair.countDemands([], () => 10)), '集計にスライドの列が無い');
+      t.info('内訳 lane=' + sum.lane + ' jump=' + sum.jump + ' 計' + sum.total);
     }
   });
 
+  /* 壁の穴（WALLHOLE / WALLSOLID）の失効（契約§4.3 2026-09-27）。定義のどこにも残っていない */
   DUO.__suites.push({
-    name: '壁の穴のルール（rank3以上・1チャンク最大1・連続禁止・全幅展開）',
+    name: '壁の穴の失効（定義: チャンク・S1・大演出・エンドレスの札・型）',
     quick: true,
     run(t) {
       const In = I();
-      const defs = In.CHUNK_DEFS;
-      let holeChunks = 0;
-      defs.forEach((d) => {
-        const n = (d.floor || []).concat(d.ceil || []).filter((e) => e.type === 'WALLHOLE').length;
-        if (n) {
-          holeChunks++;
-          t.ok(n === 1, d.id + ': 壁の穴は1チャンクに1つだけ（' + n + '）');
-          t.ok(d.difficulty >= 3, d.id + ': 壁の穴は rank3 以上（rank' + d.difficulty + '）');
-          t.ok(d.wallhole === 1, d.id + ': wallhole フラグが立っている（生成器の連続禁止に使う）');
-        }
-        /* 失効した旧型を使っていないこと */
-        (d.floor || []).concat(d.ceil || []).forEach((e) => {
-          /* SYNCSW は「対のパッド＋その先の橋」へ展開される譜面上の型（P3b / 契約§4.5）。
-             実体は SYNCPAD / SYNCGAP なので OBS には載っていない。 */
-          if (e.type === 'SYNCSW') { t.ok(typeof In.Sync.expand === 'function', d.id + ': SYNCSW は Sync が展開する'); return; }
-          /* ZEROG / GRAVWARP も同じ「譜面上の型」（P4b / 契約§4.5）。
-             実体は ZEROGATE+ZEROFIELD / WARPGATE×2 で、規則は Zero / Warp が持つ。 */
-          if (e.type === 'ZEROG') { t.ok(typeof In.Zero.expand === 'function', d.id + ': ZEROG は Zero が展開する'); return; }
-          if (e.type === 'GRAVWARP') { t.ok(typeof In.Warp.expand === 'function', d.id + ': GRAVWARP は Warp が展開する'); return; }
-          /* MIRRORZ / HANDSWAP も同じ「譜面上の型」（P5a / 契約§4.5）。
-             実体は MIRGATE×2 / SWAPGATE×2 で、規則は Mirror / Swap が持つ。 */
-          if (e.type === 'MIRRORZ') { t.ok(typeof In.Mirror.expand === 'function', d.id + ': MIRRORZ は Mirror が展開する'); return; }
-          if (e.type === 'HANDSWAP') { t.ok(typeof In.Swap.expand === 'function', d.id + ': HANDSWAP は Swap が展開する'); return; }
-          /* MERGE も同じ「譜面上の型」（P5b / 契約§4.5 合体区間）。
-             実体は MERGEGATE×2 で、規則は Merge が持つ。 */
-          if (e.type === 'MERGE') { t.ok(typeof In.Merge.expand === 'function', d.id + ': MERGE は Merge が展開する'); return; }
-          t.ok(!!In.OBS[e.type], d.id + ': 未定義の障害物型を使っていない (' + e.type + ')');
-          t.ok(e.type !== 'WALLSOLID', d.id + ': WALLSOLID はチャンクに直接書かない');
-        });
+      const bad = (e) => e && (e.type === 'WALLHOLE' || e.type === 'WALLSOLID');
+      t.ok(!In.OBS.WALLHOLE && !In.OBS.WALLSOLID, 'OBS に WALLHOLE / WALLSOLID の型が無い');
+      let n = 0;
+      In.CHUNK_DEFS.forEach((d) => {
+        (d.floor || []).concat(d.ceil || []).forEach((e) => { if (bad(e)) n++; });
+        if (d.wallhole) n++;
       });
-      t.ok(holeChunks >= 2, '壁の穴を含むチャンクが定義されている（' + holeChunks + '本）');
+      t.eq(n, 0, 'ステージのチャンク定義に壁の穴が無い（' + In.CHUNK_DEFS.length + '本）');
+      let m = 0;
+      In.EndlessKit.UNITS.forEach((d) => {
+        (d.floor || []).concat(d.ceil || []).forEach((e) => { if (bad(e)) m++; });
+        if (d.wallhole || d.gset.indexOf('wallhole') >= 0) m++;
+      });
+      t.eq(m, 0, 'エンドレスの札に壁の穴が無い（' + In.EndlessKit.UNITS.length + '枚）');
+      t.ok(In.EndlessKit.GIMMICKS.indexOf('wallhole') < 0, 'エンドレスの採用ギミックに壁の穴が無い');
+      let k = 0;
+      In.INTRO_S1.forEach((it) => (it.floor || []).concat(it.ceil || []).forEach((e) => { if (bad(e)) k++; }));
+      t.eq(k, 0, 'S1 チュートリアル（INTRO_TUT）に壁の穴が無い');
+      t.ok(!In.Tutorial.TIPS.hole, 'tip「壁の穴は潜る」が無い');
+      let s = 0;
+      Object.keys(In.Setpieces.DEFS || {}).forEach((id) => {
+        const sc = In.Setpieces.DEFS[id];
+        (sc.floor || []).concat(sc.ceil || []).forEach((e) => { if (bad(e)) s++; });
+      });
+      t.eq(s, 0, '大演出のスクリプトに壁の穴が無い');
+      /* 文言: tip・HUD の案内に「潜る」が残っていない */
+      const txt = Object.keys(In.Tutorial.TIPS).map((id) => In.Tutorial.TIPS[id].ph.join('')).join(' ');
+      t.ok(txt.indexOf('潜') < 0, 'tip の文言に「潜る」が無い');
+    }
+  });
 
-      /* 生成結果: 全幅に展開され、穴レーン以外は WALLSOLID になる */
-      let walls = 0, consecutive = 0;
-      for (let seed = 1; seed <= 50; seed++) {
-        const g = genStage(seed);
-        const byAt = {};
-        g.list.forEach((o) => {
-          if (o.type !== 'WALLHOLE' && o.type !== 'WALLSOLID') return;
-          const k = o.surface + '@' + o.at.toFixed(2);
-          (byAt[k] = byAt[k] || []).push(o);
+  /* 生成結果にも壁の穴が出ない（全7ステージ×50シード・エンドレス（全クリア扱い）×50シード×3000m）。
+     重いので runAll のみ */
+  DUO.__suites.push({
+    name: '壁の穴が生成されない（全7ステージ×50シード・エンドレス×50シード×3000m）',
+    quick: false,
+    run(t) {
+      const In = I();
+      const U = In.U, snap = U.lsSnapshot();
+      const bad = {};
+      let n = 0, other = 0;
+      const scan = (sid, list, st) => {
+        list.forEach((o) => { n++; if (/^WALL/.test(o.type)) bad[sid] = (bad[sid] || 0) + 1; });
+        const c = In.Fair.countDemands(list, st.speedAt);
+        other += c.total - c.lane - c.jump;
+      };
+      try {
+        U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']);
+        ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'endless'].forEach((sid) => {
+          for (let seed = 1; seed <= 50; seed++) {
+            const st = In.makeStage(sid);
+            const g = In.createGenerator(st, seed);
+            const L = (sid === 'endless') ? 3000 : st.lengthM;
+            for (let d = 0; d < L + 100; d += 40) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
+            scan(sid, g.obstacles.filter((o) => o.at <= L), st);
+          }
         });
-        Object.keys(byAt).forEach((k) => {
-          const set = byAt[k];
-          walls++;
-          t.ok(set.length === 3, '壁は3レーン全部に置かれる（' + set.length + '）');
-          t.ok(set.filter((o) => o.type === 'WALLHOLE').length === 1, '穴は1レーンだけ');
-          const lanes = set.map((o) => o.lane).sort();
-          t.ok(lanes.join(',') === '-1,0,1', '3レーンを覆う（' + lanes.join(',') + '）');
-        });
-        /* 連続禁止: ログ上で壁の穴チャンクが隣り合わない */
-        const ids = g.gen.log.map((c) => c.id);
-        for (let i = 1; i < ids.length; i++) {
-          const a = In.CHUNK_DEFS.filter((d) => d.id === ids[i - 1])[0];
-          const b = In.CHUNK_DEFS.filter((d) => d.id === ids[i])[0];
-          if (a && b && a.wallhole && b.wallhole) consecutive++;
-        }
-      }
-      t.ok(walls > 0, '50シード中に壁の穴が生成される（' + walls + '枚）');
-      t.eq(consecutive, 0, '壁の穴チャンクは連続しない');
+      } finally { U.lsRestore(snap); }
+      t.eq(Object.keys(bad).length, 0, '壁の穴（WALLHOLE / WALLSOLID）は1枚も生成されない（障害物 ' + n + ' 個・' + (JSON.stringify(bad)) + '）');
+      t.eq(other, 0, '要求はレーン移動とジャンプの2種だけ（それ以外 ' + other + '回）');
+      DUO.reset();
     }
   });
 
@@ -157,7 +152,6 @@
       /* 例外（意図的に判定の外に出る装飾。いずれも「当たらないのに当たりそう」に
          見える方向ではないので許容する）:
            GAP      … 路面下の穴と、判定外の路面を戻す埋め板を持つので x だけ見る
-           WALLHOLE … 穴の中（判定の下）に潜り抜けの誘導帯があるので y の下端は見ない
            LASER_SCAN … 到達位置を示す路面のマーカー（判定の外の標示）が x/z に伸びる。
                         光柱そのものの高さ y は判定どおりなので y だけ見る
            LASER_ROT  … 腕と光のカーテンは毎フレーム bands() から置く“動く部品”なので
@@ -182,7 +176,7 @@
          判定 0.6m の柵に対して見た目 1.72m・奥行き 4.25m を比べてしまうと
          この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
          装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
+      const skip = { GAP: ['y', 'z'], LASER_SCAN: ['x', 'z'], LASER_ROT: ['x', 'y', 'z'],
                      /* S7: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
                      MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                     WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
@@ -217,7 +211,7 @@
         In.Obstacles.release(type, view);
       });
 
-      /* 2体: 走り／ジャンプ／スライドの見た目が判定ボックスに収まっているか */
+      /* 2体: 走りの見た目が判定ボックスに収まっているか（スライディングは 2026-09-27 失効） */
       DUO.reset(); DUO.start('S0', 3); DUO.pump(1 / 60);
       const Game = In.Game, W = In.World;
       const check = (act, label) => {
@@ -236,7 +230,6 @@
         while (Game.runners[0].act !== 'run') DUO.pump(1 / 60);
       };
       check('run', 'LUMEN 走り');
-      check('slide', 'LUMEN スライド');
       DUO.reset();
     }
   });

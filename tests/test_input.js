@@ -1,5 +1,6 @@
 /* ============================================================================
-   tests/test_input.js — 入力 → 状態遷移（ジャンプ／スライド／レーン補間／重力逆／フック）
+   tests/test_input.js — 入力 → 状態遷移（ジャンプ／レーン補間／重力逆／フック）
+   スライディングは失効（契約§4.2・§4.3 2026-09-27）＝ S / ↓ では何も起きないことを見る
    ============================================================================ */
 'use strict';
 
@@ -19,7 +20,7 @@
   function tap(code) { DUO.key(code, true); DUO.pump(1 / 60); DUO.key(code, false); }
 
   DUO.__suites.push({
-    name: 'キー入力 → ジャンプ／スライドの状態遷移',
+    name: 'キー入力 → ジャンプの状態遷移（S は無効）',
     quick: true,
     run(t) {
       const CFG = I().CFG;
@@ -46,19 +47,16 @@
       t.near(DUO.state().runners.lumen.actT, 2 / 60, 0.004, '空中で再入力しても跳び直さない（actTが巻き戻らない）');
       pumpFor(CFG.JUMP_T);
 
-      /* --- スライディング（S） --- */
+      /* --- S（旧スライディング）は何も起こさない（2026-09-27 失効） --- */
+      const b0 = DUO.state().runners.lumen.box;
       tap('KeyS');
       s = DUO.state();
-      t.eq(s.runners.lumen.act, 'slide', 'S でスライディング開始');
-      t.near(s.runners.lumen.box.y1 - s.runners.lumen.box.y0, CFG.SLIDE_H, 1e-6, 'スライド中の当たり判定高さ = ' + CFG.SLIDE_H);
-      pumpFor(CFG.SLIDE_T + 2 / 60);
-      t.eq(DUO.state().runners.lumen.act, 'run', 'スライド ' + CFG.SLIDE_T + '秒 で解除');
-
-      /* --- スライド中のジャンプはキャンセルして跳べる（連続要求の救済） --- */
-      tap('KeyS');
-      tap('KeyW');
-      t.eq(DUO.state().runners.lumen.act, 'jump', 'スライド中の W はジャンプへ移行できる');
-      pumpFor(CFG.JUMP_T);
+      t.eq(s.runners.lumen.act, 'run', 'S では何も起きない（run のまま）');
+      t.near(s.runners.lumen.box.y1 - s.runners.lumen.box.y0, CFG.RUN_H, 1e-6, '当たり判定の高さも直立のまま = ' + CFG.RUN_H);
+      t.eq(s.runners.lumen.box.z1 - s.runners.lumen.box.z0, b0.z1 - b0.z0, '当たり判定の奥行きも変わらない');
+      t.ok(CFG.SLIDE_T === undefined && CFG.SLIDE_H === undefined && CFG.SLIDE_D === undefined, 'SLIDE_* 定数は撤去済み');
+      t.ok(!CFG.KEYMAP.KeyS && !CFG.KEYMAP.ArrowDown, 'KEYMAP に S / ↓ が無い');
+      t.eq(I().Runners.input(I().Game.runners[0], 'slide'), false, "Runners.input('slide') は受け付けない");
 
       /* --- オートリピートは1動作 --- */
       DUO.key('KeyW', true); DUO.key('KeyW', true); DUO.pump(1 / 60);
@@ -184,7 +182,10 @@
       ev('keydown', 'ArrowDown', 'ArrowDown');
       DUO.pump(1 / 60);
       ev('keyup', 'ArrowDown', 'ArrowDown');
-      t.eq(DUO.state().runners.umbra.act, 'slide', '実 KeyboardEvent（↓）でスライドする');
+      t.eq(DUO.state().runners.umbra.act, 'run', '実 KeyboardEvent（↓）では何も起きない（スライディング失効）');
+      ev('keydown', 'ArrowUp', 'ArrowUp'); DUO.pump(1 / 60); ev('keyup', 'ArrowUp', 'ArrowUp');
+      t.eq(DUO.state().runners.umbra.act, 'jump', '実 KeyboardEvent（↑）で UMBRA がジャンプ');
+      for (let i = 0; i < 40; i++) DUO.pump(1 / 60);
       ev('keydown', 'KeyA', 'a'); DUO.pump(1 / 60); ev('keyup', 'KeyA', 'a');
       t.eq(DUO.state().runners.lumen.lane, -1, '実 KeyboardEvent（A）でレーン移動する');
       /* 割り当てのないキーは無視 */

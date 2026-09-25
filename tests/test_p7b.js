@@ -120,7 +120,6 @@
       const acts = In.Obstacles.occ(oo).floor.lanes[0];
       t.eq(acts.run, false, '崩落点で橋のレーンに居ると落ちる');
       t.eq(acts.jump, false, '跳んでも穴に着地する（崩落は 1.0秒続く）＝ジャンプは逃げ道にならない');
-      t.eq(acts.slide, false, '潜っても落ちる');
       t.eq(In.Obstacles.demand(oo, 'floor'), 'lane', '要求はレーン移動');
       t.eq(In.Obstacles.occ(oo).ceil.lanes[0].run, true, '反対の面には効かない');
       t.eq(In.Obstacles.occ(oo).floor.lanes[1].run, true, '隣のレーンは素通りできる');
@@ -246,17 +245,17 @@
       t.ok(MOT.rollLane(o, 300 + 24) < -1, '通り過ぎた後は -x 側へ抜けていく');
       t.eq(Ob.bands(o, 276).length, 0, '壁の外に居る間は当たらない');
       /* 2) occ ⇔ hits の総当り（安全と言った動作は絶対に当たらない／危険と言った動作は必ず当たる） */
-      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
+      const probe = { run: 0, jump: CFG.OCC.JUMP_T };
       let mS = 0, mD = 0, checked = 0;
       [-1, -0.5, 0, 0.5, 1].forEach((ln) => {
         [-1, 1].forEach((dir) => {
           ['floor', 'ceil'].forEach((surf) => {
             const oo = Ob.make('ROCK', surf, 0, 500, 0, { roll: { lane: ln, dir: dir, periodM: 14 } });
             const occ = Ob.occ(oo);
-            const W = (OBS.ROCK.depth + CFG.SLIDE_D) / 2 + 0.2;
+            const W = (OBS.ROCK.depth + CFG.BODY_D) / 2 + 0.2;
             ['floor', 'ceil'].forEach((side) => {
               CFG.LANES.forEach((lane) => {
-                ['run', 'jump', 'slide'].forEach((act) => {
+                ['run', 'jump'].forEach((act) => {
                   const want = occ[side].lanes[lane][act];
                   let hit = false;
                   for (let d = -W; d <= W; d += 0.01) {
@@ -436,20 +435,20 @@
       t.near(MOT.scanLane(mk(-1, 0, 0), 500), -1, 1e-9, 'phase 0 の到達位置は from');
       t.near(MOT.scanLane(mk(-1, 0, 0.5), 500), 0, 1e-9, 'phase 0.5 の到達位置は to');
       t.ok(Math.abs(MOT.scanLane(mk(-1, 0, 0), 470) - (-1)) > 0.5, '手前では横へ動いている（迫りながら横切る）');
-      const probe = { run: 0, jump: CFG.OCC.JUMP_T, slide: CFG.SLIDE_T / 2 };
+      const probe = { run: 0, jump: CFG.OCC.JUMP_T };
       let mS = 0, mD = 0, checked = 0;
       [[-1, 0, 0], [-1, 0, 0.5], [0, -1, 0], [0, -1, 0.5]].forEach((c) => {
         const o = mk(c[0], c[1], c[2]);
         const occ = Ob.occ(o);
-        const W = (OBS.SHARK.depth + CFG.SLIDE_D) / 2 + 0.2;
+        const W = (OBS.SHARK.depth + CFG.BODY_D) / 2 + 0.2;
         ['floor', 'ceil'].forEach((side) => {
           const free = CFG.LANES.filter((l) => occ[side].lanes[l].run);
           const at = MOT.scanLane(o, o.at);
           const want = (at < -0.5) ? 1 : -1;
           t.eq(free.join(','), String(want), 'from ' + c[0] + '→' + c[1] + ' ph ' + c[2] + '（' + side + '）: 空くのはサメが抜けた1レーン（' + want + '）');
-          t.eq(Ob.demand(o, side), 'lane', '要求はレーン移動（跳んでも潜っても抜けない）');
+          t.eq(Ob.demand(o, side), 'lane', '要求はレーン移動（跳んでも抜けない）');
           CFG.LANES.forEach((lane) => {
-            ['run', 'jump', 'slide'].forEach((act) => {
+            ['run', 'jump'].forEach((act) => {
               const w = occ[side].lanes[lane][act];
               let hit = false;
               for (let d = -W; d <= W; d += 0.01) {

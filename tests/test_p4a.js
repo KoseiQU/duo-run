@@ -122,7 +122,7 @@
          判定 0.6m の柵に対して見た目 1.72m・奥行き 4.25m を比べてしまうと
          この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
          装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
+      const skip = { GAP: ['y', 'z'], LASER_SCAN: ['x', 'z'],
                      /* S6: ゲートは ghost、割れた鏡の床は足場＋裂け目を毎フレーム置く（P5a） */
                      MIRGATE: ['x', 'y', 'z'], SWAPGATE: ['x', 'y', 'z'], MERGEGATE: ['x', 'y', 'z'], SHARDGAP: ['x', 'y', 'z'],
                     WARPGATE: ['x', 'y', 'z'], ZEROGATE: ['x', 'y', 'z'],
@@ -198,7 +198,7 @@
       t.eq(s5.filter((c) => c.cur || c.lift || c.door).length, 0, '海流・浮上足場・色の扉は失効（契約 v2）');
 
       let bad = 0, spFound = 0, blanks = 0, tips = 0;
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const agg = { lane: 0, jump: 0, total: 0 };
       const half = { a: 0, b: 0 };
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S4');
@@ -217,7 +217,7 @@
         if (tp.some((e) => ['shark', 'vent'].indexOf(e.params.id) < 0) ||
             tp.filter((e) => e.params.id === 'shark').length > 1 || tp.filter((e) => e.params.id === 'vent').length > 1) tips++;
         const c = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        agg.lane += c.lane; agg.jump += c.jump; agg.total += c.total;
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
@@ -251,8 +251,7 @@
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 60, 'S4 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜60%');
       t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S4 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S4 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S4 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.info('S4 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' 計' + agg.total);
       DUO.reset();
     }
   });

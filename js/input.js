@@ -8,8 +8,9 @@
      マルチタッチ（2本同時）必須。縦持ち・横持ちのどちらでも同じ規則。
    - フリックは**スクリーン方向**のまま積み、担当キャラの足場に応じて
      「足場から離れる向き＝ジャンプ」に変換する（Input.actFromDir）。
-       LUMEN（床）: 上フリック=ジャンプ / 下フリック=スライド
-       UMBRA（天井）: 下フリック=ジャンプ / 上フリック=スライド
+       LUMEN（床）: 上フリック=ジャンプ / 下フリック=何も起きない
+       UMBRA（天井）: 下フリック=ジャンプ / 上フリック=何も起きない
+     （足場へ向かうフリックは無効 / 契約§4.2・§4.3 2026-09-27 スライディング失効）
    - キュー要素は2種類:
        { hand:'left'|'right', act:... }   … キーボード・ボット（担当は「手」で決まる）
        { zone:'bottom'|'top', dir:... }   … タッチ（担当は「画面の上下」で決まる）
@@ -78,12 +79,13 @@ const Input = {
     Input.queue.push({ zone: zone, dir: dir });
     return true;
   },
-  /* 「足場から離れる向き＝ジャンプ」への変換（§4.2） */
+  /* 「足場から離れる向き＝ジャンプ」への変換（§4.2）。
+     足場へ向かう向きは **null＝何も起きない**（2026-09-27 スライディング失効）。 */
   actFromDir(dir, surface) {
     if (dir === 'left' || dir === 'right') return dir;
-    if (dir === 'up') return (surface === 'floor') ? 'jump' : 'slide';
-    if (dir === 'down') return (surface === 'floor') ? 'slide' : 'jump';
-    return dir;   // すでに jump/slide が来たらそのまま
+    if (dir === 'up') return (surface === 'floor') ? 'jump' : null;
+    if (dir === 'down') return (surface === 'floor') ? null : 'jump';
+    return (dir === 'jump') ? dir : null;   // すでに jump が来たらそのまま
   },
   /* 画面の上下 → その面を走るキャラの面 */
   surfaceOfZone(zone) { return (zone === 'top') ? 'ceil' : 'floor'; },
@@ -99,13 +101,15 @@ const Input = {
 
   /* --- キーボード --------------------------------------------------------- */
   keyEvent(code, down) {
-    const map = CFG.KEYMAP[code];
-    if (!map) return false;
-    /* 自由飛行中は「押されているか」だけを見る（1動作ずつのキューには積まない） */
+    /* 自由飛行中は「押されているか」だけを見る（1動作ずつのキューには積まない）。
+       S/↓ は走行中は無効（スライディング失効）だが、滑空の「下へ」には使う */
     if (Input.mode === 'free') {
+      if (!Input.FREE_KEYS[code]) return false;
       if (down) Input.held[code] = true; else delete Input.held[code];
       return true;
     }
+    const map = CFG.KEYMAP[code];
+    if (!map) return false;
     if (down) {
       if (Input.held[code]) return false;     // オートリピートは1動作に潰す
       Input.held[code] = true;
@@ -181,7 +185,7 @@ const Input = {
   attach(el) {
     window.addEventListener('keydown', function (e) {
       const code = Input.codeOf(e);
-      if (CFG.KEYMAP[code]) e.preventDefault();
+      if (CFG.KEYMAP[code] || Input.FREE_KEYS[code]) e.preventDefault();
       Input.keyEvent(code, true);
     }, { passive: false });
     window.addEventListener('keyup', function (e) { Input.keyEvent(Input.codeOf(e), false); });

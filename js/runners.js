@@ -14,7 +14,7 @@ const Runners = {
       surface: surface,          // 'floor' | 'ceil'
       mirrored: false,           // 左右反転中か（鏡ゾーン）
       laneFrom: 0, laneTo: 0, laneVal: 0, laneT: CFG.LANE_T,
-      act: 'run', actT: 0,       // 'run' | 'jump' | 'slide'
+      act: 'run', actT: 0,       // 'run' | 'jump'（スライディングは失効 2026-09-27）
       /* 踏み切った瞬間の滞空時間（秒）。無重力区間（§4.5 / S6）では 1.5倍になる。
          **高さは変えない**ので、通過の瞬間の姿勢（位相 = 経過/滞空）は通常と同じ。
          ＝ 判定（occ）の表は書き換わらず、変わるのは「時間」だけ。 */
@@ -50,19 +50,14 @@ const Runners = {
     }
     if (act === 'jump') {
       if (r.act === 'jump') return false;          // 空中ジャンプ不可
-      r.act = 'jump'; r.actT = 0;                  // スライド中のジャンプは可（キャンセル）
+      r.act = 'jump'; r.actT = 0;
       /* 滞空時間は **踏み切った場所** で決まる（無重力区間なら 1.5倍 / 契約§4.5）。
          Zero.cur は Game.step が毎フレーム現在地から更新する唯一の出所。 */
       r.jumpT = CFG.JUMP_T * ((typeof Zero !== 'undefined') ? Zero.cur : 1);
       r.laneBuf = 0;                               // 踏切の瞬間に古いバッファは捨てる
       return true;                                 // 補間中のジャンプは可（補間はそのまま続く）
     }
-    if (act === 'slide') {
-      if (r.act !== 'run') return false;           // 空中スライド不可
-      r.act = 'slide'; r.actT = 0;
-      return true;
-    }
-    return false;
+    return false;                                  // それ以外（足場へ向かうフリック等）は何も起きない
   },
 
   update(r, dt) {
@@ -77,7 +72,7 @@ const Runners = {
     if (r.act !== 'run') {
       const wasJump = (r.act === 'jump');
       r.actT += dt;
-      const dur = wasJump ? (r.jumpT || CFG.JUMP_T) : CFG.SLIDE_T;
+      const dur = r.jumpT || CFG.JUMP_T;
       if (r.actT >= dur) {
         r.act = 'run'; r.actT = 0;
         if (wasJump) U.sfx('land', { who: r.id });
@@ -97,7 +92,7 @@ const Runners = {
     const u = U.clamp(r.actT / (r.jumpT || CFG.JUMP_T), 0, 1);
     return CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * u), CFG.JUMP_SHAPE);
   },
-  height(r) { return r.act === 'slide' ? CFG.SLIDE_H : CFG.RUN_H; },
+  height(r) { return CFG.RUN_H; },
   x(r) { return r.laneVal * CFG.LANE_W; },
 
   /* 当たり判定ボックス（絶対座標。2体は常に z=0）
@@ -108,8 +103,8 @@ const Runners = {
     const off = (act === 'jump')
       ? CFG.JUMP_APEX * Math.pow(Math.sin(Math.PI * U.clamp(actT / (jumpT || CFG.JUMP_T), 0, 1)), CFG.JUMP_SHAPE)
       : 0;
-    const h = (act === 'slide') ? CFG.SLIDE_H : CFG.RUN_H;
-    const d = (act === 'slide') ? CFG.SLIDE_D : CFG.BODY_D;   // 倒れ込むぶん前後に伸びる
+    const h = CFG.RUN_H;
+    const d = CFG.BODY_D;
     const x = laneVal * CFG.LANE_W;
     let y0, y1;
     if (surface === 'floor') { y0 = off; y1 = off + h; }
@@ -125,7 +120,7 @@ const Runners = {
   /* t秒後の動作状態（入力がなければどうなるか）。ボットの予測に使う */
   actAfter(r, t) {
     if (r.act === 'run') return { act: 'run', actT: 0 };
-    const dur = (r.act === 'jump') ? (r.jumpT || CFG.JUMP_T) : CFG.SLIDE_T;
+    const dur = r.jumpT || CFG.JUMP_T;
     const tt = r.actT + t;
     return (tt >= dur) ? { act: 'run', actT: 0 } : { act: r.act, actT: tt };
   },

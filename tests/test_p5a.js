@@ -161,7 +161,7 @@
          判定 0.6m の柵に対して見た目 1.72m・奥行き 4.25m を比べてしまうと
          この検査の目的（当たり判定と実体の食い違いを見つける）が測れなくなるので、
          装飾（userData.deco）を外した外接箱 In.viewBox() で測る。 */
-      const skip = { GAP: ['y', 'z'], WALLHOLE: ['y0'], LASER_SCAN: ['x', 'z'],
+      const skip = { GAP: ['y', 'z'], LASER_SCAN: ['x', 'z'],
                      LASER_ROT: ['x', 'y', 'z'], BRIDGE: ['x', 'y', 'z'],
                      SYNCPAD: ['x', 'y', 'z'], SYNCGAP: ['x', 'y', 'z'], DROPCEIL: ['y', 'z'],
                      CURRENT: ['x', 'y', 'z'], CURGATE: ['x', 'y', 'z'], DOOR: ['x', 'y', 'z'],
@@ -568,7 +568,7 @@
       t.ok(s7.filter((c) => c.net).length >= 3, 'レーザーネットのチャンクが ' + s7.filter((c) => c.net).length + '本');
 
       let bad = 0, spFound = 0, blanks = 0, mirSeen = 0, swpSeen = 0, bothSeen = 0, overlapSeen = 0, netSeen = 0, tips = 0;
-      const agg = { lane: 0, jump: 0, slide: 0, total: 0 };
+      const agg = { lane: 0, jump: 0, total: 0 };
       const half = { b: 0 }, rnd = { a: 0, b: 0 };
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S6');
@@ -594,7 +594,7 @@
         if (l.some((o) => o.type === 'LASER_DIAG' || o.type === 'LASER_H')) netSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;
         const c = In.Fair.countDemands(l, st.speedAt);
-        agg.lane += c.lane; agg.jump += c.jump; agg.slide += c.slide; agg.total += c.total;
+        agg.lane += c.lane; agg.jump += c.jump; agg.total += c.total;
         /* P5c（契約§4.8 tip の猶予規則）: tip の窓（表示開始〜対象通過後 speed×1.0秒）は
          規則で「対象以外は置かない」区間なので、密度はその窓を除いた区間で測る */
         const tw = In.Fair.tipWindows(g.events);
@@ -650,8 +650,7 @@
       const pct = (k) => agg[k] / agg.total * 100;
       t.ok(pct('lane') >= 45 && pct('lane') <= 62, 'S6 レーン移動 ' + pct('lane').toFixed(1) + '% が 45〜62%');
       t.ok(pct('jump') >= 28 && pct('jump') <= 55, 'S6 ジャンプ ' + pct('jump').toFixed(1) + '% が 28〜55%');
-      t.ok(pct('slide') <= 15, 'S6 スライディング ' + pct('slide').toFixed(1) + '% ≤ 15%');
-      t.info('S6 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' slide=' + agg.slide + ' 計' + agg.total);
+      t.info('S6 内訳 lane=' + agg.lane + ' jump=' + agg.jump + ' 計' + agg.total);
       DUO.reset();
     }
   });

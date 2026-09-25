@@ -133,7 +133,7 @@ const Bot = {
 
     /* 1) レーンを決める（今の目標レーンが全滅なら、生存レーンのうち一番近い所へ） */
     let lane = r.laneTo;
-    const ok = (l) => { const a = acts[l]; return a && (a.run || a.jump || a.slide); };
+    const ok = (l) => { const a = acts[l]; return a && (a.run || a.jump); };
     if (!ok(lane)) {
       let best = null, bestCost = 1e9;
       CFG.LANES.forEach((l) => {
@@ -142,7 +142,7 @@ const Bot = {
         let cost = Math.abs(l - r.laneTo);
         if (walls[1]) {
           const a2 = Fair.laneActs(walls[1], r.surface)[l];
-          if (!(a2.run || a2.jump || a2.slide)) cost += 0.5;
+          if (!(a2.run || a2.jump)) cost += 0.5;
         }
         if (cost < bestCost) { bestCost = cost; best = l; }
       });
@@ -187,7 +187,6 @@ const Bot = {
          区間の境目で「早すぎる踏切」になって落ちる（2026-09-22 P4b で実測）。 */
     const zk = (typeof Zero !== 'undefined' && game.gen) ? Zero.kAt(game.gen.zeros, game.dist) : 1;
     if (a.jump && r.act !== 'jump' && perceived <= sp * CFG.BOT.JUMP_LEAD * zk) return { act: 'jump' };
-    if (a.slide && r.act === 'run' && perceived <= sp * CFG.BOT.SLIDE_LEAD) return { act: 'slide' };
     return null;
   },
 
@@ -202,7 +201,7 @@ const Bot = {
       return;
     }
     /* 合体区間（契約§4.5 / S8）: 動かす体は1つ（床を走っている方）だけ。
-       出す入力も人間と同じ経路＝ 移動は左手・ジャンプ/スライドは右手（§4.5 の割当）。 */
+       出す入力も人間と同じ経路＝ 移動は左手・ジャンプは右手（§4.5 の割当）。 */
     if (game.merged) {
       const r = game.mergeLead();
       const cmd = Bot.decideFor(game, r, delay);

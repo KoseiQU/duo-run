@@ -52,19 +52,18 @@
     run(t) {
       const In = I();
       const stage = In.makeStage('S1');
-      t.eq(stage.lengthM, 700, 'S1 は 700m');
+      t.eq(stage.lengthM, 600, 'S1 は 600m（2026-09-27 壁の穴失効）');
       t.near(stage.speedAt(0), 14, 1e-6, '開始 14 m/s');
-      t.near(stage.speedAt(700), 16, 1e-6, '終了 16 m/s');
+      t.near(stage.speedAt(600), 16, 1e-6, '終了 16 m/s');
       t.eq(stage.zone, 'white', 'ゾーンは白い空間');
       t.eq(stage.setpieces.length, 0, '大演出なし');
-      /* 項目の順（契約§4.4 S1）: レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー */
-      const ORDER = ['lane', 'jump', 'wide', 'hole', 'both', 'moving'];
+      /* 項目の順（契約§4.4 S1 / 2026-09-27）: レーン移動→ジャンプ→2レーン封鎖→両手同時→動くレーザー（5項目） */
+      const ORDER = ['lane', 'jump', 'wide', 'both', 'moving'];
       /* 各項目の「それだけを要求する」型（練習の中身の検査） */
       const KIND = {
         lane: (o) => o.type === 'PILLAR',
         jump: (o) => o.type === 'ROVER' || o.type === 'LASER_LOW',
         wide: (o) => o.type === 'WIDEBAR',
-        hole: (o) => o.type === 'WALLHOLE' || o.type === 'WALLSOLID',
         both: (o) => o.type === 'ROVER' || o.type === 'WIDEBAR',
         moving: (o) => o.type === 'LASER_SCAN'
       };
@@ -107,11 +106,11 @@
       t.eq(badDrill, 0, '各項目は その型だけ・練習は1〜3回（' + JSON.stringify(drillN) + '）');
       t.ok(ORDER.every((k) => drillN[k] >= 2), '練習はどの項目も2回以上（対象と合わせて3回）: ' + JSON.stringify(drillN));
       t.eq(badBoth, 0, '「両手同時」の対象は床と天井に同時');
-      /* 壁の穴（唯一のスライド）は床と天井の両方で練習する */
+      /* 壁の穴は失効（2026-09-27）＝ S1 には出ない。型は レーン移動・ジャンプ・2レーン封鎖・動くレーザーだけ */
       const g1 = In.createGenerator(stage, 1);
       g1.ensure(stage.lengthM, 0);
-      const holes = g1.obstacles.filter((o) => o.type === 'WALLHOLE');
-      t.ok(holes.some((o) => o.surface === 'floor') && holes.some((o) => o.surface === 'ceil'), '壁の穴は床と天井の両方');
+      t.eq(g1.obstacles.filter((o) => /^WALL/.test(o.type)).length, 0, '壁の穴は出ない');
+      t.eq(In.INTRO_S1.filter((it) => it.tip).length, 5, 'S1 の項目は5つ');
       t.ok(g1.obstacles.some((o) => o.type === 'LASER_SCAN'), '動くレーザー（横スキャン）が出る');
       /* エンドレスには含めない（S1 のゾーン白空間は順に無い） */
       t.eq(In.Endless.ORDER.indexOf('white'), -1, 'エンドレスのゾーン順に白空間は無い');
@@ -152,15 +151,14 @@
       for (let i = 0; i < 200; i++) DUO.__step(1 / 60);
       t.eq(el.classList.contains('on'), false, '一定時間で自動的に消える');
       /* 文言はタッチ前提（指アイコン＋フリックの言い方） */
-      ['lane', 'jump', 'wide', 'hole', 'both', 'moving'].forEach((id) => {
+      ['lane', 'jump', 'wide', 'both', 'moving'].forEach((id) => {
         t.ok(!!In.Tutorial.TIPS[id], 'S1 の文言がある: ' + id);
       });
       In.Tutorial.show('jump');
       t.ok(el.innerHTML.indexOf('finger') >= 0, '指アイコンが入っている');
       t.ok(el.textContent.indexOf('フリック') >= 0, 'フリックの言い方になっている: ' + el.textContent.slice(0, 24));
       t.ok(el.textContent.indexOf('下へ') >= 0, 'UMBRA は「下へフリックでジャンプ」と案内する');
-      In.Tutorial.show('hole');
-      t.ok(el.textContent.indexOf('潜る') >= 0, '壁の穴は「潜る」と案内する');
+      t.ok(!In.Tutorial.TIPS.hole, '壁の穴の tip は無い（2026-09-27 失効）');
       In.Tutorial.hide();
       /* 最後の「準備完了」 */
       DUO.reset(); DUO.start('S1', 3); DUO.bot('perfect');
@@ -261,7 +259,7 @@
       let guard = 0;
       while (Game.status === 'playing' && guard++ < 30000) DUO.__step(1 / 60);
       t.eq(Game.status, 'goal', 'ゴール到達で goal 演出に入る');
-      t.ok(Game.dist >= 700, '700m を走り切っている（' + Game.dist.toFixed(0) + 'm）');
+      t.ok(Game.dist >= 600, '600m を走り切っている（' + Game.dist.toFixed(0) + 'm）');
       for (let i = 0; i < 10; i++) DUO.__step(1 / 60);
       t.eq(Game.status, 'goal', '演出は 1.3 秒ほど続く');
       /* ここから先は人の手（ボットの走行ではチュートリアル済みを記録しない） */
@@ -272,7 +270,7 @@
       t.eq(document.getElementById('screen-clear').classList.contains('on'), true, 'リザルト（CLEAR）が出る');
       t.ok(document.getElementById('clear-dist').textContent.indexOf('準備完了') >= 0, '「準備完了」が表示される');
       t.eq(In.U.lsGet('cleared', []).indexOf('S1') >= 0, true, 'クリアが localStorage に残る');
-      t.ok(In.U.lsGet('best.S1', 0) >= 700, 'ベスト距離が保存される');
+      t.ok(In.U.lsGet('best.S1', 0) >= 600, 'ベスト距離が保存される');
       t.eq(DUO.state().bestUpdated, true, 'ベスト更新フラグが立つ');
       t.eq(In.U.lsGet('tutorialDone', false), true, 'S1 クリアでチュートリアル済み（duorun.tutorialDone）');
       In.UI.show('stages');
@@ -318,7 +316,7 @@
       t.eq(onScreen('dead'), true, '死亡でリザルト（CRASH）が出る');
       t.eq(click('retry'), true, 'リトライを押す');
       t.eq(DUO.state().status, 'playing', 'チェックポイントから再開する');
-      t.near(DUO.state().dist, 700 / 3, 1e-6, '1/3 地点のチェックポイントから再開');
+      t.near(DUO.state().dist, 600 / 3, 1e-6, '1/3 地点のチェックポイントから再開');
       t.eq(click('title'), true, 'タイトルへを押す');
       t.eq(onScreen('title'), true, 'タイトルに戻る');
       t.eq(DUO.state().status, 'idle', '状態も idle に戻る');

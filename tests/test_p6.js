@@ -467,11 +467,10 @@
       isolate((A) => {
         A.play = function (name) { heard[name] = (heard[name] || 0) + 1; return false; };
         const stepUntil = (cond, cap) => { let g = 0; while (!cond() && g++ < (cap || 20000)) DUO.__step(1 / 60); return cond(); };
-        /* 1) 操作: ジャンプ・着地・スライド・レーン移動（キーとタッチの実経路） */
+        /* 1) 操作: ジャンプ・着地・レーン移動（キーとタッチの実経路。スライディングは 2026-09-27 失効） */
         DUO.reset(); DUO.start('S0', 11);
         DUO.key('KeyW', true); DUO.pump(1 / 60); DUO.key('KeyW', false);
         stepUntil(() => Game.runners[0].act === 'run', 120);
-        DUO.touch('bottom', 'down'); DUO.pump(1 / 60);
         DUO.touch('top', 'right'); DUO.pump(1 / 60);
         /* 2) 被弾 */
         In.clearObstacles();
@@ -533,7 +532,8 @@
       const want = I().Audio.SE_NAMES();
       const miss = want.filter((n) => !heard[n]);
       t.eq(miss.length, 0, '全効果音 ' + want.length + ' 種がイベントから呼ばれる（未発火: ' + (miss.join(',') || 'なし') + '）');
-      ['jump', 'land', 'slide', 'lane', 'hit', 'checkpoint', 'goal', 'warn', 'rumble',
+      t.ok(want.indexOf('slide') < 0, 'スライドの効果音は撤去済み（' + want.length + ' 種）');
+      ['jump', 'land', 'lane', 'hit', 'checkpoint', 'goal', 'warn', 'rumble',
        'gate_grav', 'gate_mirror', 'gate_swap', 'gate_merge', 'boost', 'boom', 'gate'].forEach((n) => {
         t.ok(!!heard[n], n + ' が鳴る（' + (heard[n] || 0) + '回）');
       });

@@ -18,7 +18,7 @@
       r.laneFrom = actorLane; r.laneTo = actorLane; r.laneVal = actorLane; r.laneT = CFG.LANE_T;
     });
     const o = In.spawnOne(type, surface, obsLane, 30);
-    const lead = (action === 'jump') ? CFG.BOT.JUMP_LEAD : CFG.BOT.SLIDE_LEAD;
+    const lead = CFG.BOT.JUMP_LEAD;
     let fired = false, guard = 0;
     /* 障害物の後端を 2m 通り過ぎるまで回す */
     while (Game.dist < o.at + 2 && guard++ < 1200) {
@@ -50,24 +50,13 @@
         /* type,     surface, obsLane, actorLane, action, 期待:生存? */
         ['ROVER',   'floor', 0,  0, 'run',   false],
         ['ROVER',   'floor', 0,  0, 'jump',  true ],
-        ['ROVER',   'floor', 0,  0, 'slide', false],
         ['ROVER',   'floor', 0,  1, 'run',   true ],
-        ['WALLHOLE','floor', 0,  0, 'run',   false],
-        ['WALLHOLE','floor', 0,  0, 'jump',  false],
-        ['WALLHOLE','floor', 0,  0, 'slide', true ],
-        ['WALLHOLE','floor', 0, -1, 'run',   true ],
-        ['WALLSOLID','floor',0,  0, 'run',   false],
-        ['WALLSOLID','floor',0,  0, 'jump',  false],
-        ['WALLSOLID','floor',0,  0, 'slide', false],
-        ['WALLSOLID','floor',0,  1, 'run',   true ],
         ['LASER_LOW','floor',0,  0, 'run',   false],
         ['LASER_LOW','floor',0,  0, 'jump',  true ],
-        ['LASER_LOW','floor',0,  0, 'slide', false],
         ['LASER_LOW','floor',0,  1, 'run',   true ],
         ['WIDEBAR', 'floor', -1, -1, 'run',  false],
         ['WIDEBAR', 'floor', -1,  0, 'run',  false],
         ['WIDEBAR', 'floor', -1,  0, 'jump', false],
-        ['WIDEBAR', 'floor', -1,  0, 'slide',false],
         ['WIDEBAR', 'floor', -1,  1, 'run',  true ]
       ]);
     }
@@ -80,11 +69,7 @@
       table(t, [
         ['ROVER', 'ceil', 0,  0, 'run',   false],
         ['ROVER', 'ceil', 0,  0, 'jump',  true ],
-        ['ROVER', 'ceil', 0,  0, 'slide', false],
         ['ROVER', 'ceil', 0, -1, 'run',   true ],
-        ['WALLHOLE', 'ceil', 1,  1, 'run',   false],
-        ['WALLHOLE', 'ceil', 1,  1, 'slide', true ],
-        ['WALLHOLE', 'ceil', 1,  1, 'jump',  false],
         ['LASER_LOW','ceil', 1,  1, 'run',   false],
         ['LASER_LOW','ceil', 1,  1, 'jump',  true ]
       ]);
@@ -103,11 +88,9 @@
       table(t, [
         ['PILLAR', 'floor', 0,  0, 'run',   false],
         ['PILLAR', 'floor', 0,  0, 'jump',  false],
-        ['PILLAR', 'floor', 0,  0, 'slide', false],
         ['PILLAR', 'floor', 0, -1, 'run',   true ],
         ['LASER_V','floor', 0,  0, 'run',   false],
         ['LASER_V','floor', 0,  0, 'jump',  false],
-        ['LASER_V','floor', 0,  0, 'slide', false],
         ['LASER_V','floor', 0,  1, 'run',   true ]
       ]);
       /* ピラーは 2体のどちらにも効く（天井側でも死ぬ） */

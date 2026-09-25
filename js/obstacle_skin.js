@@ -12,7 +12,6 @@
      ピラー                  赤黒の縞の柱（全高）
      ワイド梁                赤黒の縞のゲート（判定どおりの高さ。床＋天井の対で全高）
      縦レーザー（光柱）      赤い光柱＋床天井の発生装置
-     壁の穴 / 壁             白い壁＋1レーンの低い開口（縁が橙に光る）
      動くレーザー            上記レーザーの色・形のまま動く（予告線は白）
 
    ■ 判定（OBS）は一切変えない。寸法はすべて OBS の y0/y1/depth/span から引く
@@ -29,9 +28,7 @@ const ObstacleSkin = {
     redSide: 0xd8301c,    // 側面の赤（面の向きが読めるよう少し暗く）
     black: 0x1c0707,      // 縞の黒
     white: 0xffffff,      // 白（ハードルの縞・縁取り）
-    wall: 0xdfe4ea,       // 壁の白
-    wallLine: 0xa3acb8,   // 壁の目地
-    orange: 0xff8a1e,     // 橙（壁の穴の縁）
+    orange: 0xff8a1e,     // 橙
     dev: 0x2b2e35,        // 回転レーザーの台座など（無彩色の暗色）
     emit: 0xd9dde3,       // レーザーの発生装置（明るい無彩色＝暗い道で装置の位置が読める）
     core: 0xffe2dc,       // 光線の芯（白に近い赤）
@@ -103,7 +100,7 @@ const ObstacleSkin = {
   },
 
   /* 白×赤縞の発光バー（ハードル・倒れた柱・牙）。高さ top の判定を持つ跳ぶ障害物。
-     バーは上端から 0.30（厚み）。その下は薄い赤の幕で「潜れない・跳べ」を示す。 */
+     バーは上端から 0.30（厚み）。その下は薄い赤の幕で「跳べ」を示す。 */
   hurdle(x, w, D, top, colA, colB, n) {
     const G = Obstacles._glow, C = ObstacleSkin.COL;
     const TH = 0.30, BD = D * 0.9;
@@ -141,24 +138,6 @@ const ObstacleSkin = {
     } else if (type === 'WIDEBAR' || type === 'ADPANEL') {
       /* 赤黒の縞のゲート（2レーン）。判定どおりの高さ（2.2）＝ 床と天井の対で全高になる */
       S.stripedBlock(x, -w / 2, w / 2, 0, t.y1, -D * 0.45, D * 0.45, { bottomEdge: true, edge: 0.12 });
-
-    } else if (type === 'WALLHOLE' || type === 'WALLSOLID') {
-      /* 白い壁。穴のレーンは下端 0.5 まで開き、開口の縁が橙に光る */
-      const hole = (type === 'WALLHOLE');
-      const y0 = hole ? t.y0 : 0, TOP = t.y1;
-      const wall = G('wall', C.wall), line = G('wallLine', C.wallLine), org = G('orange', C.orange);
-      x.box(w, TOP - y0, D * 0.8, wall, 0, (TOP + y0) / 2, 0);
-      /* 目地（横2本・縦1本）: 白一色だと距離が読めないので面を刻む */
-      [0.40, 0.72].forEach((u) => x.box(w, 0.035, 0.02, line, 0, y0 + (TOP - y0) * u, D * 0.4 + 0.01));
-      x.box(0.035, TOP - y0, 0.02, line, 0, (TOP + y0) / 2, D * 0.4 + 0.01);
-      if (hole) {
-        /* 開口の縁（上辺＋左右の縦＋床の敷居）が橙に光る */
-        x.box(w, 0.08, D * 0.86, org, 0, y0 + 0.04, 0);
-        [-1, 1].forEach((s) => x.box(0.07, y0, D * 0.86, org, s * (w / 2 - 0.035), y0 / 2, 0));
-        x.box(w, 0.03, D * 0.86, org, 0, 0.015, 0);
-      } else {
-        x.box(w, 0.06, 0.02, org, 0, TOP - 0.03, D * 0.4 + 0.012);
-      }
 
     } else if (type === 'LASER_LOW') {
       /* 赤い水平光線＋両端の小さな発生装置 */

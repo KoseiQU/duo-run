@@ -43,7 +43,7 @@ const Endless = {
     const has = (id) => (cleared || []).indexOf(id) >= 0;
     const late = CFG.FAIR.REACT_BOTH_LATE;
     const pools = {};
-    /* ネオン都市は基本セットとして最初から入っている。S2 クリアで動くレーザー・壁の穴が混ざる */
+    /* ネオン都市は基本セットとして最初から入っている。S2 クリアで動くレーザーが混ざる */
     let neon = STAGE_DEFS.endless.chunkPool.slice(), nr = STAGE_DEFS.endless.maxRank;
     if (has('S2')) { neon = neon.concat(ENDLESS_UNLOCK.S2); nr = 3; }
     pools.neon = { pool: neon, minRank: 1, maxRank: nr, reactBoth: CFG.FAIR.REACT_BOTH };

@@ -13,13 +13,12 @@
 /* ---------------------------------------------------------------- チャンク定義
    契約 §4.3 改訂（2026-09-21）に合わせた構成。
    ・回避の主役は「横に避ける（lane）」と「飛び越える（jump）」。
-   ・スライディングは WALLHOLE（壁の穴）だけ。rank3 以上・1チャンクに最大1・連続禁止。
+   ・スライディング（壁の穴 WALLHOLE）は失効（契約§4.3 2026-09-27）。回避は横とジャンプの2種だけ。
    ・PILLAR / LASER_V は床天井の両方に効く（OBS.both）。floor 配列に書けば生成時に
      surface:'both' になる（1つで「両者にレーン移動を要求するウォール」になる）。
-   ・WALLHOLE は生成時に「穴のレーン=WALLHOLE / 残り2レーン=WALLSOLID」へ展開される。
    ------------------------------------------------------------------------- */
 const CHUNK_DEFS = [
-  /* --- rank1: 1種ずつ・ゆったり（S1相当。スライディングは一切出さない） ---- */
+  /* --- rank1: 1種ずつ・ゆったり（S1相当） -------------------------------- */
   { id: 'c1_rover_f', zone: 'neon', lengthM: 46, difficulty: 1, minSpeed: 0,
     floor: [{ at: 14, lane: 0, type: 'ROVER' }, { at: 32, lane: -1, type: 'ROVER' }], ceil: [], events: [] },
   { id: 'c1_rover_c', zone: 'neon', lengthM: 46, difficulty: 1, minSpeed: 0,
@@ -61,7 +60,7 @@ const CHUNK_DEFS = [
     floor: [{ at: 12, lane: 1, type: 'ROVER' }, { at: 42, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 27, lane: 0, type: 'ROVER' }], events: [] },
 
-  /* --- rank3: 2体に別々の動作を同時に要求／ワイド梁／壁の穴 --------------- */
+  /* --- rank3: 2体に別々の動作を同時に要求／ワイド梁 ------------------------ */
   { id: 'c3_dual_a', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0,
     floor: [{ at: 12, lane: 0, type: 'ROVER' }, { at: 34, lane: -1, type: 'WIDEBAR' }],
     ceil:  [{ at: 12, lane: 0, type: 'WIDEBAR' }, { at: 34, lane: 1, type: 'ROVER' }], events: [] },
@@ -74,21 +73,6 @@ const CHUNK_DEFS = [
   { id: 'c3_gauntlet', zone: 'neon', lengthM: 60, difficulty: 3, minSpeed: 0,
     floor: [{ at: 12, lane: -1, type: 'LASER_V' }, { at: 30, lane: 0, type: 'ROVER' }, { at: 46, lane: 1, type: 'LASER_V' }],
     ceil: [], events: [] },
-  /* 壁の穴（唯一のスライディング要素・1チャンクに1つだけ・連続禁止）。
-     密度の規範（§4.7）に乗るよう、前後に両者同時のウォールを持たせる。 */
-  { id: 'c3_wallhole_f', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, wallhole: 1, dense: 1,
-    floor: [{ at: 14, lane: 0, type: 'WALLHOLE' }, { at: 29, lane: -1, type: 'ROVER' },
-            { at: 44, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 29, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 'c3_wallhole_c', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, wallhole: 1, dense: 1,
-    floor: [{ at: 14, lane: 1, type: 'ROVER' }, { at: 29, lane: 0, type: 'LASER_LOW' },
-            { at: 44, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 14, lane: -1, type: 'WALLHOLE' }, { at: 29, lane: 1, type: 'ROVER' }], events: [] },
-  { id: 'c3_wallhole_x', zone: 'neon', lengthM: 52, difficulty: 3, minSpeed: 0, wallhole: 1, dense: 1,
-    floor: [{ at: 12, lane: -1, type: 'ROVER' }, { at: 27, lane: 1, type: 'WALLHOLE' },
-            { at: 44, lane: 0, type: 'ROVER' }],
-    ceil:  [{ at: 12, lane: 0, type: 'LASER_LOW' }, { at: 27, lane: -1, type: 'PILLAR' },
-            { at: 44, lane: 1, type: 'ROVER' }], events: [] },
 
   /* ==========================================================================
      S2「ネオン都市・夜」の動くレーザー（契約§4.4 / §4.5）
@@ -305,10 +289,6 @@ const CHUNK_DEFS = [
             { at: 54, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 10, lane: -1, type: 'LASER_LOW' }, { at: 32, lane: 1, type: 'ROVER' },
             { at: 54, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 'r3_wallhole', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, wallhole: 1, dense: 1,
-    floor: [{ at: 14, lane: 0, type: 'WALLHOLE' }, { at: 30, lane: -1, type: 'ROVER' },
-            { at: 44, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 14, lane: 1, type: 'ROVER' }, { at: 30, lane: 0, type: 'ROVER' }], events: [] },
   { id: 'r3_bridge_duo', zone: 'ruins', lengthM: 54, difficulty: 3, minSpeed: 0, s3: 1, dense: 1, bridge: 1,
     /* 右の橋に乗せられ、崩落の続く間に中央の光柱＝ **左まで2レーン** 抜ける（崩れた右は通れない） */
     floor: [{ at: 8, lane: -1, type: 'WIDEBAR' }, { at: 26, lane: 1, type: 'BRIDGE' },
@@ -459,7 +439,7 @@ const CHUNK_DEFS = [
             { at: 48, lane: 1, type: 'PILLAR' }, { at: 55, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 30, lane: -1, type: 'ROVER' }, { at: 38, lane: 1, type: 'LASER_LOW' }], events: [] },
 
-  /* --- 内部の回廊（列柱の縫い・跳び継ぎ・壁の穴） ------------------------ */
+  /* --- 内部の回廊（列柱の縫い・跳び継ぎ） -------------------------------- */
   { id: 'r4_weave', zone: 'ruins', lengthM: 60, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
     floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 15, lane: -1, type: 'LASER_V' },
             { at: 22, lane: 1, type: 'PILLAR' }, { at: 31, lane: 0, type: 'LASER_V' },
@@ -472,10 +452,6 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 9, lane: 1, type: 'ROVER' }, { at: 17, lane: 0, type: 'LASER_LOW' },
             { at: 25, lane: -1, type: 'ROVER' }, { at: 33, lane: 1, type: 'ROVER' },
             { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 49, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 'r4_wallhole', zone: 'ruins', lengthM: 58, difficulty: 3, minSpeed: 0, s4: 1, wallhole: 1, dense: 1,
-    floor: [{ at: 12, lane: 1, type: 'WALLHOLE' }, { at: 30, lane: 0, type: 'LASER_V' },
-            { at: 46, lane: -1, type: 'PILLAR' }],
-    ceil:  [{ at: 12, lane: -1, type: 'ROVER' }], events: [] },
   { id: 'r4_duo', zone: 'ruins', lengthM: 62, difficulty: 4, minSpeed: 0, s4: 1, dense: 2,
     floor: [{ at: 9, lane: 1, type: 'ROVER' }, { at: 19, lane: 0, type: 'PILLAR' },
             { at: 27, lane: -1, type: 'ROVER' }, { at: 37, lane: 1, type: 'LASER_V' },
@@ -687,7 +663,7 @@ const CHUNK_DEFS = [
             { at: 58, lane: -1, type: 'PILLAR' }],
     ceil:  [{ at: 36, lane: 1, type: 'ROVER' }], events: [] },
 
-  /* --- 深海の最奥（rank4・最も密）と、壁の穴・つなぎ -------------------- */
+  /* --- 深海の最奥（rank4・最も密）と、つなぎ ---------------------------- */
   { id: 's5_gauntlet', zone: 'sea', lengthM: 68, difficulty: 4, minSpeed: 0, s5: 1, dense: 2,
     floor: [{ at: 8, lane: 0, type: 'PILLAR' }, { at: 14, lane: 1, type: 'LASER_V' },
             { at: 20, lane: -1, type: 'PILLAR' }, { at: 26, lane: -1, type: 'ADPANEL' }, { at: 26, lane: 1, type: 'ADPANEL' },
@@ -709,11 +685,6 @@ const CHUNK_DEFS = [
             { at: 28, lane: 0, type: 'WIDEBAR' }, { at: 33, lane: 0, type: 'LASER_V' },
             { at: 38, lane: 1, type: 'PILLAR' }, { at: 43, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 8, lane: 0, type: 'WIDEBAR' }, { at: 28, lane: -1, type: 'WIDEBAR' }], events: [] },
-  { id: 's5_wallhole', zone: 'sea', lengthM: 60, difficulty: 3, minSpeed: 0, s5: 1, wallhole: 1, dense: 1,
-    floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 20, lane: 0, type: 'PILLAR' },
-            { at: 26, lane: -1, type: 'LASER_V' }, { at: 36, lane: 1, type: 'ROVER' },
-            { at: 46, lane: 0, type: 'PILLAR' }, { at: 52, lane: -1, type: 'LASER_V' }],
-    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 36, lane: 0, type: 'ROVER' }], events: [] },
   /* --- サメの横断・泡の噴出口（契約§4.5【新・深海】/ P7b） ------------------
      SHARK: 2レーン幅の壁（全高・両者に効く）が横スキャンしながら迫る。到達の瞬間は端で溜まる
             （phase 0＝from／0.5＝to）＝ **サメが抜けた（空いた）1レーン** へ入る。
@@ -860,9 +831,9 @@ const CHUNK_DEFS = [
             { at: 51.8, lane: -1, type: 'PILLAR' }, { at: 56.6, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 1, type: 'ROVER' }, { at: 42.1, lane: -1, type: 'LASER_LOW' }], events: [] },
-  { id: 's6_mix_f', zone: 'space', lengthM: 68, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, leap: 1, wallhole: 1,
-    /* 壁の穴（唯一のスライディング要素）を1つだけ混ぜる。契約§4.3「1チャンクに最大1」 */
-    floor: [{ at: 8, lane: 0, type: 'WALLHOLE' }, { at: 17.7, lane: 1, type: 'PILLAR' },
+  { id: 's6_mix_f', zone: 'space', lengthM: 68, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, leap: 1,
+    /* 先頭の床の壁の穴は失効（契約§4.3 2026-09-27 スライディング廃止）＝取り除いただけ（間合いは広がる側） */
+    floor: [{ at: 17.7, lane: 1, type: 'PILLAR' },
             { at: 22.5, lane: -1, type: 'LASER_V' }, { at: 27.3, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 1, type: 'ROVER' }, { at: 44.4, lane: -1, type: 'PILLAR' },
             { at: 49.2, lane: 0, type: 'LASER_V' }, { at: 54, lane: 1, type: 'ROVER' }],
@@ -1015,7 +986,7 @@ const CHUNK_DEFS = [
             { at: 67.4, lane: 1, type: 'PILLAR' }, { at: 72.2, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 26.2, lane: 1, type: 'ROVER' }], events: [] },
 
-  /* --- 最奥（rank5・最も密）と、壁の穴・つなぎ ---------------------------- */
+  /* --- 最奥（rank5・最も密）と、つなぎ ---------------------------------- */
   { id: 's6_gauntlet', zone: 'space', lengthM: 78, difficulty: 5, minSpeed: 0, s6: 1, dense: 2, net: 1, leap: 1, moving: 1,
     floor: [{ at: 8, lane: 0, type: 'ROVER' }, { at: 15.4, lane: 1, type: 'ROVER' },
             { at: 25.1, lane: 0, type: 'PILLAR' },
@@ -1027,13 +998,6 @@ const CHUNK_DEFS = [
             { at: 66.2, lane: 0, type: 'PILLAR' }, { at: 71, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 8, lane: -1, type: 'ROVER' }, { at: 15.4, lane: 0, type: 'LASER_LOW' },
             { at: 49.1, lane: 0, type: 'ROVER' }, { at: 56.5, lane: 1, type: 'ROVER' }], events: [] },
-  { id: 's6_wallhole', zone: 'space', lengthM: 66, difficulty: 4, minSpeed: 0, s6: 1, wallhole: 1, dense: 1,
-    floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 19.7, lane: 0, type: 'PILLAR' },
-            { at: 24.5, lane: -1, type: 'LASER_V' }, { at: 29.3, lane: 1, type: 'PILLAR' },
-            { at: 34.1, lane: 0, type: 'ROVER' }, { at: 41.5, lane: -1, type: 'ROVER' },
-            { at: 51.2, lane: 1, type: 'PILLAR' }, { at: 56, lane: 0, type: 'LASER_V' }],
-    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 34.1, lane: 1, type: 'ROVER' },
-            { at: 41.5, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's6_fill_a', zone: 'space', lengthM: 26, difficulty: 4, minSpeed: 0, s6: 1, dense: 2, fill: 1,
     floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 9.8, lane: 1, type: 'LASER_V' },
             { at: 14.6, lane: -1, type: 'PILLAR' }, { at: 19.4, lane: 0, type: 'LASER_V' }],
@@ -1281,14 +1245,7 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 52.6, lane: 1, type: 'ROVER' },
             { at: 67, lane: -1, type: 'LASER_LOW' }], events: [] },
 
-  /* --- 壁の穴・つなぎ ------------------------------------------------------ */
-  { id: 's7_wallhole', zone: 'mirror', lengthM: 68, difficulty: 4, minSpeed: 0, s7: 1, wallhole: 1, dense: 1,
-    floor: [{ at: 10, lane: 1, type: 'WALLHOLE' }, { at: 20, lane: 0, type: 'PILLAR' },
-            { at: 24.9, lane: -1, type: 'LASER_V' }, { at: 29.8, lane: 1, type: 'PILLAR' },
-            { at: 34.7, lane: 0, type: 'ROVER' }, { at: 42.4, lane: -1, type: 'ROVER' },
-            { at: 52.4, lane: 1, type: 'PILLAR' }, { at: 57.3, lane: 0, type: 'LASER_V' }],
-    ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 34.7, lane: 1, type: 'ROVER' },
-            { at: 42.4, lane: 0, type: 'LASER_LOW' }], events: [] },
+  /* --- つなぎ ------------------------------------------------------------ */
   /* P8a: 最後の1本をハードルに（鏡の札がランダムに引かれなくなった＝跳ぶ札が減ったぶん、
      つなぎで §4.3 の比率（レーン ≤62%）を保つ） */
   { id: 's7_fill_a', zone: 'mirror', lengthM: 28, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, fill: 1,
@@ -1310,7 +1267,7 @@ const CHUNK_DEFS = [
                  **1体（合体体）**になり、床を走る。
                  操作（契約§4.5 を本作の上下タッチ規則（§4.2）で読んだ形）:
                    下半分の横フリック → レーン移動
-                   上半分の上フリック → ジャンプ ／ 下フリック → スライディング
+                   上半分の上フリック → ジャンプ（下フリックは無効＝スライディング失効 2026-09-27）
                  判定は床の1体ぶん＝天井側の障害物には当たらない
                  （Fair が合体区間の天井の要求を落とす）。
                  params.mrg = { n: 区間の長さ（秒） }。ゲートの直後 1.0秒は
@@ -1661,11 +1618,7 @@ const CHUNK_DEFS = [
             { at: 47, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 51.9, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 51.9, lane: 0, type: 'LASER_LOW' }], events: [] },
-  /* --- 壁の穴・つなぎ ------------------------------------------------------ */
-  { id: 's8_wallhole', zone: 'core', lengthM: 34, difficulty: 5, minSpeed: 0, s8: 1, wallhole: 1, dense: 1,
-    floor: [{ at: 8, lane: 1, type: 'WALLHOLE' }, { at: 18, lane: 0, type: 'PILLAR' },
-            { at: 22.9, lane: -1, type: 'LASER_V' }, { at: 27.8, lane: 1, type: 'PILLAR' }],
-    ceil:  [{ at: 8, lane: -1, type: 'ROVER' }], events: [] },
+  /* --- つなぎ ------------------------------------------------------------ */
   { id: 's8_fill_a', zone: 'core', lengthM: 24, difficulty: 5, minSpeed: 0, s8: 1, dense: 2, fill: 1,
     floor: [{ at: 4, lane: 0, type: 'PILLAR' }, { at: 8.9, lane: 1, type: 'LASER_V' },
             { at: 13.8, lane: -1, type: 'PILLAR' }, { at: 18.7, lane: 0, type: 'LASER_V' }],
@@ -1695,14 +1648,14 @@ const CHUNK_DEFS = [
 ];
 
 /* ---------------------------------------------------------------- S1 チュートリアル（白い空間）
-   契約 §4.4 v2 S1: レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー を1つずつ。
+   契約 §4.4 v2 S1: レーン移動→ジャンプ→2レーン封鎖→両手同時→動くレーザー を1つずつ（壁の穴は 2026-09-27 失効）。
    各項目 = tip つきの「対象」1つ ＋ その項目だけを要求する練習（2〜3回）。
    ・位置は生成器が決める（appendIntro）: tip つきの対象は tip の猶予規則（§4.8: speed×4.0秒前に出て
      2.0秒で消え、窓の中は対象だけ、対象通過後 speed×1.0秒は空ける）の最小位置へ。
      練習は直前の障害物から speed × gapT 秒の後ろ（かつ tip の窓が明けてから）。
    ・「跳ぶ」項目は3レーン全部に置く（横へ逃げずに必ず跳ぶ）。2レーン封鎖は床＋天井の対（全高のゲート）。
    ・動くレーザーの周期は速度で伸縮させる（scale ＝ 秒で一定・通常のチャンクと同じ）。
-   ・最後の練習の後に「準備完了」（tut.ready）→ 700m でゴール。ランダム区間・大演出は無い。 */
+   ・最後の練習の後に「準備完了」（tut.ready）→ 600m でゴール。ランダム区間・大演出は無い。 */
 const INTRO_TUT = [
   /* 1. レーン移動（柱＝両者に効く） */
   { tip: 'lane',  floor: [{ lane: 0, type: 'PILLAR' }] },
@@ -1716,15 +1669,11 @@ const INTRO_TUT = [
   { tip: 'wide',  floor: [{ lane: -1, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
   { gapT: 1.5,    floor: [{ lane: 0, type: 'WIDEBAR' }],  ceil: [{ lane: 0, type: 'WIDEBAR' }] },
   { gapT: 1.5,    floor: [{ lane: -1, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
-  /* 4. 壁の穴（そのレーンへ移って潜る。床→天井→床） */
-  { tip: 'hole',  floor: [{ lane: 0, type: 'WALLHOLE' }] },
-  { gapT: 1.6,    ceil:  [{ lane: 1, type: 'WALLHOLE' }] },
-  { gapT: 1.6,    floor: [{ lane: -1, type: 'WALLHOLE' }] },
-  /* 5. 両手同時（下は跳ぶ・上は横へ → 下は横へ・上は跳ぶ → 両方跳ぶ） */
+  /* 4. 両手同時（下は跳ぶ・上は横へ → 下は横へ・上は跳ぶ → 両方跳ぶ） */
   { tip: 'both',  floor: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }], ceil: [{ lane: -1, type: 'WIDEBAR' }] },
   { gapT: 1.5,    floor: [{ lane: 0, type: 'WIDEBAR' }], ceil: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }] },
   { gapT: 1.5,    floor: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }], ceil: [{ lane: -1, type: 'ROVER' }, { lane: 0, type: 'ROVER' }, { lane: 1, type: 'ROVER' }] },
-  /* 6. 動くレーザー（横スキャン＝両者に効く。来る時に空いているレーンへ） */
+  /* 5. 動くレーザー（横スキャン＝両者に効く。来る時に空いているレーンへ） */
   { tip: 'moving', floor: [{ lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0 } } }] },
   { gapT: 1.6,    floor: [{ lane: 0, type: 'LASER_SCAN', params: { scan: { from: -1, to: 1, phase: 0.5 } } }] },
   { gapT: 1.6,    floor: [{ lane: 0, type: 'LASER_SCAN', params: { scan: { from: 0, to: 1, phase: 0.25 } } }] }
@@ -1760,17 +1709,14 @@ const LEGACY_POOL = {
   neon1: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && NOT_LATE(c)).map((c) => c.id)
     .concat(['c1_pillar', 'c1_laserv', 'c1_laserv_b', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave'])
     .concat(['d2_duo_a', 'd2_duo_b', 'd2_duo_a', 'd2_duo_b']),
-  /* 旧S2 ネオン都市・夜: 動くレーザー（厚め）＋壁の穴＋跳ぶ系＋横に避ける系（P2c で厚めに戻した） */
+  /* 旧S2 ネオン都市・夜: 動くレーザー（厚め）＋跳ぶ系＋横に避ける系（P2c で厚めに戻した。壁の穴は 2026-09-27 失効） */
   neon2: ['c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
           'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
           'c1_pillar', 'c1_weave_a', 'c1_weave_b', 'c2_weave', 'c2_lv_weave',
           'c1_rover_f', 'c1_rover_c', 'c1_gap_f', 'c1_gap_c', 'c1_lowl_f', 'c1_lowl_c',
           'c1_laserv',
           'c2_alt_a', 'c2_alt_b', 'c2_sync', 'c2_mix',
-          'c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet',
-          'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
-          'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x',
-          'c3_wallhole_f', 'c3_wallhole_c', 'c3_wallhole_x']
+          'c3_dual_a', 'c3_wide', 'c3_mix', 'c3_gauntlet']
     .concat(CHUNK_DEFS.filter((c) => c.moving && NOT_LATE(c)).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.moving && NOT_LATE(c)).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.moving && NOT_LATE(c) && c.difficulty <= 2).map((c) => c.id))
@@ -1797,7 +1743,7 @@ const LEGACY_POOL = {
     .concat(CHUNK_DEFS.filter((c) => c.s4 && c.sync).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.s4 && c.rock).map((c) => c.id))
     .concat(['r3_weave_a', 'r3_weave_b', 'r3_weave_c', 'r3_leap_a', 'r3_leap_b',
-             'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo', 'r3_wallhole']),
+             'r3_duo_a', 'r3_duo_c', 'r3_duo_e', 'r3_bridge_duo']),
   /* 旧S5 深海: 深海の札が主役。跳び継ぎ（leap）を厚く（both 型が主役でレーン移動に偏るため） */
   sea: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id)
     .concat(CHUNK_DEFS.filter((c) => c.s5 && c.dense === 2).map((c) => c.id))
@@ -1817,8 +1763,7 @@ const LEGACY_POOL = {
     .concat(CHUNK_DEFS.filter((c) => c.s6 && c.zero).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.s6 && c.net).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
-    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id))
-    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.wallhole).map((c) => c.id)),
+    .concat(CHUNK_DEFS.filter((c) => c.s6 && c.leap).map((c) => c.id)),
   /* 旧S7 鏡: 主役（s7_mix / s7_net）を厚く。ゲートの札は1本ずつ、重ね掛け（dual）は後半用に厚め */
   mirror: CHUNK_DEFS.filter((c) => c.s7).map((c) => c.id)
     .concat(CHUNK_DEFS.filter((c) => c.s7 && c.id.indexOf('s7_mix') === 0).map((c) => c.id))
@@ -1832,8 +1777,7 @@ const LEGACY_POOL = {
     .concat(CHUNK_DEFS.filter((c) => c.s7 && c.swap && !c.mir).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
     .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
-    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id))
-    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.wallhole).map((c) => c.id)),
+    .concat(CHUNK_DEFS.filter((c) => c.s7 && c.dual).map((c) => c.id)),
   /* 旧S8 コア: 網羅札＋工兵札＋先行ステージの rank4〜5（長い札は入れない） */
   core: CHUNK_DEFS.filter((c) => c.s8).map((c) => c.id)
     .concat(CHUNK_DEFS.filter((c) => c.s8 && c.cover).map((c) => c.id))
@@ -1851,11 +1795,11 @@ const STAGE_DEFS = {
     speedFrom: 16, speedTo: 20, maxRank: 3, setpiece: null, density: [3, 5],
     chunkPool: CHUNK_DEFS.filter((c) => !c.moving && NOT_LATE(c)).map((c) => c.id)
   },
-  /* S1 チュートリアル（契約 §4.4 v2）: 700m / 14→16 / 白い無地の空間。
-     レーン移動→ジャンプ→2レーン封鎖→壁の穴→両手同時→動くレーザー を1つずつ（INTRO_TUT）。
-     大演出なし・エンドレスに含めない。クリアで「準備完了」＋ duorun.tutorialDone。 */
+  /* S1 チュートリアル（契約 §4.4 v2 / 2026-09-27 壁の穴失効で 600m）: 600m / 14→16 / 白い無地の空間。
+     レーン移動→ジャンプ→2レーン封鎖→両手同時→動くレーザー を1つずつ（INTRO_TUT）。
+     大演出なし・エンドレスに含めない。クリアで「準備完了」（duorun.tutorialDone は記録だけ・UI の分岐には使わない / 2026-09-27）。 */
   S1: {
-    id: 'S1', name: 'S1 チュートリアル', zone: 'white', lengthM: 700,
+    id: 'S1', name: 'S1 チュートリアル', zone: 'white', lengthM: 600,
     speedFrom: 14, speedTo: 16, maxRank: 1, setpiece: null,
     density: [3, 4],
     tutorial: true,
@@ -1864,7 +1808,7 @@ const STAGE_DEFS = {
   },
   /* S2 ネオン都市（旧S1+S2）: 1800m / 16→24。
      中盤（780〜980m）に「高速道路の連鎖崩落」、終盤200mに「ビル間の大ジャンプ」。
-     ランク1〜3（前半＝旧S1の顔ぶれ、後半に動くレーザー・壁の穴）。 */
+     ランク1〜3（前半＝旧S1の顔ぶれ、後半に動くレーザー）。 */
   S2: {
     id: 'S2', name: 'S2 ネオン都市', zone: 'neon', lengthM: 1800,
     speedFrom: 16, speedTo: 24, minRank: 1, maxRank: 3,
@@ -1910,7 +1854,7 @@ const STAGE_DEFS = {
     density: [8, 12],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     ratioPull: 13,
-    mix: { lane: 0.49, jump: 0.47, slide: 0.04 },
+    mix: { lane: 0.51, jump: 0.49 },
     tipBoost: true,
     tipMul: 9,
     tipOnce: { warp: 'gravwarp', zero: 'zerog', net: 'lasernet' },
@@ -1925,7 +1869,7 @@ const STAGE_DEFS = {
     density: [8, 10],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     ratioPull: 10,
-    mix: { lane: 0.52, jump: 0.45, slide: 0.03 },
+    mix: { lane: 0.54, jump: 0.46 },
     tipBoost: true,
     tipMul: 40,
     tipOnce: { mir: 'mirrorzone', swap: 'handswap' },
@@ -1950,7 +1894,7 @@ const STAGE_DEFS = {
     densityReal: [5, 5],
     reactBoth: CFG.FAIR.REACT_BOTH_LATE,
     ratioPull: 10,
-    mix: { lane: 0.55, jump: 0.42, slide: 0.03 },
+    mix: { lane: 0.57, jump: 0.43 },
     tipBoost: true,
     tipMul: 9,
     tipOnce: { merge: 'mergerun' },
@@ -1990,8 +1934,8 @@ const STAGE_LAST = 'S7';
    ステージをクリアすると、そのステージが持ち込んだ顔ぶれがプールに加わる。 */
 const ENDLESS_UNLOCK = {
   S1: [],                                      // チュートリアル（白空間）はエンドレスに含めない
-  /* ネオン都市（旧S2 の持ち込み）: 動くレーザー・壁の穴・密集チャンク */
-  S2: CHUNK_DEFS.filter((c) => (c.moving || c.wallhole || c.dense) && NOT_LATE(c)).map((c) => c.id),
+  /* ネオン都市（旧S2 の持ち込み）: 動くレーザー・密集チャンク */
+  S2: CHUNK_DEFS.filter((c) => (c.moving || c.dense) && NOT_LATE(c)).map((c) => c.id),
   S3: CHUNK_DEFS.filter((c) => c.s3 || c.s4).map((c) => c.id),   // 崩れる橋・振り子・同時スイッチ・丸岩
   S4: CHUNK_DEFS.filter((c) => c.s5).map((c) => c.id),           // 深海（サメ・泡の噴出口）
   S5: CHUNK_DEFS.filter((c) => c.s6).map((c) => c.id),           // 重力反転・無重力・レーザーネット
@@ -2108,7 +2052,6 @@ const Fair = {
         if (!kinds.length) { w.demand[s] = null; return; }
         let kind = 'lane';
         if (kinds.indexOf('jump') >= 0) kind = 'jump';
-        else if (kinds.indexOf('slide') >= 0) kind = 'slide';
         w.demand[s] = kind;
       });
       w.both = !!(w.demand.floor && w.demand.ceil);
@@ -2159,13 +2102,12 @@ const Fair = {
     const res = {};
     const list = wall.cover ? wall.items.concat(wall.cover) : wall.items;
     for (const lane of CFG.LANES) {
-      const acts = { run: true, jump: true, slide: true };
+      const acts = { run: true, jump: true };
       for (const o of list) {
         if (!Obstacles.affects(o, side)) continue;
         const a = Obstacles.laneActs(o, side, lane);
         if (!a.run) acts.run = false;
         if (!a.jump) acts.jump = false;
-        if (!a.slide) acts.slide = false;
       }
       res[lane] = acts;
     }
@@ -2173,7 +2115,7 @@ const Fair = {
   },
   laneSurvivable(wall, side, lane) {
     const a = Fair.laneActs(wall, side)[lane];
-    return a.run || a.jump || a.slide;
+    return a.run || a.jump;
   },
 
   /* 本体。違反メッセージの配列を返す（空なら合格） */
@@ -2342,7 +2284,7 @@ const Fair = {
         if (opt.merges && Merge.crossed(opt.merges, prevAt, w.at)) reach = CFG.LANES.slice();
         /* 前のウォールを「通り抜けきる」までは横に動けない（動くと真横の障害物に刺さる）。
            その通過距離を引いた残りで何レーンぶん動けるかを数える。 */
-        const passM = Fair.maxDepth() + Math.max(CFG.BODY_D, CFG.SLIDE_D);
+        const passM = Fair.maxDepth() + CFG.BODY_D;
         const usable = Math.max(0, (w.at - prevAt) - passM);
         const steps = Math.floor(usable / (sp * CFG.LANE_T));
         /* 崩落の続く橋のレーンは横切れない（通り道に穴がある / 契約§4.5 改訂 v2） */
@@ -2375,12 +2317,12 @@ const Fair = {
 
   /* ------------------------------------------------------------------------
      死角の禁止（契約§4.5b / P8b・エンドレスだけ＝ opt.blind）
-       視界を塞ぐ遮蔽物（ピラー・ワイド梁・壁の穴＋WALLSOLID）の**通過後 speed×1.0秒**は、
-       同じレーン（ワイド梁・壁の穴は全レーン）に障害物を置かない（当たり判定の無いゲート・粒子は除く）。
+       視界を塞ぐ遮蔽物（ピラー・ワイド梁）の**通過後 speed×1.0秒**は、
+       同じレーン（ワイド梁は全レーン）に障害物を置かない（当たり判定の無いゲート・粒子は除く）。
        動く障害物（スキャン・回転・サメ・岩・横/斜めビーム）は全レーンに掛かるとみなす。
        崩れる橋は踏み口〜終わりの全長で見る。
      ------------------------------------------------------------------------ */
-  BLIND_OCC: { PILLAR: 'lane', WIDEBAR: 'all', WALLHOLE: 'all', WALLSOLID: 'all' },
+  BLIND_OCC: { PILLAR: 'lane', WIDEBAR: 'all' },
   BLIND_T: 1.0,
   HINT_T: 2.0,          // 遮蔽物の奥（通過後 1.0〜2.0秒）に障害物があれば予告線を出す
   HINT_LEAD_T: 1.5,     // 予告線は遮蔽物の speed×1.5秒 手前から
@@ -2500,7 +2442,7 @@ const Fair = {
 
   /* 必須動作の集計（契約§4.3 の動作比率。ウォール×面ごとに1動作と数える） */
   countDemands(list, speedAt, opt) {
-    const res = { lane: 0, jump: 0, slide: 0, total: 0 };
+    const res = { lane: 0, jump: 0, total: 0 };
     Fair.walls(list, speedAt, opt).forEach((w) => {
       Fair.SIDES.forEach((s) => {
         const k = w.demand[s];
@@ -2510,8 +2452,7 @@ const Fair = {
     });
     res.pct = {
       lane: res.total ? res.lane / res.total * 100 : 0,
-      jump: res.total ? res.jump / res.total * 100 : 0,
-      slide: res.total ? res.slide / res.total * 100 : 0
+      jump: res.total ? res.jump / res.total * 100 : 0
     };
     return res;
   },
@@ -2654,17 +2595,10 @@ function scaleParams(p, scale) {
 /* チャンク定義の素性（必須動作の回数と、最初〜最後の障害物の広がり）。
    密度（契約§4.7）を見ながらチャンクを選ぶために使う。1定義につき1回だけ測る。 */
 /* 譜面の1エントリ → 実体。**展開の規則はここだけ**（生成器・素性の計測・大演出が共用する）。
-     WALLHOLE … 穴のレーン + 残り2レーンの壁（＝全幅の壁に穴が1つ）
      SYNCSW   … 床と天井の対のパッド + その先の橋（失敗なら谷になる2レーン） / 契約§4.5
    syncs に展開したグループを積む（Sync がそこを見て 0.3秒窓を判定する）。 */
 function expandEntry(items, e, surface, at, nowDist, scale, sink) {
   const params = scaleParams(normParams(e.type, e.params), scale === undefined ? 1 : scale);
-  if (e.type === 'WALLHOLE') {
-    CFG.LANES.forEach((l) => {
-      items.push(Obstacles.make(l === e.lane ? 'WALLHOLE' : 'WALLSOLID', surface, l, at, nowDist, params));
-    });
-    return;
-  }
   if (e.type === 'SYNCSW') { Sync.expand(items, e, surface, at, nowDist, scale, sink && sink.syncs); return; }
   /* 無重力区間（契約§4.5 / S6）: 区間の中で踏み切ったジャンプの滞空が 1.5倍になる */
   if (e.type === 'ZEROG') { Zero.expand(items, e, surface, at, nowDist, scale, sink && sink.zeros); return; }
@@ -2689,7 +2623,7 @@ function chunkStats(def) {
   const c = Fair.countDemands(items, () => CFG.REF_SPEED);
   const first = items.length ? items[0].at : 0;
   const last = items.length ? items[items.length - 1].at : 0;
-  def._stats = { demands: c.total, lane: c.lane, jump: c.jump, slide: c.slide,
+  def._stats = { demands: c.total, lane: c.lane, jump: c.jump,
                  firstAt: first, lastAt: last, span: last - first, tail: def.lengthM - last };
   return def._stats;
 }
@@ -2697,7 +2631,6 @@ function chunkStats(def) {
 function createGenerator(stage, seed) {
   const rng = U.mulberry32((seed >>> 0) || 1);
   let cursor = CFG.LEAD_IN;     // 次のチャンクを置く距離
-  let lastWallhole = false;     // 直前のチャンクが「壁の穴」を含んでいたか（連続禁止）
   let introPtr = 0;             // 導入区間の何番目まで置いたか
   const tipDone = {};           // 新ギミックの初出 tip を出したか（契約§4.8）
   /* tip の窓の終わり（契約§4.8）。ここまでは対象以外の障害物を置かない */
@@ -2831,15 +2764,10 @@ function createGenerator(stage, seed) {
     if (stage.exclusive && stage.exclusive.length) {
       c = c.filter((d) => !stage.exclusive.some((f) => d[f]));
     }
-    /* 壁の穴（唯一のスライディング要素）は連続させない（契約§4.3） */
-    if (lastWallhole) {
-      const c2 = c.filter((d) => !d.wallhole);
-      if (c2.length) c = c2;
-    }
     if (!c.length) c = pool.filter((d) => d.difficulty === 1);
     /* エンドレスのゾーンの顔ぶれが速度・ランクで尽きたら、速度の条件を満たす札 → 基本セットの順で埋める */
     if (!c.length && EP) {
-      c = pool.filter((d) => sp >= (d.minSpeed || 0) && !d.wallhole);
+      c = pool.filter((d) => sp >= (d.minSpeed || 0));
       if (!c.length) c = STAGE_DEFS.endless.chunkPool.map((id) => CHUNK_BY_ID[id]).filter(Boolean);
     }
     return c;
@@ -2847,7 +2775,7 @@ function createGenerator(stage, seed) {
 
   /* これまでに置いた必須動作の内訳（比率の是正に使う）。
      終盤の大演出ぶんは最初から数に入れておく＝ランダム区間がその偏りを打ち消す。 */
-  const got = { lane: 0, jump: 0, slide: 0, total: 0 };
+  const got = { lane: 0, jump: 0, total: 0 };
   /* 大演出の頭の障害物（大演出の手前に置くチャンクとの間隔を §4.7 で検査するのに使う / P5c） */
   let spHead = [];
   let spPillars = 0, spWides = 0;
@@ -2870,19 +2798,18 @@ function createGenerator(stage, seed) {
     sp0.items.forEach((o) => { if (o.type === 'WIDEBAR') ws[o.at.toFixed(2) + '|' + o.lane] = 1; });
     spWides += Object.keys(ws).length;
     seedMix = Fair.countDemands(sp0.items, stage.speedAt);
-    got.lane += seedMix.lane; got.jump += seedMix.jump; got.slide += seedMix.slide; got.total += seedMix.total;
+    got.lane += seedMix.lane; got.jump += seedMix.jump; got.total += seedMix.total;
   });
   function noteDemands(items, local) {
     const c = Fair.countDemands(items, stage.speedAt,
                                 { merges: merges.concat((local && local.merges) || []) });
-    got.lane += c.lane; got.jump += c.jump; got.slide += c.slide; got.total += c.total;
+    got.lane += c.lane; got.jump += c.jump; got.total += c.total;
     placed.total += c.total;
   }
-  /* 契約§4.3 の比率。スライドは「壁の穴」だけ＝1チャンクに最大1・連続禁止（§4.3）なので、
-     実際には 2〜3% までしか出せない。その余りは放っておくと**全部レーン移動に流れ込む**
-     （レーンは 0.45秒間隔で詰められるぶん密度の重みでも有利）。
-     そこで速いステージでは stage.mix でジャンプ側へ振り直す。 */
-  const MIX = stage.mix || { lane: 0.52, jump: 0.40, slide: 0.08 };
+  /* 契約§4.3 の比率（レーン移動／ジャンプの2種。スライディングは 2026-09-27 失効）。
+     レーンは 0.45秒間隔で詰められるぶん密度の重みでも有利＝放っておくとレーン側へ流れ込むので、
+     速いステージでは stage.mix でジャンプ側へ振り直す。 */
+  const MIX = stage.mix || { lane: 0.56, jump: 0.44 };
   /* 比率の引き（§4.3）と密度の引き（§4.7）は取り合いになる。既定（3.2）は密度が優位。
      **速いステージほど跳びの譜面が薄くなる**（ジャンプ連続は 0.70秒より詰められないので、
      跳びだけでは 9回/100m が上限＝密度の重みに勝てない）ので、そこでは比率の引きを強める。
@@ -2913,7 +2840,7 @@ function createGenerator(stage, seed) {
       const err = dens - want;
       let wt = (err >= 0) ? 1 / (1 + 0.32 * err) : 1 / (1 + 2.4 * (-err));
       let r = 1;
-      ['lane', 'jump', 'slide'].forEach((k) => {
+      ['lane', 'jump'].forEach((k) => {
         const share = got.total ? got[k] / got.total : MIX[k];
         const mine = st.demands ? st[k] / st.demands : 0;
         r += (MIX[k] - share) * mine * PULL;
@@ -2957,8 +2884,7 @@ function createGenerator(stage, seed) {
     for (let i = 0; i < w.length; i++) { x -= w[i]; if (x <= 0) return cands[i]; }
     return cands[cands.length - 1];
   }
-  /* 定義 → 実体（基準速度からの伸縮つき）
-     WALLHOLE は「穴のレーン + 残り2レーンの壁」へ展開する（＝全幅の壁に穴が1つ）。 */
+  /* 定義 → 実体（基準速度からの伸縮つき） */
   function put(items, e, surface, at, nowDist, scale, dst) {
     expandEntry(items, e, surface, at, nowDist, scale, dst || sink);
   }
@@ -3219,7 +3145,6 @@ function createGenerator(stage, seed) {
     spIdx++;
     if (spIdx < SPS.length) { spStart = SPS[spIdx].start; spHead = headOf(spIdx); }
     else setpieceDone = true;
-    lastWallhole = false;
     return true;
   }
 
@@ -3287,7 +3212,6 @@ function createGenerator(stage, seed) {
     zoneStart = G;
     nextSwitch += Endless.SWITCH_M;
     while (nextSwitch - Endless.TUNNEL_M - stage.speedAt(nextSwitch) * Endless.GRACE_T < cursor + 60) nextSwitch += Endless.SWITCH_M;
-    lastWallhole = false;
     /* 切替の直後にミニ大演出が来るなら、ゾーン名の表示と重ならないよう少しだけ空ける */
     if (nextMini <= cursor + spG * 1.0) nextMini = Math.max(nextMini, cursor + spG * 1.0);
     refreshBarrier();
@@ -3326,7 +3250,6 @@ function createGenerator(stage, seed) {
     }
     cursor = Math.max(cursor, until);
     lastItemAt = Math.max(lastItemAt, cursor - seamFor(cursor));
-    lastWallhole = false;
     nextMini += Endless.MINI_M;
     while (nextMini < cursor) nextMini += Endless.MINI_M;
     refreshBarrier();
@@ -3541,7 +3464,6 @@ function createGenerator(stage, seed) {
     const last2 = exRec.slice(-2).map((r) => r.eg);
     let cands = exUnits.filter((d) => {
       if (last2.length === 2 && last2[0] === d.eg && last2[1] === d.eg) return false;   // 3連続禁止
-      if (lastWallhole && d.wallhole) return false;                                     // 壁の穴の連続禁止（§4.3）
       if (d.flip) {
         if (exOpen || (exWin[wi] || {}).flip) return false;                             // 1000m に最大1回
         if (cursor < exFlipEnd + sp0 * 2) return false;                                 // 区画を重ねない
@@ -3620,7 +3542,6 @@ function createGenerator(stage, seed) {
       exRec.push({ id: best.def.id, eg: best.def.eg, gset: best.def.gset, startM: best.G });
       exMain[best.def.eg] = (exMain[best.def.eg] || 0) + 1;
       log.push({ id: best.def.id, startM: best.G, lengthM: 0, eg: best.def.eg, spread: 1, firstAt: best.G, lastAt: best.G });
-      lastWallhole = false;
       return true;
     }
     if (best) {
@@ -3636,7 +3557,6 @@ function createGenerator(stage, seed) {
       log.push({ id: def.id, startM: inst.startM, lengthM: inst.lengthM, eg: def.eg, spread: +best.spread.toFixed(2),
                  firstAt: best.firstM, lastAt: best.endM });
       cursor = Math.max(cursor, best.endM);
-      lastWallhole = !!def.wallhole;
       exHints();
       if (best.closeAfter) exCloseFlip(exBackAt(best.endM), nowDist);
       return true;
@@ -3652,7 +3572,6 @@ function createGenerator(stage, seed) {
     log.push({ id: '(blank)', startM: cursor, lengthM: bl });
     cursor += bl;
     lastItemAt = Math.max(lastItemAt, cursor - sp0 * 0.3);
-    lastWallhole = false;
     return false;
   }
 
@@ -3741,7 +3660,6 @@ function createGenerator(stage, seed) {
                    tipAt: r.win.tipAt, winEnd: r.win.end, dropped: r.dropped,
                    firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
         cursor = Math.max(cursor, inst.startM + st.lastAt * scale);
-        lastWallhole = !!def.wallhole;
         return true;
       }
       const need = st.demands / Math.max(wantDensity(cursor), 0.5) * 100 - st.span * scale;
@@ -3782,7 +3700,6 @@ function createGenerator(stage, seed) {
             log.push({ id: inst.id, startM: inst.startM, lengthM: inst.lengthM,
                        firstAt: inst.startM + st.firstAt * scale, lastAt: inst.startM + st.lastAt * scale });
             cursor = Math.max(cursor, inst.startM + st.lastAt * scale);
-            lastWallhole = !!def.wallhole;
             return true;
           }
         }
@@ -3806,7 +3723,6 @@ function createGenerator(stage, seed) {
     cursor += 40;
     log.push({ id: '(blank)', startM: cursor - 40, lengthM: 40 });
     lastItemAt = Math.max(lastItemAt, cursor - 6);
-    lastWallhole = false;
     return false;
   }
 
