@@ -1049,9 +1049,10 @@ const CHUNK_DEFS = [
      S7「鏡の世界」（契約§4.4 / §4.5 / P5a）
      ------------------------------------------------------------------------
      新ギミック:
-       MIRRORZ   鏡ゾーン。銀の枠2枚で1組。**ゲートが置かれた面**を走るキャラの
-                 左右操作が反転する（右フリック＝画面左へ）。出口ゲートで戻る。
-                 params.mir = { side:'floor'|'ceil', backT: 出口までの秒数 }
+       MIRRORZ   鏡ゾーン【P8a 固定反転】。銀の枠1枚。**ゲートが置かれた面**を走るキャラの
+                 左右操作が反転し（右フリック＝画面左へ）、**以後ステージ終了まで戻らない**
+                 （出口ゲートは失効）。S6 では札の出どころを forceAt に限る（mirF=床・mirC=天井）。
+                 params.mir = { side:'floor'|'ceil' }
                  ゲートの直後 1.0秒（= 10.9 基準m）はその面にウォールを置けない。
        HANDSWAP  入れ替えワープ。紫の枠2枚で1組。**上下の担当が入れ替わる**
                  （下半分＝天井の UMBRA／上半分＝床の LUMEN）。再通過で戻る。
@@ -1192,9 +1193,9 @@ const CHUNK_DEFS = [
      ゲートの前後 1.0秒（10.9 基準m）はその面にウォールを置けないので、
      その空きぶんだけ密度が落ちる。譜面は主役と同じ「跳2・レーン3」を保って
      §4.3 の比率（ジャンプ 35%前後）を崩さないようにする。 */
-  { id: 's7_mir_a', zone: 'mirror', lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
+  { id: 's7_mir_a', zone: 'mirror', mirF: 1, lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
     /* 床側が反転する（下半分の左右が逆になる） */
-    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 5.2 } } },
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor' } } },
             { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: -1, type: 'ROVER' },
             { at: 34.7, lane: 0, type: 'PILLAR' }, { at: 39.6, lane: 1, type: 'LASER_V' },
             { at: 44.5, lane: -1, type: 'PILLAR' },
@@ -1203,9 +1204,9 @@ const CHUNK_DEFS = [
             { at: 78.8, lane: 1, type: 'PILLAR' }, { at: 83.7, lane: -1, type: 'LASER_V' }],
     ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'LASER_LOW' },
             { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 0, type: 'ROVER' }], events: [] },
-  { id: 's7_mir_b', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, net: 1, leap: 1,
+  { id: 's7_mir_b', zone: 'mirror', mirC: 1, lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, net: 1, leap: 1,
     /* 天井側が反転する（上半分の左右が逆になる）＋ 斜めビーム */
-    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 5.2 } } },
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil' } } },
             { at: 17, lane: 1, type: 'ROVER' }, { at: 24.7, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
             { at: 39.6, lane: -1, type: 'PILLAR' },
@@ -1215,8 +1216,8 @@ const CHUNK_DEFS = [
             { at: 78.8, lane: 0, type: 'PILLAR' }, { at: 83.7, lane: 1, type: 'LASER_V' }],
     ceil:  [{ at: 17, lane: -1, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'LASER_LOW' },
             { at: 49.4, lane: 1, type: 'ROVER' }, { at: 57.1, lane: -1, type: 'ROVER' }], events: [] },
-  { id: 's7_mir_c', zone: 'mirror', lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
-    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 5.2 } } },
+  { id: 's7_mir_c', zone: 'mirror', mirF: 1, lengthM: 92, difficulty: 5, minSpeed: 0, s7: 1, dense: 1, mir: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor' } } },
             { at: 17, lane: -1, type: 'LASER_LOW' }, { at: 24.7, lane: 0, type: 'ROVER' },
             { at: 34.7, lane: 1, type: 'PILLAR' }, { at: 39.6, lane: -1, type: 'LASER_V' },
             { at: 44.5, lane: 0, type: 'PILLAR' },
@@ -1255,8 +1256,8 @@ const CHUNK_DEFS = [
      必ず先に入れ替えを解除し、そのあと鏡を解除してからチャンクを終える。
      minSpeed 34 ＝ 速度が 34 を超える後半（約750m以降）でしか置かれない。
      ゲートが4枚ぶん（＝43.6 基準m）空くので密度は下がる＝既知の妥協点。 */
-  { id: 's7_both_a', zone: 'mirror', lengthM: 102, difficulty: 5, minSpeed: 34, s7: 1, dense: 1, mir: 1, swap: 1, dual: 1, leap: 1,
-    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 6.8 } } },
+  { id: 's7_both_a', zone: 'mirror', mirF: 1, lengthM: 102, difficulty: 5, minSpeed: 34, s7: 1, dense: 1, mir: 1, swap: 1, dual: 1, leap: 1,
+    floor: [{ at: 6, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor' } } },
             { at: 17, lane: 0, type: 'ROVER' },
             { at: 22, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 3.4 } } },
             { at: 33, lane: 1, type: 'LASER_V' }, { at: 37.9, lane: -1, type: 'PILLAR' },
@@ -1266,10 +1267,10 @@ const CHUNK_DEFS = [
             { at: 94.8, lane: 0, type: 'PILLAR' }],
     ceil:  [{ at: 17, lane: 1, type: 'ROVER' }, { at: 52.6, lane: 0, type: 'ROVER' },
             { at: 67, lane: 1, type: 'LASER_LOW' }], events: [] },
-  { id: 's7_both_b', zone: 'mirror', lengthM: 102, difficulty: 5, minSpeed: 34, s7: 1, dense: 1, mir: 1, swap: 1, dual: 1, net: 1, leap: 1,
+  { id: 's7_both_b', zone: 'mirror', mirC: 1, lengthM: 102, difficulty: 5, minSpeed: 34, s7: 1, dense: 1, mir: 1, swap: 1, dual: 1, net: 1, leap: 1,
     floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 6.8 } } },
             { at: 17, lane: 1, type: 'ROVER' },
-            { at: 22, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 3.4 } } },
+            { at: 22, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil' } } },
             { at: 33, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
             { at: 37.9, lane: 1, type: 'PILLAR' },
             { at: 42.8, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
@@ -1288,9 +1289,11 @@ const CHUNK_DEFS = [
             { at: 52.4, lane: 1, type: 'PILLAR' }, { at: 57.3, lane: 0, type: 'LASER_V' }],
     ceil:  [{ at: 10, lane: -1, type: 'ROVER' }, { at: 34.7, lane: 1, type: 'ROVER' },
             { at: 42.4, lane: 0, type: 'LASER_LOW' }], events: [] },
+  /* P8a: 最後の1本をハードルに（鏡の札がランダムに引かれなくなった＝跳ぶ札が減ったぶん、
+     つなぎで §4.3 の比率（レーン ≤62%）を保つ） */
   { id: 's7_fill_a', zone: 'mirror', lengthM: 28, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, fill: 1,
     floor: [{ at: 5, lane: 0, type: 'PILLAR' }, { at: 9.9, lane: 1, type: 'LASER_V' },
-            { at: 14.8, lane: -1, type: 'PILLAR' }, { at: 19.7, lane: 0, type: 'LASER_V' }],
+            { at: 14.8, lane: -1, type: 'PILLAR' }, { at: 19.7, lane: 0, type: 'ROVER' }],
     ceil: [], events: [] },
   { id: 's7_fill_b', zone: 'mirror', lengthM: 32, difficulty: 4, minSpeed: 0, s7: 1, dense: 2, fill: 1, net: 1,
     floor: [{ at: 5, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 0, c0: 1 } } },
@@ -1499,13 +1502,13 @@ const CHUNK_DEFS = [
 
   /* --- 鏡ゾーン／入れ替えワープ（S7 の顔ぶれ） ----------------------------- */
   { id: 's8_mir', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, mir: 1, bridge: 1,
-    floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 2.2 } } },
+    floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor' } } },
             { at: 15.2, lane: 0, type: 'BRIDGE' }, { at: 22.9, lane: 1, type: 'ROVER' },
             { at: 37.9, lane: -1, type: 'PILLAR' }, { at: 42.8, lane: 0, type: 'LASER_V' },
             { at: 47.7, lane: 1, type: 'PILLAR' }],
     ceil:  [{ at: 15.2, lane: -1, type: 'ROVER' }, { at: 22.9, lane: 0, type: 'LASER_LOW' }], events: [] },
   { id: 's8_mir_b', zone: 'core', lengthM: 54, difficulty: 5, minSpeed: 0, s8: 1, dense: 1, mir: 1, net: 1,
-    floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 2.2 } } },
+    floor: [{ at: 4, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil' } } },
             { at: 15.2, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: 1, c0: -1 } } },
             { at: 20.1, lane: -1, type: 'PILLAR' },
             { at: 25, lane: 0, type: 'LASER_DIAG', params: { diag: { f0: -1, c0: 1 } } },
@@ -1600,7 +1603,7 @@ const CHUNK_DEFS = [
     floor: [{ at: 0, lane: 0, type: 'ZEROG', params: { zero: { n: 2.0 } } },
             { at: 3, lane: 0, type: 'ROVER' }, { at: 13.5, lane: -1, type: 'ROVER' },
             { at: 26.7, lane: 1, type: 'PILLAR' },
-            { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor', backT: 2.0 } } },
+            { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'floor' } } },
             { at: 41, lane: 0, type: 'BRIDGE' }, { at: 48.7, lane: 1, type: 'ROVER' }],
     ceil:  [{ at: 3, lane: 1, type: 'ROVER' }, { at: 13.5, lane: 0, type: 'LASER_LOW' },
             { at: 41, lane: -1, type: 'ROVER' }, { at: 48.7, lane: 0, type: 'LASER_LOW' }], events: [] },
@@ -1609,7 +1612,7 @@ const CHUNK_DEFS = [
     floor: [{ at: 0, lane: 0, type: 'ZEROG', params: { zero: { n: 2.0 } } },
             { at: 3, lane: 1, type: 'LASER_LOW' }, { at: 13.5, lane: 0, type: 'ROVER' },
             { at: 26.7, lane: -1, type: 'PILLAR' },
-            { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil', backT: 2.0 } } },
+            { at: 30, lane: 0, type: 'MIRRORZ', params: { mir: { side: 'ceil' } } },
             { at: 41, lane: 1, type: 'BRIDGE' }, { at: 48.7, lane: 0, type: 'ROVER' }],
     ceil:  [{ at: 3, lane: -1, type: 'ROVER' }, { at: 13.5, lane: 1, type: 'ROVER' },
             { at: 41, lane: 0, type: 'LASER_LOW' }, { at: 48.7, lane: -1, type: 'ROVER' }], events: [] },
@@ -1926,12 +1929,15 @@ const STAGE_DEFS = {
     mix: { lane: 0.52, jump: 0.45, slide: 0.03 },
     tipBoost: true,
     tipMul: 40,
-    tipOnce: { mir: 'mirrorzone', swap: 'handswap', dual: 'dualzone' },
-    /* 重ね掛けの札は後半（34 m/s＝800m〜）しか候補にならず、重みだけでは 1600m の中で
-       20/50 シードしか置けなかった。800m を越えたら「次は必ず重ね掛け」にする（置けるまで持ち越し）
-       ＝ ゴールより手前で 37/50 シード（P7a の既知課題「1/50 に減」の回収 / P7c）。
-       重ね掛けの札は長い（約360実m）ぶんレーザーネットの札の置き場を食うので、ネットは 500m で先に出す。 */
-    forceAt: [{ at: 500, flag: 'net' }, { at: 800, flag: 'dual' }],
+    tipOnce: { mir: 'mirrorzone', swap: 'handswap' },
+    /* 鏡ゾーン【P8a 固定反転 / 契約§4.5 2026-09-25】: 銀のゲートは **この2枚だけ**。
+       1枚目（床＝mirF）で床側キャラが反転し、2枚目（天井＝mirC）で天井側も反転する（両方逆のまま最後まで）。
+       鏡の札はランダムには引かない（exclusive）＝ 順番と枚数がシードでぶれない。
+       世界反転（紫・swap）は 1枚目の後に必ず1回（＝鏡との重ね掛けが必ず起きる / 旧 dual の後継）。
+       札は約300実m あり、初出の tip の窓（4秒前〜）も要るので、強制は早めに掛ける:
+       150m → 床のゲートは実測 292〜493m（平均 474）、750m → 天井のゲートは 935〜1103m（平均 1041）/ 50シード。 */
+    exclusive: ['mirF', 'mirC'],
+    forceAt: [{ at: 150, flag: 'mirF' }, { at: 450, flag: 'swap' }, { at: 750, flag: 'mirC' }],
     chunkPool: LEGACY_POOL.mirror
   },
   /* S7 コア（旧S8）: 1800m / 32→44 / 全部混在＋合体区間2回／終盤: 全崩壊エスケープ→ALL CLEAR。
@@ -3250,7 +3256,9 @@ function createGenerator(stage, seed) {
       const flag = forcePlan[forcePtr].flag;
       const sp0 = stage.speedAt(cursor);
       const only = stage.chunkPool.map((id) => CHUNK_BY_ID[id]).filter(Boolean)
-        .filter((d) => d[flag] && sp0 >= (d.minSpeed || 0));
+        .filter((d) => d[flag] && sp0 >= (d.minSpeed || 0) &&
+                       /* 回数を決めてある別の顔ぶれ（exclusive）を強制のついでに持ち込まない（P8a） */
+                       !(stage.exclusive || []).some((f) => f !== flag && d[f]));
       if (only.length) { cands = only; forced = flag; }
     }
     const tail = tailOf(10);

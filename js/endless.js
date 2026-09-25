@@ -70,6 +70,8 @@ const Endless = {
         Zones.switchTo(e.params.zone, true);
         Zones.mode(null);
       }
+      /* 鏡ゾーン【P8a 固定反転】: 区画（ゾーン）の中では戻さず、ゾーン切替で解除する（契約§4.5） */
+      if (game && typeof Mirror !== 'undefined') Mirror.clearAll(game);
       Endless.log.push({ zone: e.params.zone, at: e.at, dist: game ? game.dist : e.at });
       return true;
     }

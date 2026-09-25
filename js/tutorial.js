@@ -53,7 +53,7 @@ const Tutorial = {
                      '<b>よけるレーンが違う</b>'] },
     /* S7 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     mirrorzone: { ph: ['<span class="finger">🪞</span>銀の枠をくぐった側は', '<b>左右が逆</b>になる',
-                       '（出口の枠で戻る）'] },
+                       '（もう戻らない）'] },
     handswap: { ph: ['<span class="finger">🔄</span>紫の枠で<b>担当が入れ替わる</b>',
                      '<b class="k">下半分</b>が<b class="k2">上のキャラ</b>を動かす'] },
     shardstep: { ph: ['<span class="finger">👆</span>鏡の床が砕けた', '<b>揺れる足場</b>へ跳べ'] },

@@ -252,8 +252,11 @@ const Game = {
     /* 重力反転ワープ・無重力も同じ（片道だけ通った状態・区間の途中から始まる状態を作らない） */
     Warp.killBefore(Game.gen.warps, fromM + runway);
     Zero.killBefore(Game.gen.zeros, fromM + runway);
-    /* 鏡ゾーン・入れ替えワープも同じ（片道だけ通った状態を作らない / P5a） */
-    Mirror.killBefore(Game.gen.mirrors, fromM + runway);
+    /* 鏡ゾーン【P8a 固定反転】: 再開位置（助走の終わり）までにくぐったゲートの反転を掛け直す
+       （ステージの途中から再開しても「以後ステージ終了まで戻らない」が保たれる）。
+       エンドレスは同じゾーンの中のゲートだけ（ゾーン切替で解除される規則と同じ）。 */
+    Mirror.restore(Game, fromM + runway, Game.stage.endless ? Game.gen.zoneAt : null);
+    /* 入れ替えワープ（世界反転）は片道だけ通った状態を作らない（P5a） */
     Swap.killBefore(Game.gen.swaps, fromM + runway);
     /* 合体区間も同じ（入口を通り過ぎたのに1体のまま、を作らない / P5b） */
     Merge.killBefore(Game.gen.merges, fromM + runway);

@@ -265,7 +265,7 @@
      3. 鏡ゾーン（契約§4.5 / S6）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 鏡ゾーン（該当キャラだけ左右反転・実タッチで右フリック→画面左・出口で戻る）',
+    name: 'S6: 鏡ゾーン（該当キャラだけ左右反転・実タッチで右フリック→画面左・戻らない）',
     quick: true,
     run(t) {
       const In = I(), CFG = In.CFG, Mirror = In.Mirror;
@@ -285,10 +285,10 @@
       const items = [];
       const reg = Mirror.expand(items, { at: 0, lane: 0, params: { mir: { side: 'floor', backT: 5 } } },
                                 'floor', 100, 0, 3, null);
-      t.eq(items.length, 2, '鏡ゾーンは入口と出口の2枚で1組');
+      /* P8a（契約§4.5 2026-09-25 固定反転）: 出口ゲートは失効＝1枚だけ（詳細は test_p8a） */
+      t.eq(items.length, 1, '鏡ゾーンのゲートは1枚（出口ゲートは失効 / P8a）');
       t.eq(items[0].type, 'MIRGATE', 'ゲートの型は MIRGATE');
       t.eq(In.OBS.MIRGATE.ghost, true, 'ゲートは当たり判定を持たない（通るだけ）');
-      t.near(reg.to - reg.from, 5 * CFG.REF_SPEED * 3, 1e-6, '出口は backT 秒ぶん先（速度でスケール）');
       t.eq(reg.side, 'floor', '効くのはゲートを置いた面');
       t.eq(Mirror.crossed([reg], 99, 101), 1, '入口を跨いだ回数を距離で数える');
       t.eq(Mirror.crossed([reg], 99, 101, 'ceil'), 0, '別の面のゲートは数えない');
@@ -335,12 +335,12 @@
         t.info('この環境では TouchEvent を合成できないので実タッチ経路は省略');
       }
 
-      /* --- 出口で戻る --- */
+      /* --- 固定反転（P8a）: 先へ進んでも戻らない --- */
       guard = 0;
-      while (Game.dist < r0.to + 8 && guard++ < 20000) DUO.__step(1 / 60);
-      t.eq(DUO.state().runners.lumen.mirrored, false, '出口のゲートで反転が戻る');
+      while (Game.dist < r0.from + 200 && guard++ < 20000 && Game.status === 'playing') DUO.__step(1 / 60);
+      t.eq(DUO.state().runners.lumen.mirrored, true, 'ゲートの先へ進んでも反転は戻らない（出口ゲート失効 / P8a）');
       DUO.pump(1 / 60);
-      t.eq(shown('flag-mirror'), false, 'HUD の MIRROR が消える');
+      t.eq(shown('flag-mirror'), true, 'HUD の MIRROR も出たまま');
       t.eq(Game.status, 'playing', '鏡ゾーンをボットが抜けられる（反転を知った上で正しい入力を出す）');
       DUO.reset();
     }
@@ -418,10 +418,10 @@
   });
 
   /* ==========================================================================
-     5. 重ね掛け（契約§6 P5a「1区画に最大1回・必ず解除してから次」）
+     5. 重ね掛け（P8a で改訂: 鏡は固定反転＝1枚目の後の世界反転はすべて重ね掛け）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 鏡ゾーンと入れ替えワープの重ね掛け（1区画1回・解除順・S6後半のみ）',
+    name: 'S6: 鏡ゾーンと入れ替えワープの重ね掛け（1区画1回・固定反転の後の入れ替え）',
     quick: true,
     run(t) {
       const In = I();
@@ -434,47 +434,24 @@
       const both = s7.filter((c) => c.mir && c.swap);
       t.ok(both.length >= 2, '重ね掛けのチャンクが ' + both.length + '本ある');
       both.forEach((c) => {
-        t.eq(c.minSpeed >= 34, true, c.id + ': 重ね掛けは S6 後半だけ（minSpeed ' + c.minSpeed + '）');
-        /* 展開して「同時に効いている区間」が1つだけで、どちらも必ず解除されることを見る */
+        t.eq(c.minSpeed >= 34, true, c.id + ': 重ね掛けの札は S6 後半だけ（minSpeed ' + c.minSpeed + '）');
         const items = [], sink = { mirrors: [], swaps: [] };
         (c.floor || []).forEach((e) => In.expandEntry(items, e, 'floor', e.at, 0, 1,
                                                       { mirrors: sink.mirrors, swaps: sink.swaps }));
-        t.eq(sink.mirrors.length, 1, c.id + ': 鏡ゾーンの組は1つ');
+        t.eq(sink.mirrors.length, 1, c.id + ': 鏡ゲートは1枚');
         t.eq(sink.swaps.length, 1, c.id + ': 入れ替えの組は1つ');
-        const mr = sink.mirrors[0], sw = sink.swaps[0];
-        const lo = Math.max(mr.from, sw.from), hi = Math.min(mr.to, sw.to);
-        t.ok(hi > lo, c.id + ': 両方が同時に効く区間がある（' + lo.toFixed(1) + '〜' + hi.toFixed(1) + '）');
-        const nested = (mr.from >= sw.from && mr.to <= sw.to) || (sw.from >= mr.from && sw.to <= mr.to);
-        t.eq(nested, true, c.id + ': 片方を必ず解除してからもう片方を解除する（入れ子）');
-        t.ok(Math.max(mr.to, sw.to) <= c.lengthM,
-             c.id + ': チャンクの終わりまでに両方とも解除される');
-        /* 重なりは1区画に1回だけ（入れ子なので区間は1つ） */
-        t.eq(In.Mirror.crossed([mr], 0, c.lengthM), 2, c.id + ': 鏡は入口と出口の2回だけ跨ぐ');
-        t.eq(In.Swap.crossed([sw], 0, c.lengthM), 2, c.id + ': 入れ替えも2回だけ跨ぐ');
+        t.ok(sink.swaps[0].to <= c.lengthM, c.id + ': 入れ替えはチャンクの終わりまでに戻る');
       });
-      /* 実走行でも「同時に効く」状態が現れる */
-      let seen = 0, seeds = 0, seenIn = 0;
+      /* 実走行: 鏡（固定）の後に入れ替えが来る＝同時に効く区間がゴールより手前に必ずある */
+      let seeds = 0;
       for (let seed = 1; seed <= 50; seed++) {
         const st = In.makeStage('S6');
         const g = In.createGenerator(st, seed);
         for (let d = 0; d < 1600; d += 20) g.ensure(d + In.CFG.SPAWN_AHEAD, d);
-        for (let a = 0; a < g.mirrors.length; a++) {
-          for (let b = 0; b < g.swaps.length; b++) {
-            const lo = Math.max(g.mirrors[a].from, g.swaps[b].from);
-            const hi = Math.min(g.mirrors[a].to, g.swaps[b].to);
-            if (hi > lo) {
-              seen++; t.ok(lo > 700, '重ね掛けは後半で起きる（' + Math.floor(lo) + 'm）');
-              if (hi < st.lengthM) seenIn++;                 // ゴールより手前（走る区間）
-            }
-          }
-        }
-        /* 重ね掛けの札（dualzone の初出 tip つき）がゴールより手前に出たか（P7a の既知課題の指標） */
-        if (g.events.some((e) => e.type === 'tip' && e.params.id === 'dualzone' && e.params.targetAt < st.lengthM)) seeds++;
+        const m0 = g.mirrors.filter((r) => r.side === 'floor')[0];
+        if (m0 && g.swaps.some((w) => w.from > m0.from && w.to < st.lengthM)) seeds++;
       }
-      t.ok(seen >= 20, '50シードのうち ' + seen + ' 区間で重ね掛けが起きる（20以上）');
-      /* P7c: P7a の既知課題「重ね掛けが 1/50 に減」の回収（1600m の中で 60% 以上のシード） */
-      t.ok(seeds >= 30, 'ゴールより手前で重ね掛けの札（dualzone）が出るシード ' + seeds + '/50（60% 以上 / P7c）');
-      t.ok(seenIn >= 20, 'ゴールより手前の重ね掛け区間 ' + seenIn + '（20以上）');
+      t.eq(seeds, 50, 'ゴールより手前で重ね掛け（鏡の後の入れ替え）が起きるシード ' + seeds + '/50');
       DUO.reset();
     }
   });
@@ -609,9 +586,8 @@
         if (g.swaps.length) swpSeen++;
         if (g.mirrors.length && g.swaps.length) bothSeen++;
         let ov = 0;
-        g.mirrors.forEach((mr) => g.swaps.forEach((sw) => {
-          if (Math.min(mr.to, sw.to) > Math.max(mr.from, sw.from)) ov++;
-        }));
+        /* P8a: 鏡は固定反転（ゲートの先はずっと効く）＝ゲートより後の入れ替えはすべて重ね掛け */
+        g.mirrors.forEach((mr) => g.swaps.forEach((sw) => { if (sw.to > mr.from) ov++; }));
         if (ov) overlapSeen++;
         if (l.some((o) => o.type === 'LASER_DIAG' || o.type === 'LASER_H')) netSeen++;
         tips += g.events.filter((e) => e.type === 'tip').length;

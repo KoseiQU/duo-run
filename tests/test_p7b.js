@@ -716,13 +716,16 @@
       t.ok(bb.top >= window.innerHeight * 0.45 && bb.bottom <= window.innerHeight + 1, '縞枠は下半分に収まる');
       t.eq(sparkle('lumen'), true, 'LUMEN に銀の粒（鏡の光）');
       t.eq(sparkle('umbra'), false, 'UMBRA には出ない');
-      /* 出口で全部消える */
-      while (Game.dist < m.to + 6 && g++ < 2000 && Game.status === 'playing') DUO.pump(1 / 60);
-      t.eq(Game.status, 'playing', '鏡ゾーンをボットが抜ける');
-      t.eq(Game.runners[0].mirrored, false, '出口で反転が戻る');
-      t.eq(vis(flag), false, '出口で MIRROR が消える');
-      t.eq(vis(frame('bottom')) || vis(frame('top')), false, '出口で縞枠が消える');
-      t.eq(sparkle('lumen'), false, '出口で銀の粒が消える');
+      /* P8a（固定反転）: 出口ゲートは失効＝先へ進んでも表示は出たまま。最初からやり直すと全部消える */
+      while (Game.dist < m.from + 120 && g++ < 2000 && Game.status === 'playing') DUO.pump(1 / 60);
+      t.eq(Game.status, 'playing', '鏡ゾーンをボットが走る');
+      t.eq(Game.runners[0].mirrored, true, '先へ進んでも反転は戻らない（P8a）');
+      t.eq(vis(flag) && vis(frame('bottom')) && sparkle('lumen'), true, 'MIRROR・縞枠・銀の粒は出たまま');
+      Game.retry(true); DUO.pump(1 / 60);
+      t.eq(Game.runners[0].mirrored, false, '最初からやり直すと反転が戻る');
+      t.eq(vis(flag), false, 'MIRROR が消える');
+      t.eq(vis(frame('bottom')) || vis(frame('top')), false, '縞枠が消える');
+      t.eq(sparkle('lumen'), false, '銀の粒が消える');
 
       /* 2) 入れ替えワープとの重ね掛け: LUMEN（床）が反転 × 担当が入れ替わる →
             LUMEN を動かすのは上半分 ＝ 縞枠は上半分に出る（画面の位置で分かる） */

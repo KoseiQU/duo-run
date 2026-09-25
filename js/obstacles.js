@@ -605,14 +605,19 @@ const Zero = {
 };
 
 /* ============================================================================
-   Mirror — 鏡ゾーン（契約§4.5 / §4.4 S7）の**時刻規則の唯一の出所**
+   Mirror — 鏡ゾーン（契約§4.5【2026-09-25 改訂: 固定反転】/ P8a）の**時刻規則の唯一の出所**
 
    ■ 形
-     銀の枠のゲートが2枚で1組（入口と出口）。**ゲートが置かれた面**（床 or 天井）を
-     走るキャラの左右操作が、跨ぐたびに反転する（runner.mirrored をトグル）。
+     銀の枠のゲートが **1枚**（出口ゲートは失効）。**ゲートが置かれた面**（床 or 天井）を
+     走るキャラの左右操作が反転し、**以後戻らない**（runner.mirrored = true。トグルしない＝
+     同じ面のゲートをもう一度くぐっても反転のまま）。
      反転そのものは Runners.input の1行（dir = -dir）が唯一の実装で、
      人間のタッチもキーボードもボットも同じ1か所を通る。
-
+   ■ いつ戻るか（＝ mirrored が false に戻るのはここに挙げる場合だけ）
+     ・ステージの終わり／最初からやり直す／タイトルへ戻る（Runners.reset）
+     ・エンドレスのゾーン切替（Mirror.clearAll / 区画内では戻さない）
+     ・チェックポイント再開は「再開位置までにくぐったゲート」を Mirror.restore が掛け直す
+       （＝ステージの途中から再開しても、そのステージの反転の状態は変わらない）
    ■ 規則（重力反転ワープと同じ流儀で、距離＝時刻として書く）
      ・反転は **走行距離がゲートを跨いだ瞬間** に1回だけ起きる（フレーム非依存）。
      ・ゲートの直後 CFG.MIRRORZ.GRACE_T 秒（1.0秒）は障害物を置かない。
@@ -621,19 +626,17 @@ const Zero = {
    ============================================================================ */
 const Mirror = {
   /* 譜面の1エントリ（type:'MIRRORZ'）を実体へ展開する。
-     params.mir = { side: 'floor'|'ceil'（省略時は書いた面）, backT: 出口までの秒数 } */
+     params.mir = { side: 'floor'|'ceil'（省略時は書いた面） }（旧 backT＝出口までの秒数は失効・無視） */
   expand(items, e, surface, at, nowDist, scale, sink) {
     const p = (e.params && e.params.mir) || {};
     const unit = CFG.REF_SPEED * (scale === undefined ? 1 : scale);
-    const backT = (p.backT === undefined) ? 6 : p.backT;
     const side = (p.side === 'ceil' || p.side === 'floor') ? p.side : surface;
-    const to = at + backT * unit;
-    const reg = { from: at, to: to, unit: unit, side: side, gates: [at, to], dead: false };
-    reg.gates.forEach((m) => {
-      const o = Obstacles.make('MIRGATE', side, e.lane || 0, m, nowDist, { mir: { unitM: unit, side: side } });
-      o.reg = reg;
-      items.push(o);
-    });
+    /* to は「最後のゲート」（＝ from。生成器の regionEnd がゲート型の終わりとして読む）。
+       効き目は固定反転なので to を過ぎても続く（activeAt は from だけを見る） */
+    const reg = { from: at, to: at, unit: unit, side: side, gates: [at], fixed: true, dead: false };
+    const o = Obstacles.make('MIRGATE', side, e.lane || 0, at, nowDist, { mir: { unitM: unit, side: side } });
+    o.reg = reg;
+    items.push(o);
     if (sink) sink.push(reg);
     return reg;
   },
@@ -661,16 +664,15 @@ const Mirror = {
     }
     return false;
   },
-  /* その距離でその面が反転しているか（区間の内側か）。HUD・監査の窓口 */
+  /* その距離でその面が反転しているか（固定反転: その面のゲートを1枚でもくぐったか）。監査の窓口 */
   activeAt(list, side, m) {
     if (!list) return false;
-    let on = false;
     for (let i = 0; i < list.length; i++) {
       const r = list[i];
       if (r.dead || r.side !== side) continue;
-      if (m > r.from && m <= r.to) on = !on;
+      if (m > r.from) return true;
     }
-    return on;
+    return false;
   },
 
   /* 毎フレーム1回（Game.step から）。prevDist → dist の間に跨いだゲートを実行する */
@@ -684,9 +686,34 @@ const Mirror = {
       for (let k = 0; k < r.gates.length; k++) {
         if (r.gates[k] <= game.prevDist || r.gates[k] > game.dist) continue;
         const rn = game.runners.filter((x) => x.surface === r.side)[0];
-        if (rn) rn.mirrored = !rn.mirrored;
+        if (rn) rn.mirrored = true;                 // 固定反転: 戻さない（トグルしない）
         n++;
       }
+    }
+    return n;
+  },
+  /* エンドレスのゾーン切替（契約§4.5「ゾーン切替で解除」）: 2体とも通常へ戻す */
+  clearAll(game) {
+    let n = 0;
+    game.runners.forEach((r) => { if (r.mirrored) { r.mirrored = false; n++; } });
+    return n;
+  },
+  /* チェックポイント再開（Game.resetRun）: cutM より手前でくぐったゲートを掛け直す。
+     面は再開時に既定（LUMEN=床 / UMBRA=天井）へ戻っているので、ゲートの面＝既定のキャラ。
+     エンドレスは「cutM と同じゾーンの中のゲート」だけ（ゾーン切替で解除される規則と同じ）。
+     掛け直したゲートは dead にする（もう跨がない・監査の snapshot にも出さない）。 */
+  restore(game, cutM, zoneAt) {
+    const list = (game.gen && game.gen.mirrors) ? game.gen.mirrors : null;
+    if (!list) return 0;
+    const zNow = zoneAt ? zoneAt(cutM) : null;
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.dead || r.from >= cutM) continue;
+      r.dead = true;
+      if (zoneAt && zoneAt(r.from) !== zNow) continue;
+      const rn = game.runners.filter((x) => x.surface === r.side)[0];
+      if (rn) { rn.mirrored = true; n++; }
     }
     return n;
   },
@@ -700,7 +727,7 @@ const Mirror = {
   snapshot(game) {
     const list = (game.gen && game.gen.mirrors) ? game.gen.mirrors : [];
     return list.filter((r) => !r.dead && Math.abs(r.from - game.dist) < 260)
-               .map((r) => ({ from: +r.from.toFixed(1), to: +r.to.toFixed(1), side: r.side }));
+               .map((r) => ({ from: +r.from.toFixed(1), side: r.side }));
   }
 };
 
