@@ -736,7 +736,7 @@
   });
 
   DUO.__suites.push({
-    name: 'P6-3→P7c: チュートリアル済みは S1 クリアで立つ（duorun.tutorialDone・START の促し・設定で再表示）',
+    name: 'P6-3→P8c: チュートリアル済みは S1 クリアで記録だけ立つ（UI は変えない・設定の再表示は撤去）',
     quick: true,
     run(t) {
       const In = I(), Game = In.Game, Tu = In.Tutorial, U = In.U;
@@ -788,22 +788,16 @@
         t.ok(!!e3, 'S3 に新ギミックの tip');
         Tu.onEvent(e3);
         t.eq(Tu.current, e3.params.id, '新ギミックの tip は出す（' + e3.params.id + '）');
-        /* 済みなら START はモード選択へ */
+        /* 済みでも START はモード選択へ（未了でも同じ＝ tutorialDone は UI に影響しない / 契約§4.8 2026-09-27） */
         DUO.reset();
         click('start');
-        t.eq(document.getElementById('screen-mode').classList.contains('on'), true, '済みなら START でモード選択へ');
-        /* 設定の「チュートリアルをもう一度」 */
+        t.eq(document.getElementById('screen-mode').classList.contains('on'), true, '済みでも START でモード選択へ');
+        /* 設定の「チュートリアル再表示」は撤去（2026-09-27） */
         DUO.reset();
         click('settings');
-        const btn = document.querySelector('[data-ui="tutorial-reset"]');
-        t.eq(btn.disabled, false, '済みのときはボタンが押せる');
-        click('tutorial-reset');
-        t.eq(Tu.isDone(), false, '押すと未了に戻る');
-        t.eq(btn.disabled, true, '未了のときは押せない表示');
+        t.eq(document.querySelector('[data-ui="tutorial-reset"]'), null, '設定に「チュートリアル再表示」のボタンが無い');
+        t.eq(document.getElementById('settings').textContent.indexOf('チュートリアル'), -1, '設定パネルに「チュートリアル」の文言が無い');
         click('settings-close');
-        t.ok(document.getElementById('btn-start').textContent.indexOf('チュートリアル') >= 0, '未了に戻すと START がチュートリアルを促す');
-        click('start');
-        t.eq(DUO.state().stage, 'S1', 'START で S1 チュートリアルが始まる');
       } finally {
         U.lsRestore(snap);
         DUO.reset();

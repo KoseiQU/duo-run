@@ -395,12 +395,11 @@
     </div>
     <div class="btns">
       <button class="primary" id="btn-start" data-ui="start">START</button>
-      <button class="ghost" id="btn-start-skip" data-ui="start-skip" style="display:none">スキップ</button>
       <button class="ghost" id="btn-settings" data-ui="settings">設定</button>
     </div>
     <div class="label" id="title-best"></div>
     <div class="hint" id="title-hint">共有 → 「ホーム画面に追加」で全画面で遊べます</div>
-    <!-- 設定（音量・ミュート・チュートリアルの再表示 / §6 P6）。localStorage duorun.audio / duorun.tutorialDone -->
+    <!-- 設定（音量・ミュート / §6 P6）。localStorage duorun.audio。「チュートリアル再表示」は 2026-09-27 撤去（§4.8） -->
     <div class="panel" id="settings" data-ui="settings-panel">
       <div class="set-title label">SETTINGS</div>
       <label class="set-row"><span>BGM</span>
@@ -409,7 +408,6 @@
         <input type="range" min="0" max="100" step="5" id="set-se" data-ui="audio-se"><b id="set-se-v"></b></label>
       <div class="set-btns">
         <button class="ghost" id="set-mute" data-ui="audio-mute">音: ON</button>
-        <button class="ghost" id="set-tut" data-ui="tutorial-reset">チュートリアルをもう一度</button>
       </div>
       <button class="ghost" data-ui="settings-close">閉じる</button>
     </div>

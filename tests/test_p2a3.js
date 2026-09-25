@@ -289,25 +289,41 @@
   });
 
   DUO.__suites.push({
-    name: 'UI: 実クリック経路（初回 START＝S1 チュートリアル→死亡→リトライ→スキップ→ステージ選択）',
+    name: 'UI: 実クリック経路（クリーン状態で START→モード選択・チュートリアル案内なし→ステージ選択で S1→死亡→リトライ）',
     quick: true,
     run(t) {
       const In = I();
       const snap = In.U.lsSnapshot();
-      /* 解放状態を既知にする（最後に lsRestore で元へ戻す） */
-      ['cleared', 'tutorialDone'].forEach((k) => {
+      /* クリーン状態（初回起動と同じ: クリア・チュートリアル済みの記録なし）。最後に lsRestore で元へ戻す */
+      ['cleared', 'tutorialDone', 'best.S1'].forEach((k) => {
         try { window.localStorage.removeItem(In.CFG.LS_PREFIX + k); } catch (e) { /* noop */ }
       });
       DUO.reset();
       t.eq(onScreen('title'), true, 'タイトルが出ている');
-      t.ok(document.getElementById('btn-start').textContent.indexOf('チュートリアル') >= 0, '初回は START がチュートリアルを促す');
-      t.eq(getComputedStyle(document.getElementById('btn-start-skip')).display !== 'none', true, '初回は「スキップ」も出る');
+      t.eq(document.getElementById('btn-start').textContent, 'START', 'START の文言は「START」だけ（チュートリアルを促さない）');
+      t.eq(document.getElementById('btn-start-skip'), null, '「スキップ」ボタンは無い');
+      t.eq(document.getElementById('screen-title').textContent.indexOf('スキップ'), -1, 'タイトルに「スキップ」の文言が無い');
+      /* 実クリック（MouseEvent）で START → 常にモード選択（初回でも S1 を始めない / 契約§4.8 2026-09-27） */
       t.eq(click('start'), true, 'START を押す');
-      t.eq(DUO.state().stage, 'S1', '初回の START で S1 チュートリアルが始まる');
-      t.eq(onScreen('title'), false, 'プレイ中はタイトルが消える');
+      t.eq(onScreen('mode'), true, 'クリーン状態でも START でモード選択が出る');
+      t.eq(DUO.state().status, 'idle', 'ゲームは始まっていない（チュートリアルへ誘導しない）');
+      t.eq(onScreen('title'), false, 'タイトルは消える');
+      const modeTxt = document.getElementById('screen-mode').textContent;
+      t.eq(modeTxt.indexOf('チュートリアル'), -1, 'モード選択にチュートリアルの案内が無い');
+      /* ステージ選択 → S1 は1枚のカードとして普通に選べる */
+      t.eq(click('mode-stage'), true, 'ステージを押す');
+      t.eq(onScreen('stages'), true, 'ステージ選択へ');
+      t.eq(document.querySelectorAll('#stage-grid .stage-card').length, 7, 'ステージは7枚');
+      const s1 = document.querySelector('[data-ui="stage-S1"]');
+      const s2 = document.querySelector('[data-ui="stage-S2"]');
+      t.eq(s1 && s1.getAttribute('data-unlocked'), '1', 'S1 は解放されている');
+      t.eq(s2 && s2.getAttribute('data-unlocked'), '0', 'S2 はロックされている（S1 未クリア時・解放規則は従来どおり）');
+      t.eq(!!(s2 && s2.hasAttribute('disabled')), true, 'ロックは押せない');
+      t.eq(click('stage-S1'), true, 'ステージ選択から S1 を選ぶ');
+      t.eq(DUO.state().stage, 'S1', 'S1 が始まる');
       t.eq(document.getElementById('hud').classList.contains('on'), true, 'HUD が出る');
       t.eq(document.body.getAttribute('data-zone'), 'white', '白い空間（HUD は暗い文字）');
-      /* わざと死ぬ */
+      /* わざと死ぬ → リトライ（チェックポイント） → タイトルへ */
       DUO.skipTo(240);
       In.clearObstacles();
       In.spawnOne('PILLAR', 'floor', 0, 12);
@@ -320,27 +336,12 @@
       t.eq(click('title'), true, 'タイトルへを押す');
       t.eq(onScreen('title'), true, 'タイトルに戻る');
       t.eq(DUO.state().status, 'idle', '状態も idle に戻る');
-      /* スキップ → モード → ステージ選択（7枚） */
-      t.eq(click('start-skip'), true, 'スキップを押す');
-      t.eq(onScreen('mode'), true, 'モード選択へ');
-      t.eq(click('mode-stage'), true, 'ステージを押す');
-      t.eq(onScreen('stages'), true, 'ステージ選択へ');
-      t.eq(document.querySelectorAll('#stage-grid .stage-card').length, 7, 'ステージは7枚');
-      const s1 = document.querySelector('[data-ui="stage-S1"]');
-      const s2 = document.querySelector('[data-ui="stage-S2"]');
-      t.eq(s1 && s1.getAttribute('data-unlocked'), '1', 'S1 は解放されている');
-      t.eq(s2 && s2.getAttribute('data-unlocked'), '0', 'S2 はロックされている（S1 未クリア時）');
-      t.eq(!!(s2 && s2.hasAttribute('disabled')), true, 'ロックは押せない');
-      t.eq(click('stage-S1'), true, 'ステージ選択からも S1 を選べる');
-      t.eq(DUO.state().stage, 'S1', 'S1 が始まる');
-      /* チュートリアル済みなら START はモード選択へ */
-      DUO.reset();
+      /* チュートリアル済みでも同じ（tutorialDone は UI に影響しない） */
       In.U.lsSet('tutorialDone', true);
       In.UI.show('title');
-      t.eq(document.getElementById('btn-start').textContent, 'START', '済みなら START だけ');
-      t.eq(getComputedStyle(document.getElementById('btn-start-skip')).display, 'none', '済みならスキップは出ない');
+      t.eq(document.getElementById('btn-start').textContent, 'START', '済みでも START の文言は同じ');
       click('start');
-      t.eq(onScreen('mode'), true, '済みなら START でモード選択へ');
+      t.eq(onScreen('mode'), true, '済みでも START でモード選択へ');
       click('mode-endless');
       t.eq(DUO.state().stage, 'endless', 'エンドレスが始まる');
       t.eq(DUO.state().speed >= 16, true, 'エンドレスも 16 m/s から');

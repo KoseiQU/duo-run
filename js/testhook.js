@@ -119,7 +119,7 @@ const DUO = {
       for (let i = 0; i < list.length; i++) {
         const s = list[i];
         DUO.reset();
-        /* 製品の初期状態＝チュートリアル未了（P6 初回のみ表示）。スイートごとに戻す */
+        /* 製品の初期状態＝チュートリアル未了（記録のみ・UI には影響しない / P8c）。スイートごとに戻す */
         try { window.localStorage.removeItem(CFG.LS_PREFIX + 'tutorialDone'); } catch (e) { /* noop */ }
         if (typeof UI !== 'undefined') UI._testLock = true;   // テスト中はステージ解放規則を本来の姿で検証
         const t = DUO._mkT();

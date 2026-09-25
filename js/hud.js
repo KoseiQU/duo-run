@@ -323,13 +323,9 @@ const UI = {
     return cl.indexOf(UI.STAGES[i - 1].id) >= 0 || cl.indexOf(UI.STAGES[i].id) >= 0;
   },
 
-  tutorialPending() { return !(typeof Tutorial !== 'undefined' && Tutorial.isDone && Tutorial.isDone()); },
+  /* 起動時の「チュートリアルを始める／スキップ」の誘導は失効（契約§4.8 2026-09-27）。
+     START は常にモード選択へ。S1 はステージ選択の1枚として選ぶ。duorun.tutorialDone は UI に影響させない */
   renderTitle() {
-    const pend = UI.tutorialPending();
-    const bs = document.getElementById('btn-start');
-    if (bs) bs.textContent = pend ? 'START ─ チュートリアル' : 'START';
-    const sk = document.getElementById('btn-start-skip');
-    if (sk) sk.style.display = pend ? '' : 'none';
     const e = HUD.el['title-best'] || document.getElementById('title-best');
     if (!e) return;
     const be = U.lsGet('best.endless', 0);
@@ -366,7 +362,7 @@ const UI = {
     });
   },
 
-  /* 設定パネル（§6 P6）: 音量・ミュート・チュートリアルの再表示 */
+  /* 設定パネル（§6 P6）: 音量・ミュート（「チュートリアル再表示」は 2026-09-27 撤去） */
   settingsOpen(on) {
     const p = document.getElementById('settings');
     const title = document.getElementById('screen-title');
@@ -385,8 +381,6 @@ const UI = {
     txt('set-bgm-v', Math.round(s.bgm * 100)); txt('set-se-v', Math.round(s.se * 100));
     const m = document.getElementById('set-mute');
     if (m) { m.textContent = s.mute ? '音: OFF（ミュート）' : '音: ON'; m.classList.toggle('off', !!s.mute); }
-    const tb = document.getElementById('set-tut');
-    if (tb && typeof Tutorial !== 'undefined' && Tutorial.isDone) tb.disabled = !Tutorial.isDone();
     return true;
   },
 
@@ -400,7 +394,6 @@ const UI = {
     on('settings', () => UI.settingsOpen(true));
     on('settings-close', () => UI.settingsOpen(false));
     on('audio-mute', () => { if (typeof Audio !== 'undefined' && Audio.SE) Audio.toggleMute(); UI.renderSettings(); });
-    on('tutorial-reset', () => { if (typeof Tutorial !== 'undefined' && Tutorial.resetDone) Tutorial.resetDone(); UI.renderSettings(); UI.renderTitle(); });
     ['bgm', 'se'].forEach((k) => {
       const e = document.querySelector('[data-ui="audio-' + k + '"]');
       if (e) e.addEventListener('input', () => {
@@ -409,14 +402,11 @@ const UI = {
       });
     });
     UI.renderSettings();
-    /* 初回（チュートリアル未了）は START が S1 チュートリアルを促す（契約§4.4 v2 / P7c）。
-       済みならモード選択へ。未了でも「スキップ」でモード選択へ行ける（ステージ選択でも S1 を選べる） */
+    /* START は常にモード選択へ（契約§4.8 2026-09-27: 起動時のチュートリアル案内は失効） */
     on('start', () => {
       UI.settingsOpen(false);
-      if (UI.tutorialPending()) game.start('S1');
-      else UI.show('mode');
+      UI.show('mode');
     });
-    on('start-skip', () => { UI.settingsOpen(false); UI.show('mode'); });
     on('mode-stage', () => UI.show('stages'));
     on('mode-endless', () => game.start('endless'));
     on('back-title', () => UI.show('title'));

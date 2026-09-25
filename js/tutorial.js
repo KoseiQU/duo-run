@@ -61,15 +61,11 @@ const Tutorial = {
                      '<b class="k2">上半分</b>で<b>↑跳ぶ</b>'] }
   },
   /* ---- チュートリアル済み（契約§4.4 v2 / P7c）: **S1 をクリアしたら** duorun.tutorialDone を立てる
-     （Game.onClear から。ボットの走行では記録しない）。未了のあいだはタイトルの START が S1 を促す。
-     設定の「チュートリアルをもう一度」で戻せる。旧「S1 冒頭の導入区間を初回のみ表示」は失効
-     （S1 はそれ自体がチュートリアルなので、tip は毎回出す）。 ---- */
+     （Game.onClear から。ボットの走行では記録しない）。**記録だけで UI には影響させない**
+     （2026-09-27 契約§4.8: 起動時の「チュートリアルを始める／スキップ」と設定の「チュートリアル再表示」は撤去。
+     START は常にモード選択へ）。S1 はそれ自体がチュートリアルなので、tip は毎回出す。 ---- */
   isDone() { return !!U.lsGet('tutorialDone', false); },
   markDone() { U.lsSet('tutorialDone', true); return true; },
-  resetDone() {
-    try { window.localStorage.removeItem(CFG.LS_PREFIX + 'tutorialDone'); } catch (e) { /* noop */ }
-    return true;
-  },
 
   /* 句をつなぐ（句と句の間だけが改行できる位置になる） */
   html(tip) { return tip.ph.map((x) => '<span class="ph">' + x + '</span>').join(''); },
