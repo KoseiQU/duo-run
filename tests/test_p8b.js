@@ -61,6 +61,8 @@
         occ[x] = (occ[x] || 0) + 1;
         (zonesOf[x] || (zonesOf[x] = {}))[g.zoneAt(o.at)] = 1;
       }));
+      /* サメはエンドレスから除外（§4.5b 2026-09-27）＝生成にも1匹も出ない */
+      list.forEach((o) => { if (o.type === 'SHARK') miss.push('seed' + seed + ' SHARK@' + o.at.toFixed(0)); });
       /* 同じ主ギミックの札を3枚続けない */
       const units = g.log.filter((l) => l.eg && l.startM < L);
       units.forEach((u) => { mains[u.eg] = (mains[u.eg] || 0) + 1; });
@@ -103,7 +105,7 @@
     t.ok(nFlip >= n * (L / 1000) * 0.9, '世界反転が 1000m にほぼ1回（' + (nFlip / n).toFixed(2) + '回 / ' + L + 'm）');
     t.eq(asymLow.length, 0, '上下で違う動きが必須動作の 60% 以上（最小 ' + asymMin.toFixed(3) + '・平均 ' + (asymSum / n).toFixed(3) + '）');
     /* ゾーン（背景）と無関係: ステージ固有だったギミックが 4ゾーン以上で出る */
-    ['bridge', 'rock', 'shark', 'vent', 'sync', 'zero', 'net', 'flip'].forEach((x) => {
+    ['bridge', 'rock', 'vent', 'sync', 'zero', 'net', 'flip'].forEach((x) => {
       const zs = Object.keys(zonesOf[x] || {});
       t.ok(zs.length >= 4, x + ' がゾーンと無関係に出る（' + zs.join(',') + '）');
     });
@@ -123,7 +125,11 @@
       const In = I(), EK = In.EndlessKit;
       const types = {};
       EK.UNITS.forEach((d) => (d.floor || []).concat(d.ceil || []).forEach((e) => { types[e.type] = 1; }));
-      ['MIRRORZ', 'GRAVWARP', 'MERGE'].forEach((x) => t.ok(!types[x], '札に ' + x + ' が無い（§4.5b 除外）'));
+      ['MIRRORZ', 'GRAVWARP', 'MERGE', 'SHARK', 'WALLHOLE'].forEach((x) => t.ok(!types[x], '札に ' + x + ' が無い（§4.5b 除外）'));
+      t.ok(EK.GIMMICKS.indexOf('shark') < 0 && EK.available(ALL).indexOf('shark') < 0, 'サメは採用ギミックに無い（2026-09-27 エンドレスから除外）');
+      t.ok(EK.available(['S1', 'S2', 'S3', 'S4']).indexOf('vent') >= 0, 'S4 クリアで泡の噴出口だけが解放される（サメは入らない）');
+      t.eq(EK.GIMMICKS.length, 15, '採用ギミックは15種（17 − 壁の穴 − サメ）');
+      t.ok(EK.UNITS.every((d) => d.gset.indexOf('shark') < 0), 'どの札にもサメが入っていない（' + EK.UNITS.length + '枚）');
       t.ok(!!types.HANDSWAP, '世界反転ゲートは採用（§4.5b）');
       t.eq(In.makeStage('endless').p8b, true, 'エンドレスは P8b の生成（stage.p8b）');
       t.eq(EK.available([]).join(','), 'hurdle,lowl,pillar,wide,laserv', '未クリアは基本障害物だけ');
@@ -146,6 +152,9 @@
           n += g.mirrors.length + g.warps.length + g.merges.length;
         }
         t.eq(n, 0, '3シード×5000m: 鏡・重力反転・合体の区間 0');
+        let sh = 0;
+        for (let seed = 1; seed <= 3; seed++) sh += gen(seed).list.filter((o) => o.type === 'SHARK').length;
+        t.eq(sh, 0, '3シード×5000m: サメは1匹も出ない');
       });
     }
   });
@@ -191,7 +200,7 @@
   });
 
   /* ==========================================================================
-     3. 死角の禁止（契約§4.5b / P8b-2）: 遮蔽物の通過後 speed×1.0秒は同じレーン（ワイド梁・壁の穴は全レーン）に
+     3. 死角の禁止（契約§4.5b / P8b-2）: 遮蔽物の通過後 speed×1.0秒は同じレーン（ワイド梁は全レーン）に
         障害物なし。奥（1.0〜2.0秒）に障害物があれば、遮蔽物の speed×1.5秒 手前から白い予告線
      ========================================================================== */
   DUO.__suites.push({
