@@ -262,6 +262,8 @@ const EndlessKit = (function () {
     BEST_OF: 2,
     /* 窓の詰まり（owed を出し切る見積り秒 ÷ 窓の残り秒）がこれを越えたら「重い順・効率優先」 */
     TIGHT: 0.5,
+    /* 世界反転: 区切りまでの続いた残りが FLIP_T + これ（秒）を切ったら最優先（札1〜2枚ぶんの余裕） */
+    FLIP_URGENT: 11,
     UNITS: UNITS, BASE: BASE,
     available: available, unitsFor: unitsFor,
     gimmicksOfDef: gimmicksOfDef, gimmicksOfItem: gimmicksOfItem,

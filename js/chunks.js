@@ -3419,6 +3419,16 @@ function createGenerator(stage, seed) {
     }
     return sec;
   }
+  /* 世界反転を出してよい最初の位置（窓ごと）: 窓の頭に毎回来ないよう、区画が収まる余裕の6割の中でシードで散らす */
+  const exFlipAfterC = {};
+  function exFlipAfter(wi) {
+    if (exFlipAfterC[wi] !== undefined) return exFlipAfterC[wi];
+    const sp = stage.speedAt(cursor);
+    /* 区切り（ミニ大演出・切替）までの続いた残りだけで数える（区画は区切りをまたげない） */
+    const seg = (Math.min((wi + 1) * Endless.SWITCH_M, spStart) - cursor) / sp;
+    const slack = Math.max(0, seg - (EndlessKit.FLIP_T + EndlessKit.FLIP_URGENT)) * sp;
+    return (exFlipAfterC[wi] = cursor + rng() * slack * 0.6);
+  }
   /* 「重い順」の鍵: 相方として必ず出る基本障害物（ハードル・ローレーザー）は後回し、
      それ以外は札の秒が長いものから */
   function exHard(g) { return (EndlessKit.COMMON[g] ? 0 : 100) + exCost(g); }
@@ -3434,11 +3444,15 @@ function createGenerator(stage, seed) {
     const owed = EXG.filter((g) => !seen[g]);
     /* 窓の詰まり具合: owed を全部出すのに要る秒（組み札で約3つずつ消える）÷ 窓の残りの秒。
        世界反転は中身を後ろの札が埋めるので、実際に食う秒（ゲート2枚の猶予）で数える */
-    const pressure = exPlanSec(owed, cands) / Math.max(0.1, exRoomSec(m));
+    const roomSec = exRoomSec(m);
+    const segSec = (Math.min((exWinOf(m) + 1) * Endless.SWITCH_M, spStart) - m) / stage.speedAt(m);
+    const pressure = exPlanSec(owed, cands) / Math.max(0.1, roomSec);
     /* 詰まっている時は「いちばん重い owed」を含む札だけから選ぶ（重い順に確実に入れる） */
     if (pressure > EndlessKit.TIGHT && owed.length) {
-      const hard = owed.filter((g) => cands.some((d) => d.gset.indexOf(g) >= 0))
-        .sort((a, b) => exHard(b) - exHard(a))[0];
+      /* 毎回同じ順にならないよう、重い方から2つのうちどちらかをシードで選ぶ（札の並びの単調さを避ける） */
+      const hs = owed.filter((g) => cands.some((d) => d.gset.indexOf(g) >= 0))
+        .sort((a, b) => exHard(b) - exHard(a));
+      const hard = (hs.length > 1 && hs[0] !== 'flip' && exHard(hs[1]) >= 100 && rng() < 0.4) ? hs[1] : hs[0];
       if (hard) cands = cands.filter((d) => d.gset.indexOf(hard) >= 0);
     } else if (owed.length) {
       /* owed を含む札があれば、その中だけから選ぶ（均等化の重みで owed が埋もれないように） */
@@ -3462,8 +3476,8 @@ function createGenerator(stage, seed) {
         wt *= cover ? Math.pow(4, cover) * val * val : 0.02;
         /* 詰まってきたら「1秒あたりに消せる owed の重さ」で選ぶ（三つ組の札・短い札） */
         if (cover && pressure > EndlessKit.TIGHT) wt *= Math.pow(val / (exStats(d).span / CFG.REF_SPEED + 0.9), 3);
-        /* 世界反転は区画（8.6秒）が次の区切りの手前に収まる間に置く＝窓の頭で先に出す */
-        if (d.flip && cover) wt *= 60;
+        /* 世界反転は区画（8.6秒）が次の区切りの手前に収まる間に置く。残りが少なくなってきたら最優先 */
+        if (d.flip && cover) wt *= (segSec < EndlessKit.FLIP_T + EndlessKit.FLIP_URGENT) ? 60 : 1;
       }
       /* 密度（§4.7）: 詰まっていない時は、目安より薄い札を軽くする（速い区間ほど札は薄くなる） */
       if (!d.flip && pressure <= EndlessKit.TIGHT && want) {
@@ -3531,6 +3545,7 @@ function createGenerator(stage, seed) {
       if (d.flip) {
         if (exOpen || (exWin[wi] || {}).flip) return false;                             // 1000m に最大1回
         if (cursor < exFlipEnd + sp0 * 2) return false;                                 // 区画を重ねない
+        if (cursor < exFlipAfter(wi)) return false;                                     // 窓の中の出す位置はシードで散らす
       }
       return d.lengthM * scale <= spStart - cursor;
     });
