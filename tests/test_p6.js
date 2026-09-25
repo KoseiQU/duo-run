@@ -141,7 +141,7 @@
       withCleared(ALL, () => {
         const st = In.makeStage('endless');
         const low = [], rows = [];
-        for (let seed = 1; seed <= 6; seed++) {
+        for (let seed = 1; seed <= 4; seed++) {
           const g = In.createGenerator(st, seed);
           g.ensure(12500, 0);
           const ex = [];

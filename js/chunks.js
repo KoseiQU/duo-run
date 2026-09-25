@@ -3419,7 +3419,7 @@ function createGenerator(stage, seed) {
     }
     return sec;
   }
-  /* 「重い順」の鍵: 相方として必ず出る基本障害物（ハードル・ローレーザー・縦レーザー）は後回し、
+  /* 「重い順」の鍵: 相方として必ず出る基本障害物（ハードル・ローレーザー）は後回し、
      それ以外は札の秒が長いものから */
   function exHard(g) { return (EndlessKit.COMMON[g] ? 0 : 100) + exCost(g); }
   /* 窓の残り（秒）: 窓の終わりか次の区切りまで＋区切りがミニ大演出なら、その後ろの残り */
@@ -3436,7 +3436,7 @@ function createGenerator(stage, seed) {
        世界反転は中身を後ろの札が埋めるので、実際に食う秒（ゲート2枚の猶予）で数える */
     const pressure = exPlanSec(owed, cands) / Math.max(0.1, exRoomSec(m));
     /* 詰まっている時は「いちばん重い owed」を含む札だけから選ぶ（重い順に確実に入れる） */
-    if (pressure > 0.7 && owed.length) {
+    if (pressure > EndlessKit.TIGHT && owed.length) {
       const hard = owed.filter((g) => cands.some((d) => d.gset.indexOf(g) >= 0))
         .sort((a, b) => exHard(b) - exHard(a))[0];
       if (hard) cands = cands.filter((d) => d.gset.indexOf(hard) >= 0);
@@ -3461,12 +3461,12 @@ function createGenerator(stage, seed) {
         d.gset.forEach((g) => { if (owed.indexOf(g) >= 0) { cover++; val += exCost(g); } });
         wt *= cover ? Math.pow(4, cover) * val * val : 0.02;
         /* 詰まってきたら「1秒あたりに消せる owed の重さ」で選ぶ（三つ組の札・短い札） */
-        if (cover && pressure > 0.7) wt *= Math.pow(val / (exStats(d).span / CFG.REF_SPEED + 0.9), 3);
+        if (cover && pressure > EndlessKit.TIGHT) wt *= Math.pow(val / (exStats(d).span / CFG.REF_SPEED + 0.9), 3);
         /* 世界反転は区画（8.6秒）が次の区切りの手前に収まる間に置く＝窓の頭で先に出す */
         if (d.flip && cover) wt *= 60;
       }
       /* 密度（§4.7）: 詰まっていない時は、目安より薄い札を軽くする（速い区間ほど札は薄くなる） */
-      if (!d.flip && pressure <= 0.7 && want) {
+      if (!d.flip && pressure <= EndlessKit.TIGHT && want) {
         const st = exStats(d);
         const dens = st.demands / (st.span / CFG.REF_SPEED + 0.6) * 100 / stage.speedAt(m);
         wt *= Math.pow(U.clamp(dens / want, 0.3, 1.5), 2);
@@ -3547,7 +3547,8 @@ function createGenerator(stage, seed) {
         spread = U.clamp((st.demands * 100 / want - seam) / (st.span * scale), 1, EndlessKit.SPREAD_MAX);
       }
       const need = st.demands / want * 100 - st.span * scale * spread;
-      const gap = U.clamp(need, sp0 * 0.18, seam);
+      /* 継ぎ目の下限は反応窓（ウォール間 ≥ speed×0.45秒）＝それより手前は必ず §4.7 で弾かれる */
+      const gap = U.clamp(need, sp0 * CFG.FAIR.REACT, Math.max(seam, sp0 * CFG.FAIR.REACT));
       const f0 = st.firstAt * scale * spread, h0 = st.headAt * scale * spread;
       const wantFirst = (lastItemAt > -1e9) ? (lastItemAt + gap) : (cursor + f0);
       const step = Math.max(3, sp0 * 0.1);
@@ -3581,7 +3582,7 @@ function createGenerator(stage, seed) {
     /* 窓が詰まっている時は「owed の重さ ÷ 札が食う距離」が最大の札を採る（8枚まで試す） */
     const seen0 = exWin[wi] || {};
     const owed0 = EXG.filter((g) => !seen0[g]);
-    const tight = owed0.length && exPlanSec(owed0, cands) / Math.max(0.1, exRoomSec(cursor)) > 0.7;
+    const tight = owed0.length && exPlanSec(owed0, cands) / Math.max(0.1, exRoomSec(cursor)) > EndlessKit.TIGHT;
     const eff = (r) => {
       let v = 0;
       r.def.gset.forEach((g) => { if (owed0.indexOf(g) >= 0) v += exCost(g); });

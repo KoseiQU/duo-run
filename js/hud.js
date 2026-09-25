@@ -170,7 +170,34 @@ const HUD = {
     const e = HUD.el[id];
     if (e) e.textContent = txt;
   },
+  /* ハート（契約§4.5b / エンドレスだけ）: ♥ が残り・♡ が失った数 */
+  heartsState: '',
+  hearts(g) {
+    const e = HUD.el['hud-hearts'] || (HUD.el['hud-hearts'] = document.getElementById('hud-hearts'));
+    if (!e) return '';
+    const on = !!(g && g.stage && g.stage.endless);
+    const st = on ? (g.hearts + '/' + CFG.HEART.N) : '';
+    if (st === HUD.heartsState) return st;
+    HUD.heartsState = st;
+    e.style.display = on ? '' : 'none';
+    if (on) {
+      let h = '';
+      for (let i = 0; i < CFG.HEART.N; i++) h += '<span class="h' + (i < g.hearts ? '' : ' lost') + '">' + (i < g.hearts ? '♥' : '♡') + '</span>';
+      e.innerHTML = h;
+      e.setAttribute('data-hearts', String(g.hearts));
+    }
+    return st;
+  },
+  heartHit() {
+    const e = HUD.el['hud-hearts'] || document.getElementById('hud-hearts');
+    if (!e) return false;
+    e.classList.remove('hit');
+    void e.offsetWidth;
+    e.classList.add('hit');
+    return true;
+  },
   update(g) {
+    HUD.hearts(g);
     HUD._set('hud-dist', Math.floor(g.dist) + ' m');
     HUD._set('hud-speed', g.speed.toFixed(1) + ' m/s');
     /* エンドレスは今のゾーン名も出す（1000m ごとに切り替わる / §4.4 P6） */

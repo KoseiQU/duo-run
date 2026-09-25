@@ -570,6 +570,10 @@ const World = {
     if (vis) World.goal.position.set(0, Setpieces.viewLift(stage.lengthM), -rel);
   },
 
+  blinkOff() {
+    if (typeof Game === 'undefined' || !(Game.invulT > 0)) return false;
+    return Math.floor(Game.invulT * CFG.HEART.BLINK_HZ) % 2 === 1;
+  },
   syncRunners(runners, t) {
     World._t = t;
     runners.forEach((r) => {
@@ -620,7 +624,8 @@ const World = {
       v.group.position.set(px, py, 0);
       v.group.rotation.set(0, 0, rz);
       v.group.scale.set(1, 1, 1);
-      v.group.visible = r.alive;
+      /* 無敵中（ハートの被弾直後 / §4.5b）は2体とも点滅 */
+      v.group.visible = r.alive && !World.blinkOff();
 
       const sw = Math.sin(t * 15);
       const arms = v.parts.arms, legs = v.parts.legs;

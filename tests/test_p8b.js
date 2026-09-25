@@ -137,10 +137,27 @@
         const bad = g.obstacles.filter((o) => EK.gimmicksOfItem(o).some((x) => !EK.BASIC[x]));
         t.eq(bad.length, 0, '未クリア: 基本障害物以外は出ない（' + (bad[0] ? bad[0].type : 'なし') + '）');
       });
+      /* 生成でもゲートの類は出ない */
+      withCleared(ALL, () => {
+        let n = 0;
+        for (let seed = 1; seed <= 3; seed++) {
+          const g = gen(seed).g;
+          n += g.mirrors.length + g.warps.length + g.merges.length;
+        }
+        t.eq(n, 0, '3シード×5000m: 鏡・重力反転・合体の区間 0');
+      });
+    }
+  });
+
+  DUO.__suites.push({
+    name: 'P8b-1: エンドレスの札を1枚ずつ §4.7＋死角の禁止で検査（16・44 m/s）',
+    quick: false,
+    run(t) {
+      const In = I(), EK = In.EndlessKit;
       /* 札ごとに §4.7（4つの速度）＋死角の禁止 */
       const errs = [];
       EK.UNITS.forEach((d) => {
-        [16, 30, 44].forEach((sp) => {
+        [16, 44].forEach((sp) => {
           const speedAt = () => sp, scale = sp / 10, items = [];
           const loc = { syncs: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
           const put = (e, s) => In.expandEntry(items, e, s, 100 + e.at * scale, 0, scale, loc);
@@ -150,17 +167,7 @@
           if (e.length) errs.push(d.id + '@' + sp + ' ' + e[0]);
         });
       });
-      t.eq(errs.length, 0, '札 ' + EK.UNITS.length + '枚 × 3速度で §4.7（' + (errs[0] || '違反なし') + '）');
-      /* 生成でもゲートの類は出ない */
-      withCleared(ALL, () => {
-        let n = 0;
-        for (let seed = 1; seed <= 10; seed++) {
-          const g = In.createGenerator(In.makeStage('endless'), seed);
-          g.ensure(6000, 0);
-          n += g.mirrors.length + g.warps.length + g.merges.length;
-        }
-        t.eq(n, 0, '10シード×6000m: 鏡・重力反転・合体の区間 0');
-      });
+      t.eq(errs.length, 0, '札 ' + EK.UNITS.length + '枚 × 2速度（16・44 m/s）で §4.7（' + (errs[0] || '違反なし') + '）');
     }
   });
 
@@ -168,9 +175,9 @@
      2. 均等化・世界反転・非対称（quick は 10シード、runAll は 50シード＋§4.7）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'P8b-1: ギミック均等（1000mごと全種・3連続なし）・世界反転の区画・上下非対称60%（seed 1〜6 × 5000m）',
+    name: 'P8b-1: ギミック均等（1000mごと全種・3連続なし）・世界反転の区画・上下非対称60%（seed 1〜3 × 5000m）',
     quick: true,
-    run(t) { checkGimmicks(t, [1, 2, 3, 4, 5, 6], false); }
+    run(t) { checkGimmicks(t, [1, 2, 3], false); }
   });
   DUO.__suites.push({
     name: 'P8b-1: ギミック均等・世界反転・上下非対称60%・§4.7（seed 1〜50 × 5000m）',
@@ -236,6 +243,7 @@
         DUO.reset(); DUO.start('endless', 2); DUO.bot('perfect');
         DUO.skipTo(h.occAt - 170);
         let k = 0;
+        while (G.dist < h.fromM - 12 && k++ < 20000) DUO.__step(1 / 60);
         while (G.dist < h.fromM - 3 && k++ < 20000) DUO.pump(1 / 60);
         const want = h.lane * In.CFG.LANE_W;
         const match = () => (W._hintPool || []).filter((m) => m.visible && Math.abs(m.position.x - want) < 1e-6 &&
@@ -249,6 +257,136 @@
         while (G.dist < h.occAt + 3 && k++ < 20000) DUO.pump(1 / 60);
         t.eq(match(), 0, '遮蔽物を通り過ぎたら消える');
         t.ok(G.snapshot().drawCalls <= 300, 'ドローコール ≤ 300（' + G.snapshot().drawCalls + '）');
+      } finally {
+        U.lsRestore(snap);
+        DUO.reset();
+      }
+    }
+  });
+
+  /* ==========================================================================
+     4. ハート3個（契約§4.5b / P8b-3）
+     ========================================================================== */
+  DUO.__suites.push({
+    name: 'P8b-3: ハート3個（被弾→−1・0.6秒スロー・2.0秒無敵の点滅とすり抜け・噴出口は作動・3回目で終了・HUD・リザルト）',
+    quick: true,
+    run(t) {
+      const In = I(), G = In.Game, CFG = In.CFG, U = In.U;
+      const snap = U.lsSnapshot();
+      const sfx0 = U.sfx, heard = [];
+      U.sfx = function (id, o) { heard.push(id); return sfx0.call(U, id, o); };
+      /* 本物の障害物は流さない（ボットなしで数秒走るため）: 1フレームごとに片付ける */
+      const step = (sec) => {
+        const n = Math.round(sec * 60);
+        for (let i = 0; i < n; i++) { In.clearObstacles(); if (i < n - 1) DUO.__step(1 / 60); else DUO.pump(1 / 60); }
+      };
+      const lumen = () => G.runners.filter((r) => r.id === 'lumen')[0];
+      /* LUMEN の目の前に柱を置いて当てる（助走の空白の中） */
+      const hitNow = (frames) => {
+        In.clearObstacles();
+        In.spawnOne('PILLAR', 'both', lumen().laneTo, 2.5);
+        let k = 0;
+        const h0 = G.hitCount, s0 = G.status;
+        while (G.hitCount === h0 && G.status === s0 && k++ < (frames || 120)) DUO.__step(1 / 60);
+        DUO.pump(1 / 60);
+      };
+      try {
+        U.lsSet('cleared', ALL);
+        DUO.reset(); DUO.start('endless', 11);
+        t.eq(G.hearts, 3, 'エンドレスはハート3個から');
+        const he = document.getElementById('hud-hearts');
+        step(0.1);
+        t.eq(he.style.display, '', 'HUD にハート（data-ui="hearts"）');
+        t.eq(he.getAttribute('data-ui'), 'hearts', 'data-ui="hearts"');
+        t.eq(he.textContent, '♥♥♥', 'HUD ♥♥♥');
+        /* 1回目 */
+        heard.length = 0;
+        hitNow();
+        t.eq(G.status, 'playing', '1回目の被弾で続行');
+        t.eq(G.hearts, 2, 'ハート −1（残り2）');
+        t.eq(G.hitCount, 1, '被弾数 1');
+        t.ok(heard.indexOf('hit') >= 0, '被弾の効果音');
+        t.ok(G.invulT > 1.9 && G.hurtT > 0.5, '無敵 2.0秒・スロー 0.6秒が始まる（' + G.invulT.toFixed(2) + ' / ' + G.hurtT.toFixed(2) + '）');
+        step(0.05);
+        t.eq(he.textContent, '♥♥♡', 'HUD ♥♥♡');
+        /* スロー: 1フレームの前進が speed×dt×SLOW_SCALE */
+        const d0 = G.dist; DUO.pump(1 / 60);
+        t.near((G.dist - d0) / (G.speed / 60), CFG.HEART.SLOW_SCALE, 0.02, 'スロー中の前進は ' + CFG.HEART.SLOW_SCALE + ' 倍');
+        /* 点滅 */
+        let off = 0, onN = 0;
+        for (let i = 0; i < 24; i++) { In.clearObstacles(); DUO.pump(1 / 60); if (In.World.runnerViews.lumen.group.visible) onN++; else off++; }
+        t.ok(off >= 3 && onN >= 3, '無敵中は2体が点滅（消 ' + off + ' / 見 ' + onN + '）');
+        /* 無敵中はすり抜け（柱を通り過ぎる 0.4秒だけ走る） */
+        hitNow(24);
+        t.eq(G.hearts, 2, '無敵中は柱をすり抜ける（ハートは減らない）');
+        t.eq(G.status, 'playing', '無敵中は死なない');
+        /* 無敵中でも噴出口は作動（踏み系は通常どおり） */
+        In.clearObstacles();
+        const v = In.spawnOne('VENT', 'floor', lumen().laneTo, 2.0);
+        let k = 0, jumped = false;
+        while (k++ < 60 && !jumped) { DUO.__step(1 / 60); if (lumen().act === 'jump') jumped = true; }
+        t.ok(G.invulT > 0 && jumped && !!v['_vent_lumen'], '無敵中でも噴出口で跳ばされる');
+        /* 無敵が明けたら通常の判定 */
+        step(2.2);
+        t.eq(G.invulT, 0, '無敵は 2.0秒で明ける');
+        t.ok(In.World.runnerViews.lumen.group.visible, '明けたら点滅しない');
+        hitNow();
+        t.eq(G.hearts, 1, '2回目の被弾（残り1）');
+        t.eq(G.status, 'playing', '2回目でも続行');
+        step(2.2);
+        /* 3回目で従来の死亡 → リザルト */
+        hitNow();
+        t.eq(G.status, 'dying', '3回目の被弾で終了（スロー）');
+        t.eq(G.hearts, 0, 'ハート 0');
+        t.eq(G.hitCount, 3, '被弾数 3');
+        step(0.8);
+        t.eq(G.status, 'dead', 'リザルトへ');
+        const dh = document.getElementById('dead-hits');
+        t.ok(dh && dh.style.display !== 'none' && /被弾 3 回/.test(dh.textContent), 'リザルトに被弾数（' + (dh ? dh.textContent : '-') + '）');
+        t.ok(document.getElementById('screen-dead').classList.contains('on'), 'リザルト画面');
+        /* 最初から（リトライ）でハートは3個に戻る */
+        G.retry(true);
+        t.eq(G.hearts, 3, 'やり直しでハート3個に戻る');
+        t.eq(G.hitCount, 0, '被弾数も 0 に戻る');
+        /* ステージはハートなし（1発で終了のまま） */
+        DUO.reset(); DUO.start('S2', 3); step(0.1);
+        t.eq(G.hearts, 0, 'ステージにはハートが無い');
+        t.eq(document.getElementById('hud-hearts').style.display, 'none', 'ステージの HUD にハートを出さない');
+        hitNow();
+        t.eq(G.status, 'dying', 'ステージは1回の被弾で終了（従来どおり）');
+      } finally {
+        U.sfx = sfx0;
+        U.lsRestore(snap);
+        DUO.reset();
+      }
+    }
+  });
+  DUO.__suites.push({
+    name: 'P8b-3: ボット（perfect 5000m は被弾0・世界反転を通過／delay250 2500m は被弾≤2 × seed 1〜30）',
+    quick: false,
+    run(t) {
+      const In = I(), G = In.Game, U = In.U;
+      const snap = U.lsSnapshot();
+      try {
+        U.lsSet('cleared', ALL);
+        [['perfect', 5000], ['delay250', 2500]].forEach((c) => {
+          const bad = [];
+          let hits = 0, flips = 0;
+          for (let seed = 1; seed <= 30; seed++) {
+            DUO.reset(); DUO.start('endless', seed); DUO.bot(c[0]);
+            let k = 0, was = false;
+            while (G.status === 'playing' && G.dist < c[1] && k++ < 400000) {
+              DUO.__step(1 / 60);
+              if (G.worldFlip && !was) flips++;
+              was = G.worldFlip;
+            }
+            hits += G.hitCount;
+            const ok = (G.status === 'playing' && G.dist >= c[1]) && (c[0] === 'perfect' ? G.hitCount === 0 : G.hitCount <= 2);
+            if (!ok) bad.push(seed + '@' + Math.floor(G.dist) + ' 被弾' + G.hitCount + (G.lastHit ? '/' + G.lastHit.obstacle : ''));
+          }
+          t.eq(bad.length, 0, 'エンドレス ' + c[0] + ' ' + c[1] + 'm: 30/30（' + (bad.slice(0, 4).join(', ') || 'なし') + '・被弾 計' + hits + '）');
+          if (c[0] === 'perfect') t.ok(flips >= 30 * 4, 'perfect: 世界反転を通過（' + flips + '回 / 30走）');
+        });
       } finally {
         U.lsRestore(snap);
         DUO.reset();

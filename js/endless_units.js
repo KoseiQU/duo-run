@@ -26,7 +26,7 @@ const EndlessKit = (function () {
                     'wallhole', 'scan', 'rot', 'blink', 'net', 'sync', 'bridge', 'rock', 'shark', 'vent', 'zero', 'flip'];
   const BASIC = { hurdle: 1, lowl: 1, pillar: 1, wide: 1, laserv: 1 };
   /* 相方としてほぼ全部の札に出る基本障害物（均等化の「重い順」で後回しにしてよい） */
-  const COMMON = { hurdle: 1, lowl: 1, laserv: 1 };
+  const COMMON = { hurdle: 1, lowl: 1 };
   const LABEL = { hurdle: 'ハードル', lowl: 'ローレーザー', pillar: 'ピラー', wide: 'ワイド梁', laserv: '縦レーザー',
                   wallhole: '壁の穴', scan: '横スキャン（振り子）', rot: '回転レーザー', blink: '点滅レーザー',
                   net: 'レーザーネット', sync: '同時スイッチ', bridge: '崩れる橋', rock: '転がる丸岩', shark: 'サメ',
@@ -143,7 +143,7 @@ const EndlessKit = (function () {
     { id: 'y6', eg: 'wide', w: [w(0, fW(-1), cK(1, -1)), w(10.6, S(-1, 1, 0), fj(0, 1))] },
     { id: 'y7', eg: 'wallhole', wallhole: 1, noSwap: 1, w: [w(0, fH(0), cj(-1, 0, 1)), w(10.6, SH(0, -1, 0), VENT(-1))] },
     { id: 'y8', eg: 'pillar', w: [w(0, P(0), fLon(-1, 1)), w(10.6, cR(1, 0.25), fj(0))] },
-    { id: 'y9', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cK(-1, 1)), w(13.4, Hhigh()), w(27, cLon(-1, 0, 1))] },
+    { id: 'y9', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cK(-1, 1)), w(13.4, Hhigh()), w(27, cLon(-1, 0, 1), V(0))] },
     { id: 'y10', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, SH(-1, 0, 0), cj(1)), w(26, fK(0, 1))] },
     { id: 'y11', eg: 'zero', rigid: 1, noSwap: 1, w: [w(0, ZG(2.4)), w(5, VENT(-1), VENT(1)), w(11, cK(0, 1)), w(16, fLon(0))] },
     { id: 'y12', eg: 'sync', w: [w(0, SY(-1, 1, -1, 1)), w(19.4, cK(1, -1))] },
@@ -156,7 +156,7 @@ const EndlessKit = (function () {
     { id: 'q5', eg: 'shark', noSwap: 1, w: [w(0, SH(-1, 0, 0), VENT(1)), w(9.7, Hhigh()), w(14.5, fLon(-1, 0, 1))] },
     /* --- 五つ組の札（無重力の中で崩れる橋／同時スイッチ→サメ＋噴出口→壁の穴＋回転） --- */
     { id: 'z5', eg: 'zero', rigid: 1, w: [w(0, ZG(3.0)), w(2, NETG()), w(22, fBR(0), fBR(1)), w(6, cK(-1, 1)),
-                                         w(16.3, cLon(-1, 0, 1)), w(28, Hhigh())] },
+                                         w(16.3, cLon(-1, 0, 1)), w(28, Hhigh(), V(0))] },
     { id: 'q6', eg: 'sync', noSwap: 1, wallhole: 1, w: [w(0, SY(0, 0, 0, 0)), w(19.4, SH(0, -1, 0), VENT(-1)),
                                                        w(29.1, fH(-1), cR(-1, 0.25))] }
   ];
@@ -259,7 +259,9 @@ const EndlessKit = (function () {
        札は速い区間の詰め方で書いてあるので、遅い区間は位置を最大 SPREAD_MAX 倍まで引き伸ばす。 */
     DENS0: 6, DENS_MAX: 9, SPREAD_MAX: 3,
     /* 札は重みで BEST_OF 枚まで引いて、いちばん早く置けるものを採る */
-    BEST_OF: 4,
+    BEST_OF: 2,
+    /* 窓の詰まり（owed を出し切る見積り秒 ÷ 窓の残り秒）がこれを越えたら「重い順・効率優先」 */
+    TIGHT: 0.5,
     UNITS: UNITS, BASE: BASE,
     available: available, unitsFor: unitsFor,
     gimmicksOfDef: gimmicksOfDef, gimmicksOfItem: gimmicksOfItem,

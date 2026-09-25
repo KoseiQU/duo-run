@@ -42,6 +42,13 @@
   #hud-dist{font-size:26px; font-weight:700; text-shadow:0 0 14px rgba(140,170,255,.55);}
   #hud-speed{font-size:13px; opacity:.75;}
   #hud-stage{font-size:13px; opacity:.55;}
+  /* ハート（契約§4.5b / エンドレスだけ）: 残りは赤く光り、失ったものは白い輪郭。被弾の瞬間に脈打つ */
+  #hud-hearts{font-size:20px; letter-spacing:.12em; line-height:1;}
+  #hud-hearts .h{color:#ff4d6a; text-shadow:0 0 10px rgba(255,70,100,.8);}
+  #hud-hearts .h.lost{color:rgba(255,255,255,.35); text-shadow:none;}
+  #hud-hearts.hit{animation:heartHit .5s ease-out;}
+  @keyframes heartHit{0%{transform:scale(1.6)} 100%{transform:scale(1)}}
+  #dead-hits{font-size:14px; color:#ffb3c0;}
   .flag{font-size:11px; padding:2px 7px; border:1px solid currentColor; border-radius:99px; opacity:.9;}
   /* 世界反転（契約§4.5【2026-09-25】/ P8a）: 紫のゲートの色 */
   #flag-wflip{color:#e0b8ff; border-color:rgba(214,160,255,.9); box-shadow:0 0 14px rgba(190,120,255,.45);}
@@ -333,6 +340,7 @@
       <span id="hud-stage">—</span>
       <span id="hud-dist">0 m</span>
       <span id="hud-speed">8.0 m/s</span>
+      <span id="hud-hearts" data-ui="hearts" style="display:none" aria-label="ハート"></span>
       <span class="flag" id="flag-mirror" style="display:none">MIRROR</span>
       <span class="flag" id="flag-wflip" style="display:none">WORLD FLIP</span>
       <span class="flag" id="flag-grav" style="display:none">GRAVITY</span>
@@ -426,7 +434,7 @@
 
   <div class="screen" id="screen-dead" data-ui="screen-result-dead">
     <div class="result-big result-dead">CRASH</div>
-    <div class="sub"><span id="dead-dist">0 m</span><br><span id="dead-cp"></span></div>
+    <div class="sub"><span id="dead-dist">0 m</span><br><span id="dead-cp"></span><br><span id="dead-hits" data-ui="result-hits" style="display:none"></span></div>
     <div class="label" id="dead-best"></div>
     <div class="btns">
       <button class="primary" id="btn-retry" data-ui="retry">リトライ</button>

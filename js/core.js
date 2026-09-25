@@ -37,6 +37,12 @@ const Game = {
   allClearT: 0,          // 全クリア演出の経過（S7 クリア＝全7ステージ制覇 / §6 P5b・P7c）
   ALLCLEAR_T: 2.2,       // 全クリア演出の長さ（秒）
   slowT: 0,              // 減速帯（§4.4 S3）の残り時間。速度が一時的に落ちる
+  /* ハート（契約§4.5b / P8b・エンドレスだけ）: 残り・被弾数・無敵の残り（秒）・被弾スローの残り（秒） */
+  hearts: 0,
+  hitCount: 0,
+  invulT: 0,
+  hurtT: 0,
+  lastHit: null,
   bestUpdated: false,    // 直近のリザルトでベスト更新したか
   stats: { frames: 0 },
   GOAL_T: 1.3,           // ゴール演出の長さ（秒）
@@ -281,6 +287,12 @@ const Game = {
     Game.flipT = 0;
     Game.flipN = 0;
     Zero.cur = 1;
+    /* ハート（§4.5b）: エンドレスは3個から。ステージには無い（共有ライフ1発のまま） */
+    Game.hearts = Game.stage.endless ? CFG.HEART.N : 0;
+    Game.hitCount = 0;
+    Game.invulT = 0;
+    Game.hurtT = 0;
+    Game.lastHit = null;
     /* 鏡ゾーン・世界反転（§4.5）も必ず既定へ戻す
        （左右の反転は Runners.reset → Mirror.restore が、世界反転（カメラのロール）はここが受け持つ）。 */
     Game.resetWorldFlip();
@@ -356,8 +368,11 @@ const Game = {
     }
 
     if (Game.status === 'playing' || Game.status === 'dying') {
-      const scale = (Game.status === 'dying') ? CFG.DEATH_SLOW_SCALE : 1;
+      /* 被弾（ハートが残る / §4.5b）: SLOW_T 秒のスロー。無敵は実時間で減らす */
+      const scale = (Game.status === 'dying') ? CFG.DEATH_SLOW_SCALE : (Game.hurtT > 0) ? CFG.HEART.SLOW_SCALE : 1;
       const d = dt * scale;
+      if (Game.hurtT > 0) Game.hurtT = Math.max(0, Game.hurtT - dt);
+      if (Game.invulT > 0) Game.invulT = Math.max(0, Game.invulT - dt);
 
       /* 無重力（契約§4.5 / S6）: **踏み切る瞬間の倍率**を現在地から決める。
          入力より先に置く＝このフレームのジャンプが正しい滞空で始まる。 */
@@ -522,9 +537,11 @@ const Game = {
        レーンの障害物は滑空区間に1つも無いので、ここで完全に道が分かれる。 */
     if (FF.active()) {
       const hit = FF.collide(Game.prevDist, Game.dist);
-      if (hit) Game.onHit(Game.runners[0], { type: 'AIR_' + hit.kind, lane: 0, at: hit.at });
+      if (hit && Game.invulT <= 0) Game.onHit(Game.runners[0], { type: 'AIR_' + hit.kind, lane: 0, at: hit.at });
       return;
     }
+    /* 無敵中（ハートの被弾直後 / §4.5b）: 障害物はすり抜ける。踏むもの（噴出口）だけは作動する */
+    const invul = Game.invulT > 0;
     /* 合体区間（契約§4.5 / S8）: 判定は **床を走っている1体ぶん**だけ。
        天井側には誰も居ないので、天井側の障害物には当たらない。 */
     const lead = Game.merged ? Game.mergeLead() : null;
@@ -541,6 +558,7 @@ const Game = {
         if (OBS[o.type].vent) { Game.onVent(r, o); continue; }
         /* 無害な障害物（減速帯）は死なせず、速度だけ落とす（1個につき1回） */
         if (OBS[o.type].harmless) { Game.onSlow(r, o); continue; }
+        if (invul) continue;
         Game.onHit(r, o);
         return;
       }
@@ -575,6 +593,20 @@ const Game = {
 
   onHit(runner, obstacle) {
     if (Game.status !== 'playing') return;
+    if (Game.invulT > 0) return;           // 無敵中はすり抜け（巨岩の圧殺などの直呼びも同じ）
+    /* ハート（契約§4.5b / エンドレスだけ）: 残りがあれば −1 → スロー＋無敵で続行。最後の1個で従来の死亡 */
+    if (Game.stage && Game.stage.endless && Game.hearts > 0) {
+      Game.hearts--;
+      Game.hitCount++;
+      Game.lastHit = { runner: runner.id, obstacle: obstacle.type, lane: obstacle.lane, at: obstacle.at, dist: Game.dist };
+      if (Game.hearts > 0) {
+        Game.hurtT = CFG.HEART.SLOW_T;
+        Game.invulT = CFG.HEART.INVUL_T;
+        U.sfx('hit');
+        if (typeof HUD !== 'undefined' && HUD.heartHit) HUD.heartHit();
+        return;
+      }
+    }
     Game.status = 'dying';                 // スロー0.6秒（§4.8）
     Game.dyingT = 0;
     Game.killer = { runner: runner.id, obstacle: obstacle.type, lane: obstacle.lane, at: obstacle.at };
@@ -593,6 +625,12 @@ const Game = {
     if (dd) dd.textContent = Math.floor(Game.dist) + ' m';
     const cp = document.getElementById('dead-cp');
     if (cp) cp.textContent = Game.stage.endless ? 'エンドレス' : ('チェックポイント ' + Math.floor(Game.lastCheckpoint) + ' m から再開');
+    /* 被弾数（ハート / §4.5b）: エンドレスだけ */
+    const dh = document.getElementById('dead-hits');
+    if (dh) {
+      dh.textContent = Game.stage.endless ? ('被弾 ' + Game.hitCount + ' 回 ／ ハート ' + CFG.HEART.N) : '';
+      dh.style.display = Game.stage.endless ? '' : 'none';
+    }
     const btn = document.getElementById('btn-retry');
     if (btn) btn.style.display = Game.stage.endless ? 'none' : '';
     UI.show('dead');
@@ -713,6 +751,12 @@ const Game = {
       bot: Game.botMode,
       checkpoint: Game.lastCheckpoint,
       killer: Game.killer,
+      /* ハート（§4.5b / エンドレス）: 残り・被弾数・無敵の残り・被弾スローの残り */
+      hearts: Game.hearts,
+      hits: Game.hitCount,
+      invulT: +Game.invulT.toFixed(3),
+      hurtT: +Game.hurtT.toFixed(3),
+      lastHit: Game.lastHit,
       runners: rs,
       chunk: Game.gen ? (Game.gen.log.filter((c) => c.startM <= Game.dist).pop() || null) : null,
       obstacles: Game.active.length,
