@@ -506,10 +506,62 @@ const World = {
     return s;
   },
 
+  /* ==========================================================================
+     死角の予告線（契約§4.5b / P8b・エンドレスだけ）
+     遮蔽物（ピラー・ワイド梁・壁の穴）の奥（通過後 1.0〜2.0秒）に障害物がある時、
+     遮蔽物の speed×1.5秒 手前から、その面・レーンの路面に **細い白の線＋小さな矢印**を出す。
+     線は遮蔽物の手前 0.8〜7.8m に寝かせる（遮蔽物の後ろに引くと隠れて見えないため）。矢印は奥向き。
+     Game.gen.hints（生成器が Fair.hints で作る）を読むだけ。1本 = 1ドローコール、最大 HINT_MAX 本。
+     ========================================================================== */
+  HINT_MAX: 8,
+  HINT_LEN: 7.0,
+  _hintPool: null,
+  _buildHint() {
+    const L = World.HINT_LEN, z0 = 0.8;
+    const parts = [{ g: ZoneKit.box(0.09, 0.02, L), p: [0, 0, z0 + L / 2] }];
+    /* 矢印（奥＝ -z 向きの「く」の字）を線の上に3つ（寝た線は視線に対して潰れるので腕は長め） */
+    [z0 + 0.3, z0 + 2.4, z0 + 4.5].forEach((z) => {
+      [-1, 1].forEach((sx) => parts.push({ g: ZoneKit.box(0.08, 0.02, 0.62), p: [sx * 0.17, 0, z + 0.25], r: [0, -sx * 0.62, 0] }));
+    });
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, fog: true });
+    const m = new THREE.Mesh(ZoneKit.merge(parts), mat);
+    m.renderOrder = 3;
+    m.visible = false;
+    m.userData.hint = true;
+    return m;
+  },
+  syncHints(dist) {
+    const hs = (typeof Game !== 'undefined' && Game.gen && Game.gen.hints) ? Game.gen.hints : null;
+    if (!World._hintPool) {
+      if (!hs || !hs.length || !World.scene) return 0;
+      World._hintPool = [];
+      for (let i = 0; i < World.HINT_MAX; i++) { const m = World._buildHint(); World.scene.add(m); World._hintPool.push(m); }
+    }
+    const pool = World._hintPool;
+    let n = 0;
+    if (hs) {
+      /* 表示中＝遮蔽物の speed×1.5秒 手前から、遮蔽物を通り過ぎるまで */
+      for (let i = hs.length - 1; i >= 0 && n < pool.length; i--) {
+        const h = hs[i];
+        if (h.occAt < dist - 150) break;
+        if (h.occAt < dist - 2 || dist < h.fromM) continue;
+        const m = pool[n++];
+        m.visible = true;
+        const lift = (typeof Setpieces !== 'undefined' && Setpieces.viewLift) ? Setpieces.viewLift(h.occAt) : 0;
+        m.position.set(h.lane * CFG.LANE_W, (h.side === 'ceil') ? CFG.H - 0.025 + lift : 0.025 + lift, -(h.occAt - dist));
+        m.material.opacity = 0.62 + 0.3 * Math.sin(World._t * 10 + i);
+      }
+    }
+    for (let k = n; k < pool.length; k++) pool[k].visible = false;
+    World.hintsOn = n;
+    return n;
+  },
+
   /* ゴールゲートを置く（有限ステージのみ。視界に入ったら出す） */
   syncGoal(dist, stage) {
     World.syncRampCue(dist);
     World.syncTunnel(dist);
+    World.syncHints(dist);
     if (!World.goal) return;
     if (!stage || stage.endless) { World.goal.visible = false; return; }
     const rel = stage.lengthM - dist;

@@ -2319,6 +2319,9 @@ const Fair = {
       });
     }
 
+    /* 死角の禁止（契約§4.5b / エンドレスだけ） */
+    if (opt.blind) Fair.blind(list, speedAt).forEach((e) => errs.push(e));
+
     /* 生存経路（各ウォールで生存レーンが1つ以上＋前ウォールから到達可能） */
     const longs = list.filter((o) => OBS[o.type].long);
     Fair.SIDES.forEach((side) => {
@@ -2354,7 +2357,8 @@ const Fair = {
             const c = Fair.coverSpan(L);
             if (w.at > c.from + 1e-6 && prevAt < c.to - 1e-6) endM = Math.max(endM, c.to);
           });
-          return Math.floor(Math.max(0, w.at - endM - passM) / (sp * CFG.LANE_T)) >= Math.abs(l - r);
+          /* 明けてから「反応＋移動」（ジャンプ→横移動と同じ 0.92秒）ぶん空いていること */
+          return (w.at - endM - passM) >= sp * CFG.FAIR.JUMP_TO_LANE * Math.abs(l - r);
         };
         const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps && !crosses(r, l) && into(r, l)));
         const ok = cand.filter((l) => Fair.laneSurvivable(w, side, l));
@@ -2367,6 +2371,70 @@ const Fair = {
     });
 
     return errs;
+  },
+
+  /* ------------------------------------------------------------------------
+     死角の禁止（契約§4.5b / P8b・エンドレスだけ＝ opt.blind）
+       視界を塞ぐ遮蔽物（ピラー・ワイド梁・壁の穴＋WALLSOLID）の**通過後 speed×1.0秒**は、
+       同じレーン（ワイド梁・壁の穴は全レーン）に障害物を置かない（当たり判定の無いゲート・粒子は除く）。
+       動く障害物（スキャン・回転・サメ・岩・横/斜めビーム）は全レーンに掛かるとみなす。
+       崩れる橋は踏み口〜終わりの全長で見る。
+     ------------------------------------------------------------------------ */
+  BLIND_OCC: { PILLAR: 'lane', WIDEBAR: 'all', WALLHOLE: 'all', WALLSOLID: 'all' },
+  BLIND_T: 1.0,
+  HINT_T: 2.0,          // 遮蔽物の奥（通過後 1.0〜2.0秒）に障害物があれば予告線を出す
+  HINT_LEAD_T: 1.5,     // 予告線は遮蔽物の speed×1.5秒 手前から
+  blindLanes(o) {
+    const t = OBS[o.type];
+    if (t.motion || (o.params && (o.params.scan || o.params.roll)) || t.span >= 3) return CFG.LANES.slice();
+    if (o.type === 'WIDEBAR') return [o.lane, o.lane + 1];
+    return [o.lane];
+  },
+  occLanes(o) { return (Fair.BLIND_OCC[o.type] === 'all') ? CFG.LANES.slice() : [o.lane]; },
+  blind(list, speedAt) {
+    const errs = [];
+    const real = list.filter((o) => !OBS[o.type].ghost).sort((a, b) => a.at - b.at);
+    real.forEach((c) => {
+      if (!Fair.BLIND_OCC[c.type]) return;
+      const until = c.at + speedAt(c.at) * Fair.BLIND_T;
+      const cl = Fair.occLanes(c);
+      real.forEach((p) => {
+        if (p === c) return;
+        const ex = Obstacles.extent(p);
+        if (p.at + ex.fwd <= c.at + 1e-6 || p.at - ex.back > until - 1e-6) return;
+        if (p.at <= c.at + 1e-6 && ex.fwd <= 0) return;
+        if (!Fair.blindLanes(p).some((l) => cl.indexOf(l) >= 0)) return;
+        errs.push('死角: ' + c.type + ' @' + c.at.toFixed(1) + ' の直後 ' + ((p.at - c.at) / speedAt(c.at)).toFixed(2) +
+                  '秒に ' + p.type + '(' + p.lane + ') @' + p.at.toFixed(1));
+      });
+    });
+    return errs;
+  },
+  /* 予告線（契約§4.5b）: 遮蔽物の奥（通過後 1.0〜2.0秒）の障害物ごとに、その面・レーン（到達時に塞ぐレーン）へ。
+     {key, occAt, fromM（表示の始まり）, at, side, lane} の配列 */
+  hints(list, speedAt) {
+    const out = [];
+    const real = list.filter((o) => !OBS[o.type].ghost).sort((a, b) => a.at - b.at);
+    real.forEach((c) => {
+      if (!Fair.BLIND_OCC[c.type]) return;
+      const sp = speedAt(c.at);
+      const a = c.at + sp * Fair.BLIND_T, b = c.at + sp * Fair.HINT_T;
+      const cl = Fair.occLanes(c);
+      real.forEach((p) => {
+        if (p === c || Fair.BLIND_OCC[p.type] && p.at <= c.at + 1e-6) return;
+        if (p.at <= a - 1e-6 || p.at > b + 1e-6) return;
+        Fair.SIDES.forEach((side) => {
+          if (!Obstacles.affects(p, side)) return;
+          const lanes = Obstacles.occ(p)[side].lanes;
+          CFG.LANES.forEach((l) => {
+            if (lanes[l].run || cl.indexOf(l) < 0) return;
+            out.push({ key: c.uid + '|' + side + '|' + l, occAt: c.at, fromM: c.at - sp * Fair.HINT_LEAD_T,
+                       at: p.at, side: side, lane: l, type: p.type });
+          });
+        });
+      });
+    });
+    return out;
   },
 
   /* tip の猶予規則（契約§4.8 2026-09-24 改訂）の検査。違反メッセージの配列を返す。
@@ -3248,6 +3316,7 @@ function createGenerator(stage, seed) {
     if (inst.landM !== null) until = Math.max(until, inst.landM + stage.speedAt(inst.landM) * FF.GRACE_T);
     minis.push({ id: id, startM: inst.startM, endM: endM, k: inst.k, landM: inst.landM, freeTo: until });
     exNoteItems(inst.items);
+    exHints();
     log.push({ id: 'mini:' + id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true, mini: true });
     /* ミニ大演出は規則で薄い区間なので、密度の実測から外す（後ろを詰め込ませない） */
     noteTipWindow(inst.startM, until);
@@ -3272,6 +3341,17 @@ function createGenerator(stage, seed) {
        ・密度は札を引き伸ばして（spread ≥ 1）目安に寄せる（札は速い区間の詰め方で書いてある）。
      ========================================================================== */
   const exRec = [];                 // 置いた札 {id, eg, gset, startM}
+  /* 予告線（契約§4.5b 死角の禁止）: 遮蔽物の奥 1.0〜2.0秒の障害物ごと。World.syncHints が描く */
+  const hints = [];
+  const hintKeys = {};
+  function exHints() {
+    if (!EX) return;
+    Fair.hints(out.slice(-60), stage.speedAt).forEach((h) => {
+      if (hintKeys[h.key]) return;
+      hintKeys[h.key] = 1;
+      hints.push(h);
+    });
+  }
   const exWin = {};                 // 窓 → {ギミック: 出現数}（相方・ミニ大演出の障害物も数える）
   const exMain = {};                // 主ギミック → 札の数
   const exUnits = EX ? EndlessKit.unitsFor(EXG) : null;
@@ -3487,7 +3567,7 @@ function createGenerator(stage, seed) {
         if (closeAfter && !exBackFits(exBackAt(endM))) return null;
         const inst = instantiate(def, startM, nowDist, null, null, spread);
         const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
-                                   { startLanes: 'any', reactBoth: RB, ex: true,
+                                   { startLanes: 'any', reactBoth: RB, ex: true, blind: true,
                                      zeros: zeros.concat(inst.local.zeros), warps: warps,
                                      mirrors: mirrors, swaps: swaps.concat(inst.local.swaps),
                                      merges: merges });
@@ -3541,6 +3621,7 @@ function createGenerator(stage, seed) {
                  firstAt: best.firstM, lastAt: best.endM });
       cursor = Math.max(cursor, best.endM);
       lastWallhole = !!def.wallhole;
+      exHints();
       if (best.closeAfter) exCloseFlip(exBackAt(best.endM), nowDist);
       return true;
     }
@@ -3722,6 +3803,8 @@ function createGenerator(stage, seed) {
     /* エンドレス（P6）: ゾーン切替・ミニ大演出・その距離のゾーン・同時要求の余白 */
     switches: switches,
     minis: minis,
+    /* 死角の予告線（契約§4.5b / P8b）。エンドレス以外は空 */
+    hints: hints,
     plan: EP,
     zoneAt: zoneAt,
     reactBoth: RB,

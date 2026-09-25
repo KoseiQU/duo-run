@@ -181,4 +181,78 @@
       checkGimmicks(t, s, true);
     }
   });
+
+  /* ==========================================================================
+     3. 死角の禁止（契約§4.5b / P8b-2）: 遮蔽物の通過後 speed×1.0秒は同じレーン（ワイド梁・壁の穴は全レーン）に
+        障害物なし。奥（1.0〜2.0秒）に障害物があれば、遮蔽物の speed×1.5秒 手前から白い予告線
+     ========================================================================== */
+  DUO.__suites.push({
+    name: 'P8b-2: 死角の禁止（50シード×5000m 違反0・ミニ大演出を含む）と予告線の出現条件／ステージ版は変えない',
+    quick: false,
+    run(t) {
+      const In = I(), F = In.Fair;
+      /* 規則そのもの（合成の譜面） */
+      const O = In.Obstacles, sp = () => 20;
+      t.eq(F.blind([O.make('PILLAR', 'both', 0, 100, 0), O.make('ROVER', 'floor', 0, 115, 0)], sp).length, 1, '柱の直後 0.75秒・同じレーンは違反');
+      t.eq(F.blind([O.make('PILLAR', 'both', 0, 100, 0), O.make('ROVER', 'floor', 1, 110, 0)], sp).length, 0, '柱の直後でも別のレーンは可');
+      t.eq(F.blind([O.make('WIDEBAR', 'floor', -1, 100, 0), O.make('ROVER', 'ceil', 1, 118, 0)], sp).length, 1, 'ワイド梁の直後は全レーン');
+      t.eq(F.blind([O.make('PILLAR', 'both', 0, 100, 0), O.make('ROVER', 'floor', 0, 121, 0)], sp).length, 0, '1.0秒を過ぎれば可');
+      const hs = F.hints([O.make('PILLAR', 'both', 0, 100, 0), O.make('ROVER', 'floor', 0, 125, 0), O.make('ROVER', 'ceil', 1, 145, 0)], sp);
+      t.eq(hs.map((h) => h.side + h.lane).join(','), 'floor0', '奥 1.0〜2.0秒の同じレーンの障害物に予告線（2.0秒より奥・別のレーンは出さない）');
+      t.near(hs[0].fromM, 100 - 20 * 1.5, 1e-6, '予告線は遮蔽物の speed×1.5秒 手前から');
+      /* 生成（50シード×5000m・ミニ大演出を含む全体） */
+      const bad = [], missH = [];
+      let nh = 0;
+      for (let seed = 1; seed <= 50; seed++) {
+        const { st, g, list } = gen(seed);
+        const e = F.blind(list, st.speedAt);
+        if (e.length) bad.push('seed' + seed + ' ' + e[0]);
+        const keys = {};
+        g.hints.forEach((h) => { keys[h.key] = 1; });
+        F.hints(list, st.speedAt).forEach((h) => { if (h.occAt < L - 200 && !keys[h.key]) missH.push('seed' + seed + ' ' + h.key + '@' + h.occAt.toFixed(0)); });
+        nh += g.hints.length;
+      }
+      t.eq(bad.length, 0, '死角の違反 0（' + (bad[0] || 'なし') + '）');
+      t.eq(missH.length, 0, '奥に障害物のある遮蔽物には必ず予告線（' + (missH[0] || '漏れなし') + '・平均 ' + (nh / 50).toFixed(1) + '本/5000m）');
+      /* ステージ版は現状のまま（規則は掛けない・予告線なし） */
+      const s3 = In.makeStage('S3'), g3 = In.createGenerator(s3, 3);
+      g3.ensure(s3.lengthM, 0);
+      t.eq(g3.hints.length, 0, 'ステージ（S3）は予告線なし');
+      t.ok(F.blind(g3.obstacles, s3.speedAt).length > 0, 'ステージ（S3）の譜面は死角の規則で変えていない（遮蔽物の直後に障害物がある）');
+    }
+  });
+  DUO.__suites.push({
+    name: 'P8b-2: 予告線の表示（遮蔽物の手前 speed×1.5秒から・該当の面とレーン・通過で消える）',
+    quick: true,
+    run(t) {
+      const In = I(), G = In.Game, W = In.World, U = In.U;
+      const snap = U.lsSnapshot();
+      try {
+        U.lsSet('cleared', ALL);
+        const { g } = gen(2);
+        const h = g.hints.filter((x) => !g.swaps.some((r) => x.occAt > r.from - 60 && x.occAt < r.to + 60))[0];
+        t.ok(!!h, '予告線のある遮蔽物（世界反転の外）: ' + (h ? h.occAt.toFixed(0) + 'm ' + h.side + h.lane : 'なし'));
+        if (!h) return;
+        DUO.reset(); DUO.start('endless', 2); DUO.bot('perfect');
+        DUO.skipTo(h.occAt - 170);
+        let k = 0;
+        while (G.dist < h.fromM - 3 && k++ < 20000) DUO.pump(1 / 60);
+        const want = h.lane * In.CFG.LANE_W;
+        const match = () => (W._hintPool || []).filter((m) => m.visible && Math.abs(m.position.x - want) < 1e-6 &&
+          ((h.side === 'ceil') === (m.position.y > In.CFG.H / 2)) && Math.abs(m.position.z + (h.occAt - G.dist)) < 0.5).length;
+        const before = match();
+        while (G.dist < h.fromM + 2 && k++ < 20000) DUO.pump(1 / 60);
+        const after = match();
+        t.eq(before, 0, '遮蔽物の 1.5秒より手前ではまだ出ない');
+        t.ok(after >= 1, '遮蔽物の手前 1.5秒で該当の面・レーンに線（' + h.side + ' lane ' + h.lane + '）');
+        t.eq(G.status, 'playing', 'ボットは走行中');
+        while (G.dist < h.occAt + 3 && k++ < 20000) DUO.pump(1 / 60);
+        t.eq(match(), 0, '遮蔽物を通り過ぎたら消える');
+        t.ok(G.snapshot().drawCalls <= 300, 'ドローコール ≤ 300（' + G.snapshot().drawCalls + '）');
+      } finally {
+        U.lsRestore(snap);
+        DUO.reset();
+      }
+    }
+  });
 })();
