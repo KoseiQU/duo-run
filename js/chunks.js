@@ -1054,8 +1054,8 @@ const CHUNK_DEFS = [
                  （出口ゲートは失効）。S6 では札の出どころを forceAt に限る（mirF=床・mirC=天井）。
                  params.mir = { side:'floor'|'ceil' }
                  ゲートの直後 1.0秒（= 10.9 基準m）はその面にウォールを置けない。
-       HANDSWAP  入れ替えワープ。紫の枠2枚で1組。**上下の担当が入れ替わる**
-                 （下半分＝天井の UMBRA／上半分＝床の LUMEN）。再通過で戻る。
+       HANDSWAP  世界反転ゲート【P8a / 旧・入れ替えワープ】。紫の枠2枚で1組。**画面全体が 180° 回る**
+                 （床が画面の上。下半分＝画面の下に見える UMBRA）。再通過で逆回転して戻る。
                  params.swp = { backT: 戻りまでの秒数 }
                  ゲートの直後 1.0秒は **両面とも** ウォールを置けない。
        レーザーネットの密度アップ（契約§4.4 S7）: 1区画あたり 4〜5本。
@@ -1227,8 +1227,8 @@ const CHUNK_DEFS = [
     ceil:  [{ at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'ROVER' },
             { at: 49.4, lane: -1, type: 'ROVER' }, { at: 57.1, lane: 1, type: 'LASER_LOW' }], events: [] },
 
-  /* --- 入れ替えワープ（契約§4.5「担当が入れ替わる」＝上下の担当） -----------
-     入れ替えは **両面**に効くので、ゲートの前後はどちらの面にも置けない。 */
+  /* --- 世界反転ゲート（契約§4.5【2026-09-25】/ 旧・入れ替えワープの札を継承） --
+     世界反転は **両面**に効くので、ゲートの前後はどちらの面にも置けない。 */
   { id: 's7_swap_a', zone: 'mirror', lengthM: 92, difficulty: 4, minSpeed: 0, s7: 1, dense: 1, swap: 1, leap: 1,
     floor: [{ at: 6, lane: 0, type: 'HANDSWAP', params: { swp: { backT: 5.2 } } },
             { at: 17, lane: 0, type: 'ROVER' }, { at: 24.7, lane: 1, type: 'ROVER' },
@@ -1916,10 +1916,9 @@ const STAGE_DEFS = {
     tipOnce: { warp: 'gravwarp', zero: 'zerog', net: 'lasernet' },
     chunkPool: LEGACY_POOL.space
   },
-  /* S6 鏡の世界（旧S7）: 1600m / 30→38 / 鏡ゾーン・入れ替えワープ・レーザーネット密／終盤: 鏡の砕け散り。
+  /* S6 鏡の世界（旧S7）: 1600m / 30→38 / 鏡ゾーン（固定反転）・世界反転ゲート・レーザーネット密／終盤: 鏡の砕け散り。
      ■ 密度: 30〜38 m/s の実質上限は約10回/100m（決定ログ）＝ 8→10 に置く（既知の妥協点）。
-     ■ 重ね掛け（dual）: P7a の既知課題「1/50 に減」を回収する（P7c）。
-       鏡・入れ替えの初出が早く済むほど、後半に重ね掛けの札を置く余地が残る。 */
+     ■ 重ね掛け: P8a で鏡は固定反転＝1枚目の後の世界反転はすべて鏡との重ね掛け（専用の dual の札・tip は S6 では使わない）。 */
   S6: {
     id: 'S6', name: 'S6 鏡の世界', zone: 'mirror', lengthM: 1600,
     speedFrom: 30, speedTo: 38, minRank: 4, maxRank: 5, setpiece: 'shatter',
@@ -2590,9 +2589,9 @@ function expandEntry(items, e, surface, at, nowDist, scale, sink) {
   if (e.type === 'ZEROG') { Zero.expand(items, e, surface, at, nowDist, scale, sink && sink.zeros); return; }
   /* 重力反転ワープ（契約§4.5 / S6）: 入口と戻りの2枚のゲート。通るたびに面が入れ替わる */
   if (e.type === 'GRAVWARP') { Warp.expand(items, e, surface, at, nowDist, scale, sink && sink.warps); return; }
-  /* 鏡ゾーン（契約§4.5 / S7）: 銀の枠2枚。通った面のキャラの左右が反転する */
+  /* 鏡ゾーン（契約§4.5 / P8a 固定反転）: 銀の枠1枚。通った面のキャラの左右が反転し、戻らない */
   if (e.type === 'MIRRORZ') { Mirror.expand(items, e, surface, at, nowDist, scale, sink && sink.mirrors); return; }
-  /* 入れ替えワープ（契約§4.5 / S7）: 紫の枠2枚。上下の担当が入れ替わる */
+  /* 世界反転ゲート（契約§4.5 / P8a）: 紫の枠2枚。画面全体が 180° 回る（再通過で戻る） */
   if (e.type === 'HANDSWAP') { Swap.expand(items, e, surface, at, nowDist, scale, sink && sink.swaps); return; }
   /* 合体区間（契約§4.5 / S8）: 専用ゲート2枚。区間の中は2体が1体になって床を走る */
   if (e.type === 'MERGE') { Merge.expand(items, e, surface, at, nowDist, scale, sink && sink.merges); return; }
