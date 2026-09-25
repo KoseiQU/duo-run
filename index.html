@@ -43,7 +43,8 @@
   #hud-speed{font-size:13px; opacity:.75;}
   #hud-stage{font-size:13px; opacity:.55;}
   .flag{font-size:11px; padding:2px 7px; border:1px solid currentColor; border-radius:99px; opacity:.9;}
-  #flag-swap{color:#ffd0a0;}
+  /* 世界反転（契約§4.5【2026-09-25】/ P8a）: 紫のゲートの色 */
+  #flag-wflip{color:#e0b8ff; border-color:rgba(214,160,255,.9); box-shadow:0 0 14px rgba(190,120,255,.45);}
   /* 鏡ゾーン（契約§4.5【表示改訂】/ P7b）: 画面上部の中央に大きな「MIRROR」 */
   #flag-mirror{position:absolute; left:50%; top:calc(env(safe-area-inset-top,0px) + 44px); transform:translateX(-50%);
     font-size:clamp(22px,min(6.4vw,7vh),42px); font-weight:900; letter-spacing:.32em; line-height:1.1;
@@ -86,7 +87,7 @@
     box-shadow:inset 0 -2px 0 rgba(255,179,71,.30), inset 2px 0 0 rgba(255,179,71,.14), inset -2px 0 0 rgba(255,179,71,.14);}
   /* チュートリアルの吹き出しは分割線の上に出るので、その間はラベルを伏せる */
   /* 鏡ゾーン（契約§4.5【表示改訂】/ P7b）: 左右が反転している側の半分の枠を縞模様にし、
-     その枠の中の左右の端に「←→ 逆」。どちらの半分かは Game.runnerForZone（入れ替えワープ込み）から引く */
+     その枠の中の左右の端に「←→ 逆」。どちらの半分かは Game.runnerForZone（世界反転込み）から引く */
   #touchzones .mir-frame{position:absolute; inset:2px; display:none; pointer-events:none;
     border:7px solid transparent;
     border-image:repeating-linear-gradient(45deg,rgba(236,241,255,.95) 0 9px,rgba(70,82,126,.6) 9px 18px) 7;}
@@ -108,6 +109,14 @@
   .thumb.tr{right:14px; top:calc(50% - 74px); color:var(--umbra);}
   .thumb.bl{left:14px; top:calc(50% + 20px); color:var(--lumen);}
   .thumb.br{right:14px; top:calc(50% + 20px); color:var(--lumen);}
+  /* 世界反転（§4.5 / P8a）: 上下の枠の色は画面位置に従う＝上半分に LUMEN が見えているときは入れ替える
+     （HUD.zoneColors が Game.runnerForZone から top-lumen を付ける） */
+  #touchzones.top-lumen .tz.top{background:linear-gradient(to bottom,rgba(255,179,71,.13),rgba(255,179,71,0) 46%);
+    box-shadow:inset 0 2px 0 rgba(255,179,71,.30), inset 2px 0 0 rgba(255,179,71,.14), inset -2px 0 0 rgba(255,179,71,.14);}
+  #touchzones.top-lumen .tz.bottom{background:linear-gradient(to top,rgba(125,140,255,.13),rgba(125,140,255,0) 46%);
+    box-shadow:inset 0 -2px 0 rgba(125,140,255,.30), inset 2px 0 0 rgba(125,140,255,.14), inset -2px 0 0 rgba(125,140,255,.14);}
+  #touchzones.top-lumen .thumb.tl, #touchzones.top-lumen .thumb.tr{color:var(--lumen);}
+  #touchzones.top-lumen .thumb.bl, #touchzones.top-lumen .thumb.br{color:var(--umbra);}
 
   /* ---------- 画面 ---------- */
   .screen{position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
@@ -325,7 +334,7 @@
       <span id="hud-dist">0 m</span>
       <span id="hud-speed">8.0 m/s</span>
       <span class="flag" id="flag-mirror" style="display:none">MIRROR</span>
-      <span class="flag" id="flag-swap" style="display:none">SWAP</span>
+      <span class="flag" id="flag-wflip" style="display:none">WORLD FLIP</span>
       <span class="flag" id="flag-grav" style="display:none">GRAVITY</span>
       <span class="flag" id="flag-zero" style="display:none">ZERO-G</span>
       <span class="flag" id="flag-merge" style="display:none">MERGE</span>

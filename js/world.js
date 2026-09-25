@@ -750,6 +750,11 @@ const World = {
       World.camera.position.set(avgX * 0.16 + sx, CFG.CAM.Y + sy + camUp, CFG.CAM.Z - push + back);
       World.camera.lookAt(avgX * 0.09 + sx * 0.5, CFG.CAM.LOOK_Y + sy * 0.5 + lookUp, CFG.CAM.LOOK_Z);
     }
+    /* 世界反転ゲート（契約§4.5【2026-09-25】/ P8a）: カメラを視線の軸まわりにロールする＝
+       画面の中心を軸に画像全体（コリドー・霧・粒子・障害物）が回る。角度は Game.roll が唯一の出所
+       （0＝通常 / π＝床が画面の上。0.5秒で回り、再通過で逆回転）。lookAt の後に掛ける。 */
+    const roll = (typeof Game !== 'undefined' && Game.roll) ? Game.roll : 0;
+    if (Math.abs(roll) > 1e-6) World.camera.rotateZ(roll);
     /* 路面の縁（厚み・発光ライン）は大演出で一緒に持ち上げ、滑空中は消す */
     if (World.trim) {
       World.trim.position.y = Setpieces.viewLift(World._dist);

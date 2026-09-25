@@ -54,11 +54,10 @@ const Tutorial = {
     /* S7 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     mirrorzone: { ph: ['<span class="finger">🪞</span>銀の枠をくぐった側は', '<b>左右が逆</b>になる',
                        '（もう戻らない）'] },
-    handswap: { ph: ['<span class="finger">🔄</span>紫の枠で<b>担当が入れ替わる</b>',
-                     '<b class="k">下半分</b>が<b class="k2">上のキャラ</b>を動かす'] },
+    /* 世界反転ゲート（旧・入れ替えワープ / 契約§4.5【2026-09-25】/ P8a） */
+    handswap: { ph: ['<span class="finger">🔄</span>紫の枠で<b>世界が回る</b>',
+                     '<b class="k">画面の下に見える方</b>を下半分で動かす'] },
     shardstep: { ph: ['<span class="finger">👆</span>鏡の床が砕けた', '<b>揺れる足場</b>へ跳べ'] },
-    dualzone: { ph: ['<span class="finger">🌀</span>鏡と入れ替えが<b>同時</b>に効く',
-                     '担当も左右も入れ替わっている'] },
     /* S8 の新ギミック（契約§4.4 / §4.5）。初出のときだけ短く出す */
     mergerun: { ph: ['<span class="finger">🤝</span>2人が<b>1体</b>になった',
                      '<b class="k">下半分</b>で<b>横へ移動</b>',

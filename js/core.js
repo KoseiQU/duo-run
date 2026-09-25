@@ -17,7 +17,14 @@ const Game = {
   lastCheckpoint: 0,
   killer: null,          // {runner, obstacle}
   botMode: null,         // null | 'perfect' | 'delay250'
-  handSwap: false,       // 入れ替えワープのフック（§4.5）
+  /* 世界反転ゲート（契約§4.5【2026-09-25 全面改訂】/ P8a）: 画面全体が 180° 回る（カメラのロール）。
+     worldFlip＝いま反転しているか（論理・Swap が唯一の出所）、roll＝カメラのロール角（見た目）。
+     回転中（rollT > 0）は入力を受け付けない。 */
+  worldFlip: false,
+  roll: 0,               // カメラのロール角（rad）。0＝通常 / π＝床が画面の上
+  rollFrom: 0,
+  rollTo: 0,
+  rollT: 0,              // 回転の残り（秒）
   merged: false,         // 合体区間の中か（§4.5 / S8）。Merge（距離の関数）が唯一の出所
   flipT: 0,              // 重力反転の回転演出の残り（秒・見た目だけ / §4.5 S6）
   flipN: 0,              // この走行で面が入れ替わった回数（偶数＝既定の向き）
@@ -79,27 +86,76 @@ const Game = {
     return true;
   },
 
-  /* --- 手 ↔ キャラ（入れ替えワープのフック） ------------------------------ */
+  /* --- 画面 ↔ 世界（世界反転ゲート / 契約§4.5【2026-09-25 全面改訂】・§4.2） ------------
+     世界反転中はカメラが 180° ロールしている＝**画面の上下も左右も逆**に見える。
+     「画面の位置＝担当」「フリックの向きは画面基準」（§4.2）を保つため、入力は
+     **画面の座標 → 世界の座標**へ 180° 回して読む（ここが唯一の変換）:
+       画面の下半分 → 世界の「下」（床の側）ではなく「上」（天井の側）
+       画面の右     → 世界の左 ／ 画面の上 → 世界の下
+     ＝ 画面の下に見えている方（UMBRA）を下半分で動かし、画面の右へフリックすれば画面の右へ動き、
+       足場から離れる向き（画面上で見て）にフリックすればジャンプになる。
+     キーボード（開発・テスト用）とボットは「左手＝画面の下のキャラ／右手＝画面の上のキャラ」、
+     A/D・←/→ は画面の左右（タッチと同じ読み）。 */
+  swapZone(z) { return (z === 'top') ? 'bottom' : 'top'; },
+  worldZone(zone) { return Game.worldFlip ? Game.swapZone(zone) : zone; },
+  worldDir(dir) {
+    if (!Game.worldFlip) return dir;
+    return { left: 'right', right: 'left', up: 'down', down: 'up' }[dir] || dir;
+  },
+  /* 手の入力（キーボード・ボット）: 画面基準 ⇄ 世界基準（180° 回転は自分自身の逆なので往復とも同じ式） */
+  flipHand(hand, act) {
+    if (!Game.worldFlip) return { hand: hand, act: act };
+    return { hand: (hand === 'left') ? 'right' : 'left',
+             act: (act === 'left') ? 'right' : (act === 'right') ? 'left' : act };
+  },
+  /* 画面がいま上下逆に見えているか（HUD の窓口）。回転の途中は角度の半分（90°）で切り替わる */
+  screenFlipped() { return Math.cos(Game.roll) < 0; },
   runnerForHand(hand) {
-    const want = Game.handSwap ? (hand === 'left' ? 'right' : 'left') : hand;
+    const want = Game.screenFlipped() ? (hand === 'left' ? 'right' : 'left') : hand;
     return Game.runners.filter((r) => r.hand === want)[0] || null;
   },
-  /* タッチ: 画面の下半分＝床を走るキャラ / 上半分＝天井を走るキャラ（§4.2 改訂）。
-     重力反転ワープ（§4.5）で面が入れ替わっても「画面の位置＝担当」は保たれる。
-     **入れ替えワープ（§4.5 / S7）のときだけ、その対応が入れ替わる**:
-       下半分＝天井を走る方（UMBRA）／上半分＝床を走る方（LUMEN）。
-     handSwap の読み手はここと runnerForHand（キーボード・ボット）の2か所だけ。 */
-  runnerForZone(zone) {
-    let surface = Input.surfaceOfZone(zone);
-    if (Game.handSwap) surface = (surface === 'floor') ? 'ceil' : 'floor';
+  /* 世界の上下（bottom＝床の側 / top＝天井の側）→ その面を走るキャラ。
+     重力反転ワープ（§4.5 / S5）で面が入れ替わっても「その面にいる方」を返す。 */
+  runnerForWorldZone(wz) {
+    const surface = Input.surfaceOfZone(wz);
     return Game.runners.filter((r) => r.surface === surface)[0] || null;
+  },
+  /* タッチ: **画面の**下半分／上半分 → そこに見えているキャラ（§4.2「画面の位置＝担当」）。
+     世界反転中は画面の下に天井が見えている＝下半分は天井を走る方。HUD・監査・入力の共通の窓口。 */
+  runnerForZone(zone) {
+    return Game.runnerForWorldZone(Game.screenFlipped() ? Game.swapZone(zone) : zone);
   },
   /* 画面の上下 → いま担当しているキャラの面（HUD・監査の窓口） */
   surfaceForZone(zone) {
-    const s = Input.surfaceOfZone(zone);
-    return Game.handSwap ? ((s === 'floor') ? 'ceil' : 'floor') : s;
+    return Input.surfaceOfZone(Game.screenFlipped() ? Game.swapZone(zone) : zone);
   },
-  setHandSwap(on) { Game.handSwap = !!on; },
+  /* キャラの足場が **画面の** 上下どちらに見えているか（'floor'＝画面の下 / 'ceil'＝画面の上）。
+     フリックの案内（↑跳ぶ／↓跳ぶ）はこれで決まる。 */
+  screenSurface(r) {
+    if (!Game.screenFlipped()) return r.surface;
+    return (r.surface === 'floor') ? 'ceil' : 'floor';
+  },
+  /* 世界反転（Swap が跨いだゲートごとに呼ぶ）: 論理はその場で切り替え、カメラは 0.5秒で回す
+     （再通過は逆回転で戻る）。回転の間は入力を受け付けない（applyInput）。 */
+  setWorldFlip(on) {
+    on = !!on;
+    Game.worldFlip = on;
+    Game.rollFrom = Game.roll;
+    Game.rollTo = on ? Math.PI : 0;
+    Game.rollT = CFG.HANDSWAP.ROLL_T;
+    return on;
+  },
+  /* 世界反転を即座に既定へ（中断・再開・タイトル） */
+  resetWorldFlip() {
+    Game.worldFlip = false;
+    Game.roll = 0; Game.rollFrom = 0; Game.rollTo = 0; Game.rollT = 0;
+  },
+  updateRoll(dt) {
+    if (Game.rollT > 0) Game.rollT = Math.max(0, Game.rollT - dt);
+    const u = 1 - Game.rollT / CFG.HANDSWAP.ROLL_T;
+    Game.roll = U.lerp(Game.rollFrom, Game.rollTo, U.smooth(U.clamp(u, 0, 1)));
+    return Game.roll;
+  },
   setMirror(id, on) { Game.runners.forEach((r) => { if (r.id === id) r.mirrored = !!on; }); },
   /* 床/天井の入れ替え（重力反転ワープのフック） */
   swapSurfaces() {
@@ -165,7 +221,7 @@ const Game = {
     /* 同じゾーンでも区間パターンを替える（古代遺跡の 外周 ⇄ 内部 / 契約§4.4 S4） */
     Zones.mode(Game.stage.zoneMode);
     Game.seed = (seed === undefined) ? ((Math.random() * 1e9) | 0) : seed;
-    Game.handSwap = false;
+    Game.resetWorldFlip();
     Game.lastCheckpoint = 0;
     Game.eventLog.length = 0;
     Game.resetRun(0);
@@ -193,6 +249,7 @@ const Game = {
     Game.flipT = 0;
     Game.flipN = 0;
     Game.merged = false;
+    Game.resetWorldFlip();
     Zero.cur = 1;
     Game.runners.forEach((r, i) => Runners.reset(r, i === 0 ? 'floor' : 'ceil'));
     if (typeof HUD !== 'undefined' && HUD.gravCue) HUD.gravCue(false);
@@ -224,9 +281,9 @@ const Game = {
     Game.flipT = 0;
     Game.flipN = 0;
     Zero.cur = 1;
-    /* 鏡ゾーン・入れ替えワープ（§4.5 / S7）も必ず既定へ戻す
-       （左右の反転は Runners.reset が、担当の入れ替えはここが受け持つ）。 */
-    Game.handSwap = false;
+    /* 鏡ゾーン・世界反転（§4.5）も必ず既定へ戻す
+       （左右の反転は Runners.reset → Mirror.restore が、世界反転（カメラのロール）はここが受け持つ）。 */
+    Game.resetWorldFlip();
     /* 合体区間（§4.5 / S8）も必ず既定（2体）へ戻す */
     Game.merged = false;
     if (typeof HUD !== 'undefined' && HUD.mergeCue) HUD.mergeCue(false);
@@ -352,13 +409,14 @@ const Game = {
          ゲートは距離で跨ぐので prevDist→dist の更新後でなければ判定できない。
          直後 1.0秒は障害物が無いため、1フレームのズレは公平性に影響しない。 */
       if (Mirror.update(Game)) U.sfx('gate_mirror');
-      /* 入れ替えワープ（§4.5 / S7）: 上下の担当を入れ替える */
+      /* 世界反転ゲート（§4.5 / P8a）: 画面全体を 180° 回す（論理はその場・カメラは 0.5秒） */
       if (Swap.update(Game)) U.sfx('gate_swap');
       /* 合体区間（§4.5 / S8）: 跨いだゲートで合体／分離する。
          判定（collide）より先に置く＝そのフレームから「1体ぶんの判定」になる。 */
       if (Merge.update(Game)) U.sfx('gate_merge');
       Game.syncMerged();
       if (Game.flipT > 0) Game.flipT = Math.max(0, Game.flipT - dt);
+      Game.updateRoll(dt);
       Game.fireEvents();
       if (Game.stage.endless) Endless.update(Game);
       Setpieces.update(Game, d);
@@ -381,7 +439,15 @@ const Game = {
   },
 
   applyInput() {
-    const q = Input.drain();
+    const q0 = Input.drain();
+    /* 世界反転の回転中（0.5秒）は入力を受け付けない（契約§4.5 / P8a）。人間もボットも同じ1か所 */
+    if (Game.rollT > 0) return;
+    /* 画面の座標 → 世界の座標（世界反転中は 180° 回して読む / Game.worldZone・worldDir・flipHand） */
+    const q = q0.map((it) => {
+      if (it.zone) return { zone: Game.worldZone(it.zone), dir: Game.worldDir(it.dir) };
+      const h = Game.flipHand(it.hand, it.act);
+      return { hand: h.hand, act: h.act };
+    });
     /* 合体〜自由飛行〜分離の間（契約§4.5 改訂）は、2体は1体（DUO体）になっている。
        レーン移動もジャンプ／スライドも無く、操作は Input の自由飛行モードが受ける。
        ＝ ここへ流れてきた1動作ずつの入力は捨てる（人間もボットも同じ1か所）。 */
@@ -393,7 +459,7 @@ const Game = {
          上半分の上フリック → ジャンプ ／ 上半分の下フリック → スライディング
        キーボード（開発・テスト用・ボット）は契約のまま
          左手 A/D = 移動 ／ 右手 ↑ = ジャンプ・↓ = スライド。
-       入れ替えワープ（handSwap）はこの区間では効かない（担当が1体しかない）。 */
+       世界反転中は上の変換で「世界の上下」に直してから読む（合体体は床＝世界の下半分の側）。 */
     if (Game.merged) {
       const r = Game.mergeLead();
       for (let i = 0; i < q.length; i++) {
@@ -414,13 +480,14 @@ const Game = {
     for (let i = 0; i < q.length; i++) {
       const it = q[i];
       if (it.zone) {
-        /* タッチ: 担当は画面の上下、動作は「足場から離れる向き＝ジャンプ」で決まる */
-        const r = Game.runnerForZone(it.zone);
+        /* タッチ: 担当は画面の上下、動作は「足場から離れる向き＝ジャンプ」で決まる
+           （ここの zone/dir は世界の座標に直してある＝足場の面で素直に読める） */
+        const r = Game.runnerForWorldZone(it.zone);
         if (!r) continue;
         const act = Input.actFromDir(it.dir, r.surface);
         if (Runners.input(r, act)) Game.sfxAct(r, act);
       } else {
-        const r = Game.runnerForHand(it.hand);
+        const r = Game.runners.filter((x) => x.hand === it.hand)[0] || null;
         if (!r) continue;
         if (Runners.input(r, it.act)) Game.sfxAct(r, it.act);
       }
@@ -627,7 +694,7 @@ const Game = {
         lane: r.laneTo, laneVal: r.laneVal, x: Runners.x(r),
         surface: r.surface, act: r.act, actT: r.actT,
         foot: Runners.footY(r), offset: Runners.footOffset(r),
-        mirrored: r.mirrored, hand: Game.handSwap ? (r.hand === 'left' ? 'right' : 'left') : r.hand,
+        mirrored: r.mirrored, hand: Game.screenFlipped() ? (r.hand === 'left' ? 'right' : 'left') : r.hand,
         box: Runners.box(r)
       };
     });
@@ -638,7 +705,11 @@ const Game = {
       dist: Game.dist,
       speed: Game.speed,
       alive: (Game.status === 'playing'),
-      handSwap: Game.handSwap,
+      /* 世界反転（§4.5 / P8a）: 論理・カメラのロール角・回転の残り・画面が逆に見えているか */
+      worldFlip: Game.worldFlip,
+      roll: +Game.roll.toFixed(4),
+      rollT: +Game.rollT.toFixed(3),
+      screenFlipped: Game.screenFlipped(),
       bot: Game.botMode,
       checkpoint: Game.lastCheckpoint,
       killer: Game.killer,

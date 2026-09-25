@@ -12,7 +12,7 @@ const HUD = {
   init() {
     const ids = ['hud-dist', 'hud-speed', 'hud-stage', 'hand-left', 'hand-right',
                  'hand-left-name', 'hand-right-name', 'hand-left-keys', 'hand-right-keys',
-                 'flag-mirror', 'flag-swap', 'flag-grav', 'flag-zero', 'flag-merge',
+                 'flag-mirror', 'flag-wflip', 'flag-grav', 'flag-zero', 'flag-merge',
                  'dead-dist', 'dead-cp', 'dead-best',
                  'clear-dist', 'clear-best', 'title-best', 'cue', 'cue-main', 'cue-sub',
                  'sync', 'sync-main', 'sync-sub'];
@@ -130,6 +130,23 @@ const HUD = {
     return st;
   },
 
+  /* 上下の枠の色（琥珀＝LUMEN／藍＝UMBRA）は **画面位置に従う**（§4.8・§4.5 世界反転 / P8a）:
+     その半分に見えているキャラの色。Game.runnerForZone（画面の位置＝担当）の1か所から引く。
+     上半分に LUMEN が見えているとき #touchzones に top-lumen（CSS が枠と親指ガイドの色を入れ替える）。 */
+  zoneState: '',
+  zoneColors(g) {
+    let st = '';
+    if (g && !g.merged && g.runnerForZone) {
+      const r = g.runnerForZone('top');
+      if (r && r.id === 'lumen') st = 'top-lumen';
+    }
+    if (st === HUD.zoneState) return st;
+    HUD.zoneState = st;
+    const tz = document.getElementById('touchzones');
+    if (tz) tz.classList.toggle('top-lumen', st === 'top-lumen');
+    return st;
+  },
+
   /* 合体区間（契約§4.5 / S8）: 1体になっている間だけ表示する。
      チップの案内も「両手で1体を動かす」割当に差し替える（§4.5 を上下タッチで読んだ形）。 */
   mergeCue(on) {
@@ -169,18 +186,20 @@ const HUD = {
       if (e) e.style.opacity = fin ? '0' : '';
     });
     if (fin) {
-      ['flag-mirror', 'flag-swap', 'flag-grav', 'flag-zero', 'flag-merge'].forEach((id) => {
+      ['flag-mirror', 'flag-wflip', 'flag-grav', 'flag-zero', 'flag-merge'].forEach((id) => {
         const e = HUD.el[id];
         if (e) e.style.display = 'none';
       });
       HUD.mirrorZones(null);
+      HUD.zoneColors(null);
       return;
     }
     /* 担当アイコン: 画面の下半分＝床のキャラ／上半分＝天井のキャラ（§4.2 改訂）。
        重力反転ワープで面が入れ替わっても、画面の位置と担当は一致し続ける。 */
-    /* 入れ替えワープ（§4.5 / S7）で担当が入れ替わったら、**チップごと入れ替わる**
-       （名前・色・フリックの向きの案内が、その半分がいま動かすキャラのものになる）。
-       どちらを担当しているかは Game.runnerForZone の1か所だけが決める。 */
+    /* 世界反転（§4.5 / P8a）で画面の上下に見えるキャラが入れ替わったら、**チップごと入れ替わる**
+       （名前・色・フリックの向きの案内が、その半分に見えているキャラのものになる）。
+       どちらを担当しているかは Game.runnerForZone の1か所だけが決める。
+       フリックの案内は「足場が画面のどちらに見えているか」（Game.screenSurface）で決まる。 */
     /* 合体区間（§4.5 / S8）: 2体は1体。両手で1体を動かすので、チップは
        「下半分＝移動／上半分＝跳ぶ・潜る」に差し替える（名前は合体体の名前）。 */
     const mg = !!g.merged;
@@ -194,7 +213,8 @@ const HUD = {
       HUD._set('hand-' + c[0] + '-name', mg ? 'DUO' : r.id.toUpperCase());
       HUD._set('hand-' + c[0] + '-keys',
                mg ? (c[2] + (c[0] === 'left' ? ' ←→移動' : ' ↑跳ぶ ↓潜る'))
-                  : (c[2] + (r.surface === 'floor' ? ' ↑跳ぶ ↓潜る' : ' ↓跳ぶ ↑潜る')));
+                  : (c[2] + (((g.screenSurface ? g.screenSurface(r) : r.surface) === 'floor')
+                              ? ' ↑跳ぶ ↓潜る' : ' ↓跳ぶ ↑潜る')));
     });
     /* S6: 重力反転中／無重力区間（契約§4.5）。どちらも「今どうなっているか」を面と
        滞空倍率（Zero.cur）から引くだけ＝表示と判定が必ず一致する。 */
@@ -208,7 +228,11 @@ const HUD = {
     const anyMirror = g.runners.some((r) => r.mirrored);
     if (HUD.el['flag-mirror']) HUD.el['flag-mirror'].style.display = anyMirror ? '' : 'none';
     HUD.mirrorZones(g);
-    if (HUD.el['flag-swap']) HUD.el['flag-swap'].style.display = (g.handSwap && !g.merged) ? '' : 'none';
+    /* 世界反転（§4.5 / P8a）: 画面が逆に見えている間だけ「WORLD FLIP」 */
+    if (HUD.el['flag-wflip']) {
+      HUD.el['flag-wflip'].style.display = (g.screenFlipped && g.screenFlipped() && !g.merged) ? '' : 'none';
+    }
+    HUD.zoneColors(g);
     if (HUD.el['flag-merge']) HUD.el['flag-merge'].style.display = g.merged ? '' : 'none';
   }
 };

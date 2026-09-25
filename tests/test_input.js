@@ -131,7 +131,7 @@
   });
 
   DUO.__suites.push({
-    name: '後段フェーズ用フック（鏡・手の入れ替え・床天井の入れ替え）',
+    name: '後段フェーズ用フック（鏡・世界反転・床天井の入れ替え）',
     quick: true,
     run(t) {
       const CFG = I().CFG, Game = I().Game;
@@ -145,15 +145,20 @@
       tap('KeyD'); pumpFor(CFG.LANE_T);
       t.eq(DUO.state().runners.lumen.lane, 0, '反転解除で元に戻る');
 
-      /* 入れ替えワープ: 左手が UMBRA を担当 */
-      Game.setHandSwap(true);
-      t.eq(DUO.state().handSwap, true, 'handSwap が状態として持てる');
+      /* 世界反転（P8a / 旧・入れ替えワープ）: 画面の下に見える UMBRA を左手（WASD）が担当。
+         回転（0.5秒）が終わるまでは入力を受け付けない */
+      Game.setWorldFlip(true);
+      t.eq(DUO.state().worldFlip, true, 'worldFlip が状態として持てる');
       tap('KeyW');
-      t.eq(DUO.state().runners.umbra.act, 'jump', '入れ替え中は W で UMBRA が跳ぶ');
+      t.eq(DUO.state().runners.umbra.act === 'run' && DUO.state().runners.lumen.act === 'run', true,
+           '回転中は W を受け付けない');
+      pumpFor(CFG.HANDSWAP.ROLL_T);
+      tap('KeyW');
+      t.eq(DUO.state().runners.umbra.act, 'jump', '世界反転中は W で UMBRA（画面の下）が跳ぶ');
       t.eq(DUO.state().runners.lumen.act, 'run', 'LUMEN は跳ばない');
       t.eq(DUO.state().runners.umbra.hand, 'left', 'HUD 用の担当手も入れ替わる');
-      Game.setHandSwap(false);
-      pumpFor(CFG.JUMP_T);
+      Game.setWorldFlip(false);
+      pumpFor(CFG.JUMP_T + CFG.HANDSWAP.ROLL_T);
 
       /* 重力反転ワープ: 床と天井が入れ替わる */
       Game.swapSurfaces();

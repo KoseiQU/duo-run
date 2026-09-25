@@ -36,7 +36,7 @@ const DUO = {
   bot(mode) { Game.botMode = (mode === 'off') ? null : (mode || null); return Game.botMode; },
   reset() {
     Game.botMode = null;
-    Game.handSwap = false;
+    Game.resetWorldFlip();
     Game.merged = false;
     Game.runners.forEach((r) => { r.mirrored = false; r.jumpT = CFG.JUMP_T; });
     Game.runners[0].surface = 'floor';

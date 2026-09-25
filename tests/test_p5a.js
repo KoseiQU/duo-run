@@ -347,10 +347,11 @@
   });
 
   /* ==========================================================================
-     4. 入れ替えワープ（契約§4.5 / S6）
+     4. 世界反転ゲート（旧・入れ替えワープ / 契約§4.5【2026-09-25 全面改訂】/ P8a）
+        詳細（ロール角・入力の無視・フリック方向・重力反転との重ね掛け）は test_p8a
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 入れ替えワープ（上下の担当が入れ替わる・HUD・実タッチ・戻り）',
+    name: 'S6: 世界反転ゲート（画面が 180° 回る・下半分＝画面の下のキャラ・HUD・戻り）',
     quick: true,
     run(t) {
       const In = I(), CFG = In.CFG, Swap = In.Swap;
@@ -358,7 +359,7 @@
       const items = [];
       const reg = Swap.expand(items, { at: 0, lane: 0, params: { swp: { backT: 4 } } },
                               'floor', 200, 0, 3, null);
-      t.eq(items.length, 2, '入れ替えワープは入口と戻りの2枚で1組');
+      t.eq(items.length, 2, '世界反転ゲートは入口と戻りの2枚で1組');
       t.eq(items[0].type, 'SWAPGATE', 'ゲートの型は SWAPGATE');
       t.eq(In.OBS.SWAPGATE.ghost, true, 'ゲートは当たり判定を持たない');
       t.near(reg.to - reg.from, 4 * CFG.REF_SPEED * 3, 1e-6, '戻りは backT 秒ぶん先');
@@ -366,53 +367,54 @@
 
       /* --- 走行中 --- */
       const fs = findRegion('swaps', null);
-      t.ok(!!fs, '入れ替えワープを持つ種がある（seed' + (fs && fs.seed) + ' @' + (fs && fs.from.toFixed(0)) + 'm）');
+      t.ok(!!fs, '世界反転を持つ種がある（seed' + (fs && fs.seed) + ' @' + (fs && fs.from.toFixed(0)) + 'm）');
       DUO.reset(); DUO.start('S6', fs.seed); DUO.bot('perfect');
       DUO.skipTo(Math.max(0, fs.from - 110));
       for (let i = 0; i < 4; i++) DUO.pump(1 / 60);
       const regs = Game.gen.swaps.filter((r) => !r.dead && r.from >= fs.from - 1);
-      t.ok(regs.length > 0, 'seed' + fs.seed + ' の ' + Math.round(fs.from - 110) + 'm 以降に入れ替えワープがある');
+      t.ok(regs.length > 0, 'seed' + fs.seed + ' の ' + Math.round(fs.from - 110) + 'm 以降に世界反転がある');
       const r0 = regs[0];
       let guard = 0;
       while (Game.dist < r0.from - 2 && guard++ < 9000) DUO.__step(1 / 60);
       DUO.pump(1 / 60);
-      t.eq(DUO.state().handSwap, false, 'ゲートの手前では入れ替わっていない');
+      t.eq(DUO.state().worldFlip, false, 'ゲートの手前では反転していない');
       t.eq(DUO.state().zoneOwner.bottom, 'lumen', '下半分は床の LUMEN');
       t.eq(handName('left'), 'LUMEN', 'HUD: 下半分のチップは LUMEN');
-      while (Game.dist < r0.from + 8 && guard++ < 9000) DUO.__step(1 / 60);
-      DUO.pump(1 / 60);
-      t.eq(DUO.state().handSwap, true, 'ゲートを通ると担当が入れ替わる');
-      t.eq(DUO.state().zoneOwner.bottom, 'umbra', '下半分が天井の UMBRA を動かす（契約§4.5 の解釈）');
-      t.eq(DUO.state().zoneOwner.top, 'lumen', '上半分が床の LUMEN を動かす');
+      while (Game.dist < r0.from + Game.speed * (CFG.HANDSWAP.ROLL_T + 0.05) && guard++ < 9000) DUO.pump(1 / 60);
+      t.eq(DUO.state().worldFlip, true, 'ゲートを通ると世界が反転する');
+      t.near(DUO.state().roll, Math.PI, 1e-3, 'カメラは 180° ロールしている');
+      t.eq(DUO.state().zoneOwner.bottom, 'umbra', '下半分＝画面の下に見えている UMBRA（画面の位置＝担当）');
+      t.eq(DUO.state().zoneOwner.top, 'lumen', '上半分＝画面の上に見えている LUMEN');
+      t.eq(DUO.state().runners.lumen.surface, 'floor', 'キャラは自分の足場のまま（LUMEN は床）');
       t.eq(handName('left'), 'UMBRA', 'HUD: 下半分のチップが UMBRA へ入れ替わる');
       t.eq(handName('right'), 'LUMEN', 'HUD: 上半分のチップが LUMEN へ入れ替わる');
       t.eq(document.getElementById('hand-left').getAttribute('data-char'), 'umbra',
            'HUD: チップの色（data-char）も入れ替わる');
-      t.eq(document.getElementById('hand-left-keys').textContent.indexOf('↓跳ぶ') >= 0, true,
-           'HUD: 下半分の案内が「↓跳ぶ」（天井を走る方の向き）になる');
-      t.eq(shown('flag-swap'), true, 'HUD に SWAP が出る');
+      t.eq(document.getElementById('hand-left-keys').textContent.indexOf('↑跳ぶ') >= 0, true,
+           'HUD: 下半分の案内は「↑跳ぶ」（UMBRA の足場＝天井が画面の下に見えている）');
+      t.eq(shown('flag-wflip'), true, 'HUD に WORLD FLIP が出る');
 
-      /* --- 実入力経路: 下半分の下フリック＝天井側（UMBRA）のジャンプ --- */
+      /* --- 実入力経路: 下半分の上フリック＝画面の下に見える UMBRA のジャンプ --- */
       if (canSynth) {
         DUO.bot('off');
         In.Input.clear();
         Game.runners.forEach((r) => { r.act = 'run'; r.actT = 0; });
-        flick(41, 'bottom', 0, 90);      // 下フリック
+        flick(41, 'bottom', 0, -90);     // 上フリック
         DUO.pump(1 / 60);
         t.eq(DUO.state().runners.umbra.act, 'jump',
-             '実タッチ: 下半分の下フリック → UMBRA がジャンプ（担当が入れ替わっている）');
+             '実タッチ: 下半分の上フリック（画面で見て足場から離れる向き）→ UMBRA がジャンプ');
         t.eq(DUO.state().runners.lumen.act, 'run', 'LUMEN は動かない');
         DUO.bot('perfect');
       }
 
-      /* --- 戻り --- */
+      /* --- 戻り（逆回転） --- */
       guard = 0;
-      while (Game.dist < r0.to + 8 && guard++ < 20000) DUO.__step(1 / 60);
-      DUO.pump(1 / 60);
-      t.eq(DUO.state().handSwap, false, '再通過で担当が戻る');
+      while (Game.dist < r0.to + Game.speed * (CFG.HANDSWAP.ROLL_T + 0.05) && guard++ < 20000) DUO.pump(1 / 60);
+      t.eq(DUO.state().worldFlip, false, '再通過で戻る');
+      t.near(DUO.state().roll, 0, 1e-3, 'カメラのロールも 0 へ戻る');
       t.eq(handName('left'), 'LUMEN', 'HUD も戻る');
-      t.eq(shown('flag-swap'), false, 'HUD の SWAP が消える');
-      t.eq(Game.status, 'playing', '入れ替えワープをボットが抜けられる');
+      t.eq(shown('flag-wflip'), false, 'HUD の WORLD FLIP が消える');
+      t.eq(Game.status, 'playing', '世界反転をボットが抜けられる');
       DUO.reset();
     }
   });
@@ -770,10 +772,10 @@
   });
 
   /* ==========================================================================
-     10. 中断復元（mirrored / handSwap / HUD が全部戻る）
+     10. 中断復元（mirrored / worldFlip / HUD が全部戻る）
      ========================================================================== */
   DUO.__suites.push({
-    name: 'S6: 中断復元（鏡の反転・担当の入れ替え・HUD が全部戻る）',
+    name: 'S6: 中断復元（鏡の反転・世界反転・HUD が全部戻る）',
     quick: true,
     run(t) {
       const In = I();
@@ -799,17 +801,18 @@
       const s0 = Game.gen.swaps.filter((r) => !r.dead && r.from >= fs.from - 1)[0];
       guard = 0;
       while (Game.dist < s0.from + 10 && guard++ < 9000) DUO.__step(1 / 60);
-      DUO.pump(1 / 60);
-      t.eq(DUO.state().handSwap, true, '入れ替えワープの中にいる');
+      for (let i = 0; i < 40; i++) DUO.pump(1 / 60);
+      t.eq(DUO.state().worldFlip, true, '世界反転の中にいる');
       t.eq(handName('left'), 'UMBRA', 'HUD も入れ替わっている');
       /* 区間の中にチェックポイントを置いて再開する（旧: 固定の 500m。P5c で譜面の位置が動くため区間基準に） */
       Game.lastCheckpoint = Math.ceil(s0.from + 20);
       Game.retry();
       DUO.pump(1 / 60);
-      t.eq(DUO.state().handSwap, false, 'チェックポイント再開で担当が戻る');
+      t.eq(DUO.state().worldFlip, false, 'チェックポイント再開で世界反転が戻る');
+      t.eq(DUO.state().roll, 0, 'カメラのロールも即座に 0');
       t.eq(DUO.state().zoneOwner.bottom, 'lumen', '下半分は LUMEN に戻る');
       t.eq(handName('left'), 'LUMEN', 'HUD も戻る');
-      t.eq(shown('flag-swap'), false, 'HUD の SWAP が消える');
+      t.eq(shown('flag-wflip'), false, 'HUD の WORLD FLIP が消える');
       /* 再開位置より手前のゲートは取り込まない（片道だけ通った状態を作らない） */
       const mrs = Game.gen.mirrors.filter((r) => !r.dead);
       const sws = Game.gen.swaps.filter((r) => !r.dead);
@@ -819,10 +822,11 @@
                                    ? (o.reg && o.reg.from < Game.dist) : false), false,
            '孤立したゲート（出口だけ）が残っていない');
       /* DUO.reset でも必ず戻る */
-      Game.handSwap = true;
+      Game.setWorldFlip(true);
       Game.runners[0].mirrored = true;
       DUO.reset();
-      t.eq(DUO.state().handSwap, false, 'DUO.reset で担当が戻る');
+      t.eq(DUO.state().worldFlip, false, 'DUO.reset で世界反転が戻る');
+      t.eq(DUO.state().roll, 0, 'DUO.reset でカメラのロールも戻る');
       t.eq(DUO.state().runners.lumen.mirrored, false, 'DUO.reset で反転も戻る');
     }
   });

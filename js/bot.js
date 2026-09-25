@@ -192,17 +192,21 @@ const Bot = {
       const cmd = Bot.decideFor(game, r, delay);
       if (cmd) {
         const hand = (cmd.act === 'left' || cmd.act === 'right') ? 'left' : 'right';
-        Input.push(hand, cmd.act);
+        const h = game.flipHand(hand, cmd.act);
+        Input.push(h.hand, h.act);
       }
       return;
     }
+    /* 世界反転の回転中（0.5秒）は入力が捨てられる（人間と同じ）。出さずに待つ */
+    if (game.rollT > 0) return;
     for (let i = 0; i < game.runners.length; i++) {
       const r = game.runners[i];
       const cmd = Bot.decideFor(game, r, delay);
       if (!cmd) continue;
-      /* 人間と同じ入力経路に流す（担当の手から入れる） */
-      const hand = game.handSwap ? (r.hand === 'left' ? 'right' : 'left') : r.hand;
-      Input.push(hand, cmd.act);
+      /* 人間と同じ入力経路に流す（担当の手から入れる）。cmd は世界基準（レーンの ± と鏡の反転込み）なので、
+         世界反転中は画面基準へ 180° 回して出す（左手＝画面の下のキャラ・A/D＝画面の左右 / Game.flipHand） */
+      const h = game.flipHand(r.hand, cmd.act);
+      Input.push(h.hand, h.act);
     }
   }
 };

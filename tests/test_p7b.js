@@ -727,34 +727,35 @@
       t.eq(vis(frame('bottom')) || vis(frame('top')), false, '縞枠が消える');
       t.eq(sparkle('lumen'), false, '銀の粒が消える');
 
-      /* 2) 入れ替えワープとの重ね掛け: LUMEN（床）が反転 × 担当が入れ替わる →
-            LUMEN を動かすのは上半分 ＝ 縞枠は上半分に出る（画面の位置で分かる） */
+      /* 2) 世界反転（P8a / 旧・入れ替えワープ）との重ね掛け: LUMEN（床）が反転 × 世界が 180° 回る →
+            LUMEN は画面の上に見える＝上半分が動かす ＝ 縞枠は上半分に出る（画面の位置で分かる） */
       DUO.reset(); DUO.start('S6', seed); DUO.skipTo(200);
       In.clearObstacles();
       Game.runners[0].mirrored = true;
       DUO.pump(1 / 60);
-      t.eq(vis(frame('bottom')) && !vis(frame('top')), true, '入れ替え前: LUMEN の反転は下半分の枠');
-      Game.setHandSwap(true);
-      DUO.pump(1 / 60);
-      t.eq(Game.runnerForZone('top').id, 'lumen', '入れ替え中は上半分が LUMEN を動かす');
+      t.eq(vis(frame('bottom')) && !vis(frame('top')), true, '世界反転の前: LUMEN の反転は下半分の枠');
+      Game.setWorldFlip(true);
+      for (let i = 0; i < Math.ceil(In.CFG.HANDSWAP.ROLL_T * 60) + 2; i++) DUO.pump(1 / 60);
+      t.eq(Game.runnerForZone('top').id, 'lumen', '世界反転中は上半分が LUMEN（画面の上に見えている）を動かす');
       t.eq(vis(frame('top')), true, '重ね掛け: 縞枠は上半分へ移る');
       t.eq(vis(frame('bottom')), false, '重ね掛け: 下半分の枠は消える');
-      t.eq(vis(document.getElementById('flag-swap')) && vis(document.getElementById('flag-mirror')), true,
-           'MIRROR と SWAP が同時に見える');
-      /* 縞枠の出ている半分の横フリックが、実際に逆に効く（表示と操作が一致する） */
+      t.eq(vis(document.getElementById('flag-wflip')) && vis(document.getElementById('flag-mirror')), true,
+           'MIRROR と WORLD FLIP が同時に見える');
+      /* 縞枠の出ている半分の横フリックが、実際に（画面で見て）逆に効く（表示と操作が一致する）。
+         世界は 180° 回っているので、画面の左＝世界の +x（レーン +1） */
       const r0 = Game.runners[0];
       r0.laneFrom = r0.laneTo = r0.laneVal = 0; r0.laneT = In.CFG.LANE_T;
       DUO.touch('top', 'right'); DUO.pump(1 / 60);
-      t.eq(r0.laneTo, -1, '縞枠の半分（上）で右フリック → LUMEN は左へ（反転している）');
+      t.eq(r0.laneTo, 1, '縞枠の半分（上）で右フリック → LUMEN は画面の左へ（反転している・世界ではレーン +1）');
       const r1 = Game.runners[1];
       r1.laneFrom = r1.laneTo = r1.laneVal = 0; r1.laneT = In.CFG.LANE_T;
       DUO.touch('bottom', 'right'); DUO.pump(1 / 60);
-      t.eq(r1.laneTo, 1, '縞枠の無い半分（下）で右フリック → UMBRA は右へ（通常）');
+      t.eq(r1.laneTo, -1, '縞枠の無い半分（下）で右フリック → UMBRA は画面の右へ（通常・世界ではレーン −1）');
       /* UMBRA（天井）も反転すると両方の半分に出る */
       r1.mirrored = true; DUO.pump(1 / 60);
       t.eq(vis(frame('top')) && vis(frame('bottom')), true, '両方反転なら両方の半分に縞枠');
       t.eq(sparkle('umbra'), true, '天井の UMBRA にも銀の粒');
-      Game.setHandSwap(false); r0.mirrored = false; r1.mirrored = false;
+      Game.resetWorldFlip(); r0.mirrored = false; r1.mirrored = false;
       DUO.pump(1 / 60);
       t.eq(vis(frame('top')) || vis(frame('bottom')) || vis(document.getElementById('flag-mirror')), false, '解除で全部消える');
       /* リトライ・タイトルでも残らない */

@@ -164,9 +164,9 @@ const OBS = {
      左右反転の規則は Mirror が唯一の出所。surface 型＝置かれた面のキャラに効く。 */
   MIRGATE:  { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
               ghost: true, harmless: true, gate: true, mirror: true, label: '鏡ゾーンのゲート' },
-  /* 入れ替えワープの紫のゲート: 当たり判定なし。上下の担当が入れ替わる（Swap が出所）。 */
+  /* 世界反転ゲート（旧・入れ替えワープ）の紫のゲート: 当たり判定なし。画面全体が 180° 回る（Swap が出所）。 */
   SWAPGATE: { span: 1, depth: 0.55, y0: 0.00, y1: 0.02, both: false, safe: [],
-              ghost: true, harmless: true, gate: true, swap: true, label: '入れ替えワープのゲート' },
+              ghost: true, harmless: true, gate: true, swap: true, label: '世界反転ゲート' },
   /* 割れた鏡の床（飛び石 / 契約§4.4 S7 の大演出）: 全幅が抜けていて、
      **揺れる鏡片1枚ぶんの幅だけ**が足場。足場の外は GAP と同じ寸法＝跳べば越えられる。
      奥行きが深い（＝裂け目が広い）ので、Fair の「通過に要する距離」からは外す（noPass）。 */
@@ -732,18 +732,17 @@ const Mirror = {
 };
 
 /* ============================================================================
-   Swap — 入れ替えワープ（契約§4.5 / §4.4 S7）の**時刻規則の唯一の出所**
+   Swap — 世界反転ゲート（旧・入れ替えワープ / 契約§4.5【2026-09-25 全面改訂】/ P8a）の
+   **時刻規則の唯一の出所**
 
    ■ 形
-     紫のゲートが2枚で1組。跨ぐたびに **担当が入れ替わる**（Game.handSwap をトグル）。
-     本作のタッチは「画面の上下＝担当」（§4.2）なので、契約の
-     「左手/右手の担当が入れ替わる」は **上下の担当が入れ替わる** と読む:
-       通常   下半分＝床を走る方（LUMEN） ／ 上半分＝天井を走る方（UMBRA）
-       入替後 下半分＝天井を走る方（UMBRA）／ 上半分＝床を走る方（LUMEN）
-     ＝ Game.runnerForZone が面を反転し、キーボード／ボットは
-        Game.runnerForHand が手を反転する（どちらも handSwap の1か所を読む）。
+     紫のゲートが2枚で1組。跨ぐたびに **世界が 180° 回る**（Game.setWorldFlip をトグル）。
+     論理（担当・フリックの読み）は跨いだ瞬間に切り替わり、カメラは 0.5秒かけて回る
+     （回転の間は入力を受け付けない）。2枚目で逆回転して戻る。
+     「画面の位置＝担当」（§4.2）は不変: 画面の下半分＝画面の下に見えているキャラ
+     （Game.runnerForZone / worldZone が唯一の変換）。旧「担当だけ入れ替わる」は失効。
    ■ 規則
-     ・入れ替えは **走行距離がゲートを跨いだ瞬間** に1回だけ（フレーム非依存）。
+     ・反転は **走行距離がゲートを跨いだ瞬間** に1回だけ（フレーム非依存）。
      ・ゲートの直後 CFG.HANDSWAP.GRACE_T 秒（1.0秒）は障害物を置かない。
      ・Fair は余白を検査し、生存レーンの到達可能性を **両面ともリセット**する。
    ============================================================================ */
@@ -782,7 +781,7 @@ const Swap = {
     const list = (game.gen && game.gen.swaps) ? game.gen.swaps : null;
     if (!list || !list.length) return 0;
     const n = Swap.crossed(list, game.prevDist, game.dist);
-    for (let i = 0; i < n; i++) game.setHandSwap(!game.handSwap);
+    for (let i = 0; i < n; i++) game.setWorldFlip(!game.worldFlip);
     return n;
   },
 
@@ -941,7 +940,10 @@ const Bridge = {
     if (typeof HUD === 'undefined' || !HUD.bridgeCue) return;
     if (!o) { HUD.bridgeCue(null); return; }
     const left = Math.max(0, (MOT.bridgeFallAt(o) - dist) / MOT.bridgeUnit(o));
-    HUD.bridgeCue({ left: left, surface: o.surface, zone: zone, lane: o.lane });
+    /* 世界反転中（P8a）は画面が 180° 回っている＝橋の面もレーンも画面では上下・左右が逆に見える */
+    const fl = (typeof Game !== 'undefined' && Game.screenFlipped) ? Game.screenFlipped() : false;
+    const vs = fl ? ((o.surface === 'floor') ? 'ceil' : 'floor') : o.surface;
+    HUD.bridgeCue({ left: left, surface: vs, zone: zone, lane: fl ? -o.lane : o.lane });
   },
   /* テスト・監査の窓口 */
   snapshot(game) {
