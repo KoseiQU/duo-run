@@ -63,6 +63,7 @@ const DUO = {
     createGenerator: createGenerator, makeStage: makeStage, CHUNK_DEFS: CHUNK_DEFS,
     STAGE_DEFS: STAGE_DEFS, INTRO_S1: INTRO_S1, MOT: MOT,
     endlessPool: endlessPool, scaleParams: scaleParams,
+    EndlessKit: EndlessKit,
     Zones: Zones, ZoneKit: ZoneKit, ZoneNeon: ZoneNeon, ZoneRuins: ZoneRuins, ZoneSea: ZoneSea,
     ZoneSpace: ZoneSpace, ZoneMirror: ZoneMirror, ZoneCore: ZoneCore, ZoneWhite: ZoneWhite,
     /* 障害物の見た目の外接箱（**判定外の装飾を除く**）。

@@ -155,9 +155,11 @@
             ex.forEach((w) => { len -= Math.max(0, Math.min(w[1], a + 1000) - Math.max(w[0], a)); });
             const d = c.total / Math.max(len, 1) * 100;
             row.push(d);
-            /* 目安（3 + 1000mごと+1）。44 m/s 近くの実質上限（決定ログ: 約5〜10回/100m）で頭打ち */
+            /* 目安（3 + 1000mごと+1）。44 m/s 近くの実質上限（決定ログ: 約5〜10回/100m）で頭打ち。
+               P8b（契約§4.5b）: 上下非対称（片面だけのウォール＝1動作）と 1000m ごとの全ギミック一巡のため、
+               5000m 以降（40 m/s 超・ミニ大演出の入る窓）は 3.3〜4 回/100m に下がる＝下限を 60% に置く（既知の妥協点） */
             const want = Math.min(3 + a / 1000, 5);
-            if (d < want * 0.7) low.push('seed' + seed + '@' + a + ' ' + d.toFixed(1));
+            if (d < want * (a >= 5000 ? 0.6 : 0.7)) low.push('seed' + seed + '@' + a + ' ' + d.toFixed(1));
           }
           rows.push(row.map((x) => x.toFixed(1)).join(' '));
           if (g.log.some((l) => l.id === '(blank)')) low.push('seed' + seed + ' 空白チャンク');

@@ -221,39 +221,18 @@
         t.eq(back, 0, 'S7: ゴール（または終了）まで反転が戻らない');
         t.ok(Game.status !== 'dead' && Game.status !== 'dying', 'S7 をボットが走りきる（' + Game.status + '）');
       }
-      /* エンドレス: 鏡ゾーンで反転 → 区画内は戻らない → ゾーン切替で解除 */
+      /* エンドレス【P8b 契約§4.5b】: 鏡の反転はエンドレスから除外（ゾーン切替での解除の仕組みは残る） */
       const snap = U.lsSnapshot();
       U.lsSet('cleared', ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7']);
-      let ok = false;
-      for (let seed = 1; seed <= 12 && !ok; seed++) {
+      let nMir = 0, nSw = 0;
+      for (let seed = 1; seed <= 4; seed++) {
         const ge = In.createGenerator(In.makeStage('endless'), seed);
         ge.ensure(6500, 0);
-        const sw = ge.switches.filter((s) => s.to === 'core')[0];
-        const r = ge.mirrors.filter((q) => ge.zoneAt(q.from) === 'mirror' && sw && q.from < sw.swapAt - 60)[0];
-        if (!r || !sw) continue;
-        ok = true;
-        DUO.reset(); DUO.start('endless', seed); DUO.bot('perfect');
-        DUO.skipTo(Math.max(0, r.from - 90));
-        let g = 0;
-        while (Game.dist < r.from + 4 && g++ < 9000 && Game.status === 'playing') DUO.__step(1 / 60);
-        t.eq(In.Zones.id(), 'mirror', 'エンドレス: 鏡の世界ゾーン');
-        const rn = Game.runners.filter((x) => x.mirrored);
-        t.ok(rn.length >= 1, 'エンドレス: 鏡ゲートで反転（seed ' + seed + ' @' + r.from.toFixed(0) + 'm）');
-        let back = 0;
-        while (Game.dist < sw.swapAt - 1 && g++ < 60000 && Game.status === 'playing') {
-          DUO.__step(1 / 60);
-          if (rn.some((x) => !x.mirrored)) back++;
-        }
-        t.eq(back, 0, 'エンドレス: 区画（ゾーン）の中では戻らない');
-        t.eq(Game.status, 'playing', 'ゾーン切替の手前までボットが走る');
-        while (Game.dist < sw.swapAt + 2 && g++ < 9000 && Game.status === 'playing') DUO.__step(1 / 60);
-        t.eq(JSON.stringify(mir()), '{"L":false,"U":false}', 'エンドレス: ゾーン切替で解除');
-        t.eq(In.Zones.id(), 'core', '次のゾーン（コア）へ');
-        /* 再開（skipTo）でゾーンをまたいだ反転は掛け直さない */
-        DUO.skipTo(sw.swapAt + 40);
-        t.eq(JSON.stringify(mir()), '{"L":false,"U":false}', 'エンドレス: 別のゾーンの鏡は再開で掛け直さない');
+        nMir += ge.mirrors.length + ge.warps.length + ge.merges.length;
+        nSw += ge.switches.filter((s) => s.to === 'core').length;
       }
-      t.ok(ok, 'エンドレスの鏡ゾーンに鏡ゲートがある種を見つけた');
+      const ok = (nMir === 0 && nSw > 0);
+      t.ok(ok, 'エンドレス（§4.5b）: 鏡・重力反転・合体のゲートは 4シード×6500m で 0（鏡の世界ゾーンは通る）');
       U.lsRestore(snap);
       DUO.reset();
     }
@@ -572,9 +551,10 @@
       for (let seed = 1; seed <= 30 && seeds.length < 3; seed++) {
         const ge = In.createGenerator(In.makeStage('endless'), seed);
         ge.ensure(6900, 0);
-        if (ge.swaps.some((r) => r.from > 3900 && r.to < 6900) && ge.mirrors.some((r) => r.from > 3900)) seeds.push(seed);
+        /* P8b（契約§4.5b）: 鏡はエンドレスから除外。世界反転は 1000m ごとに1回 */
+        if (ge.swaps.some((r) => r.from > 3900 && r.to < 6900) && !ge.mirrors.length) seeds.push(seed);
       }
-      t.eq(seeds.length, 3, 'エンドレスの鏡の世界ゾーンに鏡・世界反転がある種: ' + seeds.join(','));
+      t.eq(seeds.length, 3, 'エンドレスの鏡の世界ゾーン付近に世界反転がある（鏡は無い）種: ' + seeds.join(','));
       ['perfect', 'delay250'].forEach((mode) => {
         const bad = []; let flips = 0;
         seeds.forEach((seed) => {

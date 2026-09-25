@@ -81,6 +81,18 @@ const Bot = {
     return true;
   },
 
+  /* そのレーンが（最悪値で）崩落中か・移動しきる前に崩落が始まるか（Fair.coverSpan と同じ区間） */
+  pitAt(game, r, lane) {
+    const pad = game.speed * (CFG.LANE_T + CFG.BOT.MOVE_MARGIN);
+    for (let i = 0; i < game.active.length; i++) {
+      const o = game.active[i];
+      if (!OBS[o.type].long || o.lane !== lane || !Obstacles.affects(o, r.surface)) continue;
+      const c = Fair.coverSpan(o);
+      if (game.dist > c.from - pad && game.dist < c.to + CFG.BODY_D) return true;
+    }
+    return false;
+  },
+
   /* 同時スイッチ（契約§4.5 / S4）: **完璧反応のボットは2人同時に踏める**。
      踏むのは任意（踏み損ねても迂回で生き残れる＝§4.7 は occ が最悪値で担保している）ので、
      「次のウォールより手前にパッドがあり、そこへ動いても危なくない」ときだけ寄せる。
@@ -108,6 +120,7 @@ const Bot = {
     const dir = (best.lane > r.laneTo) ? 1 : -1;
     const step = U.clamp(r.laneTo + dir, -1, 1);
     if (!Bot.moveIsSafe(game, r, step)) return null;
+    if (Bot.pitAt(game, r, step)) return null;          // 崩落中の橋のレーンへは寄せない（P8b）
     return { act: (dir * (r.mirrored ? -1 : 1) > 0) ? 'right' : 'left' };
   },
 
@@ -146,6 +159,9 @@ const Bot = {
       /* 真横を通過中の障害物へ自分から突っ込まない。危ないフレームは動かずに待つ
          （§4.7 の反応窓があるので、通過しきってから動いても次のウォールには間に合う） */
       if (!Bot.moveIsSafe(game, r, step)) return null;
+      /* 崩れる橋（P8b）: 崩落の手前〜橋の終わり（C − 移動の秒 〜 X）のレーンへは横から入らない
+         （入った先が穴。エンドレスの札は橋の直後に別のレーンを要求することがある）。終わってから動く */
+      if (Bot.pitAt(game, r, step)) return null;
       /* 鏡ゾーンで左右が反転していても「画面上どちらへ動きたいか」で指示を出す */
       return { act: (dir * (r.mirrored ? -1 : 1) > 0) ? 'right' : 'left' };
     }

@@ -1975,6 +1975,8 @@ const STAGE_DEFS = {
   endless: {
     id: 'endless', name: 'エンドレス', zone: 'neon', lengthM: Infinity,
     speedFrom: 16, speedTo: 44, maxRank: 2, setpiece: null, density: [3, 14],
+    /* 契約§4.5b（P8b）: 札は EndlessKit の札だけ・ギミックはゾーンと無関係に均等に回す */
+    p8b: true,
     /* 最初から入っているのは基本セット（旧S1 の顔ぶれ）だけ。
        ギミックはそのステージをクリアして初めて混ざる（ENDLESS_UNLOCK / 契約§4.4） */
     chunkPool: CHUNK_DEFS.filter((c) => c.difficulty <= 2 && !c.moving && NOT_LATE(c)).map((c) => c.id)
@@ -2343,7 +2345,18 @@ const Fair = {
         /* 崩落の続く橋のレーンは横切れない（通り道に穴がある / 契約§4.5 改訂 v2） */
         const blk = longs.length ? Fair.coveredBetween(longs, side, prevAt, w.at) : null;
         const crosses = (r, l) => !!blk && blk.some((b) => b > Math.min(r, l) && b < Math.max(r, l));
-        const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps && !crosses(r, l)));
+        /* エンドレス（P8b・opt.ex）: 行き先のレーン自体が崩落中なら、崩落が明けてから動く距離で数える */
+        const into = (r, l) => {
+          if (!opt.ex || !blk || r === l || blk.indexOf(l) < 0) return true;
+          let endM = -Infinity;
+          longs.forEach((L) => {
+            if (L.lane !== l || !Obstacles.affects(L, side)) return;
+            const c = Fair.coverSpan(L);
+            if (w.at > c.from + 1e-6 && prevAt < c.to - 1e-6) endM = Math.max(endM, c.to);
+          });
+          return Math.floor(Math.max(0, w.at - endM - passM) / (sp * CFG.LANE_T)) >= Math.abs(l - r);
+        };
+        const cand = CFG.LANES.filter((l) => reach.some((r) => Math.abs(l - r) <= steps && !crosses(r, l) && into(r, l)));
         const ok = cand.filter((l) => Fair.laneSurvivable(w, side, l));
         const anySafe = CFG.LANES.filter((l) => Fair.laneSurvivable(w, side, l));
         if (!anySafe.length) errs.push('生存経路なし(' + side + ') @' + w.at.toFixed(1));
@@ -2652,6 +2665,10 @@ function createGenerator(stage, seed) {
      EP = { zones:[順], pools:{zone:{pool,minRank,maxRank,reactBoth}} }（Endless.plan）。
      どのゾーンのチャンクを置くかは「いま生成しているゾーン」（zi）で決まる。 */
   const EP = stage.endless ? (stage.endlessPlan || Endless.plan(Endless.clearedList())) : null;
+  /* エンドレス仕様（契約§4.5b / P8b）: 札は js/endless_units.js（EndlessKit）だけ。
+     ギミックはゾーンと無関係に均等に回す（appendEx）。stage.p8b が無ければ旧来の生成（互換）。 */
+  const EX = !!(EP && stage.p8b && typeof EndlessKit !== 'undefined');
+  const EXG = EX ? (stage.exGimmicks || EndlessKit.available(Endless.clearedList())) : null;
   const switches = [];          // {t0（通路の入口）, at（光のゲート）, swapAt, from, to, idx, delay}
   const minis = [];             // {id, startM, endM, k}
   let zi = 0;                   // EP.zones の何番目を生成中か（ループで増え続ける）
@@ -2880,8 +2897,10 @@ function createGenerator(stage, seed) {
   /* 置けるかどうか分からないうちは、同時スイッチ・ゲート型ギミックの「区間」を
      本物の入れ物へ入れない（試し置きの残骸が走行中に効いてしまう）。
      ＝ 各試行はその場限りの local に積み、§4.7 を満たした時だけ移す。 */
-  function instantiate(def, startM, nowDist, drop, wide) {
+  function instantiate(def, startM, nowDist, drop, wide, spread) {
     const scale = stage.speedAt(startM) / CFG.REF_SPEED;
+    /* spread（エンドレスの札 / P8b）: 位置だけを引き伸ばす（運動の秒・区間の秒は変えない） */
+    const sc = scale * (spread || 1);
     const items = [];
     const keyOf = new Map();      // 障害物 → 由来のエントリ（'f3' / 'c1'）。tip の窓の検査に使う
     const local = { syncs: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
@@ -2891,11 +2910,11 @@ function createGenerator(stage, seed) {
       const n0 = items.length;
       if (wide && wide[key] !== undefined && e.type === 'PILLAR') {
         /* ワイド梁の通常出現（契約§4.3 v2）: 柱を「2レーン封鎖のゲート（床＋天井の対＝全高）」に */
-        const at = startM + e.at * scale, we = { at: e.at, lane: wide[key], type: 'WIDEBAR' };
+        const at = startM + e.at * sc, we = { at: e.at, lane: wide[key], type: 'WIDEBAR' };
         put(items, we, 'floor', at, nowDist, scale, local);
         put(items, we, 'ceil', at, nowDist, scale, local);
       } else {
-        put(items, e, surface, startM + e.at * scale, nowDist, scale, local);
+        put(items, e, surface, startM + e.at * sc, nowDist, scale, local);
       }
       for (let k = n0; k < items.length; k++) keyOf.set(items[k], key);
     });
@@ -3001,7 +3020,8 @@ function createGenerator(stage, seed) {
   function noteItems(items) {
     for (let i = 0; i < items.length; i++) {
       const o = items[i];
-      if (o.at > lastItemAt) lastItemAt = o.at;
+      /* エンドレス（P8b）: 当たり判定の無いゲート（世界反転の戻りの枠など）は継ぎ目の基準にしない */
+      if (o.at > lastItemAt && !(EX && OBS[o.type].ghost)) lastItemAt = o.at;
       if (o.type === 'PILLAR') gates.pillar++;
       else if (o.type === 'WIDEBAR') {
         const k = o.at.toFixed(2) + '|' + o.lane;
@@ -3227,6 +3247,7 @@ function createGenerator(stage, seed) {
     let until = endM;
     if (inst.landM !== null) until = Math.max(until, inst.landM + stage.speedAt(inst.landM) * FF.GRACE_T);
     minis.push({ id: id, startM: inst.startM, endM: endM, k: inst.k, landM: inst.landM, freeTo: until });
+    exNoteItems(inst.items);
     log.push({ id: 'mini:' + id, startM: inst.startM, lengthM: inst.lengthM, setpiece: true, mini: true });
     /* ミニ大演出は規則で薄い区間なので、密度の実測から外す（後ろを詰め込ませない） */
     noteTipWindow(inst.startM, until);
@@ -3243,8 +3264,304 @@ function createGenerator(stage, seed) {
     return true;
   }
 
+  /* ==========================================================================
+     エンドレス仕様（契約§4.5b / P8b）— 札の均等化・上下非対称・世界反転
+       ・1000m（窓）ごとに「まだ出ていない採用ギミック」（owed）を覚え、それを含む札を強く引く
+         （組み札は2つを一度に消す）。owed が空になったら、主ギミックの回数が少ないものほど引く。
+       ・同じ主ギミックの札を3枚続けない。世界反転は窓に1回まで・区画が次の区切り（切替・ミニ）に掛からない所だけ。
+       ・密度は札を引き伸ばして（spread ≥ 1）目安に寄せる（札は速い区間の詰め方で書いてある）。
+     ========================================================================== */
+  const exRec = [];                 // 置いた札 {id, eg, gset, startM}
+  const exWin = {};                 // 窓 → {ギミック: 出現数}（相方・ミニ大演出の障害物も数える）
+  const exMain = {};                // 主ギミック → 札の数
+  const exUnits = EX ? EndlessKit.unitsFor(EXG) : null;
+  const exStatsC = {};
+  let exFlipEnd = -1e9;             // 直近の世界反転の区画の終わり（重ねない）
+  function exWinOf(m) { return Math.floor(m / Endless.SWITCH_M); }
+  function exNoteItems(items) {
+    if (!EX) return;
+    items.forEach((o) => {
+      const wi = exWinOf(o.at);
+      const t = exWin[wi] || (exWin[wi] = {});
+      EndlessKit.gimmicksOfItem(o).forEach((g) => { t[g] = (t[g] || 0) + 1; });
+    });
+  }
+  /* 札の素性（ゲート＝当たり判定の無い実体は数えない）。世界反転の札はゲートの位置だけ */
+  function exStats(def) {
+    if (exStatsC[def.id]) return exStatsC[def.id];
+    const items = [];
+    const sk = { syncs: [], zeros: [], warps: [], mirrors: [], swaps: [], merges: [] };
+    (def.floor || []).forEach((e) => expandEntry(items, e, 'floor', e.at, 0, 1, sk));
+    (def.ceil || []).forEach((e) => expandEntry(items, e, 'ceil', e.at, 0, 1, sk));
+    const real = items.filter((o) => !OBS[o.type].ghost).sort((a, b) => a.at - b.at);
+    /* 札の実体の広がり（ゲート・粒子・無重力の区間を含む）: 区切りの猶予に掛けない判定に使う */
+    let headAt = Infinity, tailEnd = -Infinity;
+    items.forEach((o) => { headAt = Math.min(headAt, o.at - Obstacles.extent(o).back); tailEnd = Math.max(tailEnd, o.at + Obstacles.extent(o).fwd); });
+    sk.zeros.forEach((r) => { tailEnd = Math.max(tailEnd, r.to); });
+    const c = Fair.countDemands(items, () => CFG.REF_SPEED);
+    /* 崩れる橋は踏み口（at − 手前の長さ）から札が始まる（前の札の障害物を橋の板に載せない） */
+    let first = real.length ? real[0].at : 0;
+    real.forEach((o) => { first = Math.min(first, o.at - Obstacles.extent(o).back); });
+    const last = real.length ? real[real.length - 1].at : 0;
+    return (exStatsC[def.id] = { demands: c.total, firstAt: def.flip ? 0 : first, lastAt: def.flip ? 0 : last,
+                                 span: def.flip ? 0 : last - first,
+                                 headAt: def.flip ? 0 : Math.min(first, headAt), tailEnd: def.flip ? 0 : Math.max(last, tailEnd) });
+  }
+  /* 密度の目安（§4.7 エンドレス「1000mごとに+1」・「現行」の実測に合わせた帯 / P8b） */
+  function exWant(m) { return Math.min(EndlessKit.DENS_MAX, EndlessKit.DENS0 + Math.floor(m / 1000)); }
+  /* ギミックの「重さ」: それを含む札のうち最短の長さ（秒）＋継ぎ目 */
+  const exCostC = {};
+  function exCost(g) {
+    if (exCostC[g] !== undefined) return exCostC[g];
+    let best = Infinity;
+    exUnits.forEach((d) => { if (d.gset.indexOf(g) >= 0) best = Math.min(best, d.flip ? 9.0 : exStats(d).span / CFG.REF_SPEED); });
+    return (exCostC[g] = (isFinite(best) ? best : 1) + 0.9);
+  }
+  /* owed を全部出すのに要る秒の見積り（貪欲な集合被覆: 1秒あたりに消せる数が最大の札から）。
+     世界反転はゲート2枚の猶予ぶん（中身は後ろの札が埋める） */
+  function exPlanSec(owed, cands) {
+    let left = owed.slice(), sec = 0;
+    if (left.indexOf('flip') >= 0) { sec += 2.6; left = left.filter((g) => g !== 'flip'); }
+    for (let guard = 0; left.length && guard < 20; guard++) {
+      let best = null, bestV = 0;
+      for (let i = 0; i < cands.length; i++) {
+        const d = cands[i];
+        if (d.flip) continue;
+        let n = 0;
+        for (let k = 0; k < d.gset.length; k++) if (left.indexOf(d.gset[k]) >= 0) n++;
+        if (!n) continue;
+        const v = n / (exStats(d).span / CFG.REF_SPEED + 0.8);
+        if (v > bestV) { bestV = v; best = d; }
+      }
+      if (!best) break;
+      sec += exStats(best).span / CFG.REF_SPEED + 0.8;
+      left = left.filter((g) => best.gset.indexOf(g) < 0);
+    }
+    return sec;
+  }
+  /* 「重い順」の鍵: 相方として必ず出る基本障害物（ハードル・ローレーザー・縦レーザー）は後回し、
+     それ以外は札の秒が長いものから */
+  function exHard(g) { return (EndlessKit.COMMON[g] ? 0 : 100) + exCost(g); }
+  /* 窓の残り（秒）: 窓の終わりか次の区切りまで＋区切りがミニ大演出なら、その後ろの残り */
+  function exRoomSec(m) {
+    const wi = exWinOf(m), winEnd = (wi + 1) * Endless.SWITCH_M;
+    let room = Math.min(winEnd, spStart) - m;
+    if (barrier === 'mini' && spStart < winEnd - 100) room += Math.max(0, winEnd - 80 - (spStart + miniRoom(spStart)));
+    return Math.max(0, room) / stage.speedAt(m);
+  }
+  function exPick(cands, m, want) {
+    const seen = exWin[exWinOf(m)] || {};
+    const owed = EXG.filter((g) => !seen[g]);
+    /* 窓の詰まり具合: owed を全部出すのに要る秒（組み札で約3つずつ消える）÷ 窓の残りの秒。
+       世界反転は中身を後ろの札が埋めるので、実際に食う秒（ゲート2枚の猶予）で数える */
+    const pressure = exPlanSec(owed, cands) / Math.max(0.1, exRoomSec(m));
+    /* 詰まっている時は「いちばん重い owed」を含む札だけから選ぶ（重い順に確実に入れる） */
+    if (pressure > 0.7 && owed.length) {
+      const hard = owed.filter((g) => cands.some((d) => d.gset.indexOf(g) >= 0))
+        .sort((a, b) => exHard(b) - exHard(a))[0];
+      if (hard) cands = cands.filter((d) => d.gset.indexOf(hard) >= 0);
+    } else if (owed.length) {
+      /* owed を含む札があれば、その中だけから選ぶ（均等化の重みで owed が埋もれないように） */
+      const cov = cands.filter((d) => d.gset.some((g) => owed.indexOf(g) >= 0));
+      if (cov.length) cands = cov;
+    }
+    const nEg = {};
+    cands.forEach((d) => { nEg[d.eg] = (nEg[d.eg] || 0) + 1; });
+    let minMain = Infinity;
+    Object.keys(nEg).forEach((g) => { minMain = Math.min(minMain, exMain[g] || 0); });
+    const ws = [];
+    let sum = 0;
+    cands.forEach((d) => {
+      /* 均等化: 主ギミックの札の数が少ないものほど重く（同じ主ギミックの変種の数で割る） */
+      let wt = Math.pow(0.35, Math.min(6, (exMain[d.eg] || 0) - minMain)) / nEg[d.eg];
+      if (owed.length) {
+        /* owed を含む札を強く。重さ＝そのギミックを含む最短の札の秒（長い札でしか出せない
+           橋・同時スイッチ・無重力を早めに置く＝後回しにして窓に入らなくなるのを防ぐ） */
+        let cover = 0, val = 0;
+        d.gset.forEach((g) => { if (owed.indexOf(g) >= 0) { cover++; val += exCost(g); } });
+        wt *= cover ? Math.pow(4, cover) * val * val : 0.02;
+        /* 詰まってきたら「1秒あたりに消せる owed の重さ」で選ぶ（三つ組の札・短い札） */
+        if (cover && pressure > 0.7) wt *= Math.pow(val / (exStats(d).span / CFG.REF_SPEED + 0.9), 3);
+        /* 世界反転は区画（8.6秒）が次の区切りの手前に収まる間に置く＝窓の頭で先に出す */
+        if (d.flip && cover) wt *= 60;
+      }
+      /* 密度（§4.7）: 詰まっていない時は、目安より薄い札を軽くする（速い区間ほど札は薄くなる） */
+      if (!d.flip && pressure <= 0.7 && want) {
+        const st = exStats(d);
+        const dens = st.demands / (st.span / CFG.REF_SPEED + 0.6) * 100 / stage.speedAt(m);
+        wt *= Math.pow(U.clamp(dens / want, 0.3, 1.5), 2);
+      }
+      ws.push(wt); sum += wt;
+    });
+    let x = rng() * sum;
+    for (let i = 0; i < ws.length; i++) { x -= ws[i]; if (x <= 0) return cands[i]; }
+    return cands[cands.length - 1];
+  }
+  /* 世界反転（契約§4.5b / P8b）: 入口のゲートで開き、区画が FLIP_T 秒を越えた最初の札の後ろで閉じる
+     （戻りのゲートを札の継ぎ目に置く＝ゲート直後 1.0秒の空白が札の途中に落ちて時間を食わない）。
+     区画は必ず次の区切り（ゾーン切替の通路・ミニ大演出）の手前で閉じる。 */
+  let exOpen = null;                // {reg, minTo}
+  function exGateGap(m) { return stage.speedAt(m) * CFG.HANDSWAP.GRACE_T; }
+  function exOpenFlip(G, nowDist) {
+    const sp = stage.speedAt(G), unit = sp;
+    const reg = { from: G, to: Infinity, unit: unit, gates: [G], dead: false };
+    const o = Obstacles.make('SWAPGATE', 'floor', 0, G, nowDist, { swp: { unitM: unit } });
+    o.reg = reg;
+    swaps.push(reg);
+    out.push(o);
+    exNoteItems([o]);
+    exOpen = { reg: reg, minTo: G + EndlessKit.FLIP_T * sp };
+    exFlipEnd = Infinity;
+    noDemandUntil = Math.max(noDemandUntil, G + exGateGap(G));
+    cursor = Math.max(cursor, G);
+    return reg;
+  }
+  function exCloseFlip(P, nowDist) {
+    const reg = exOpen.reg;
+    reg.to = P;
+    reg.gates.push(P);
+    const o = Obstacles.make('SWAPGATE', 'floor', 0, P, nowDist, { swp: { unitM: reg.unit } });
+    o.reg = reg;
+    out.push(o);
+    exNoteItems([o]);
+    exOpen = null;
+    exFlipEnd = P;
+    noDemandUntil = Math.max(noDemandUntil, P + exGateGap(P));
+    cursor = Math.max(cursor, P);
+    log.push({ id: '(flip-back)', startM: P, lengthM: 0 });
+    return P;
+  }
+  /* 戻りのゲートを置く位置（直前の障害物から少し離す） */
+  function exBackAt(afterM) { return Math.max(exOpen.minTo, afterM + stage.speedAt(afterM) * 0.15); }
+  function exBackFits(P) { return P + exGateGap(P) * 1.1 + 2 <= spStart; }
+
+  function appendEx(nowDist) {
+    /* 区画が開いたまま区切りに来ない（区切りの手前・区画の最短を越えたら閉じる） */
+    if (exOpen && (cursor >= exOpen.minTo || !exBackFits(exBackAt(Math.max(cursor, lastItemAt)) + stage.speedAt(cursor) * 1.5))) {
+      exCloseFlip(exBackAt(Math.max(cursor, lastItemAt)), nowDist);
+    }
+    if (cursor >= spStart) return appendSetpiece(nowDist);
+    const sp0 = stage.speedAt(cursor), scale = sp0 / CFG.REF_SPEED, seam = seamFor(cursor);
+    const tail = tailOf(12);
+    const wi = exWinOf(cursor);
+    const last2 = exRec.slice(-2).map((r) => r.eg);
+    let cands = exUnits.filter((d) => {
+      if (last2.length === 2 && last2[0] === d.eg && last2[1] === d.eg) return false;   // 3連続禁止
+      if (lastWallhole && d.wallhole) return false;                                     // 壁の穴の連続禁止（§4.3）
+      if (d.flip) {
+        if (exOpen || (exWin[wi] || {}).flip) return false;                             // 1000m に最大1回
+        if (cursor < exFlipEnd + sp0 * 2) return false;                                 // 区画を重ねない
+      }
+      return d.lengthM * scale <= spStart - cursor;
+    });
+    /* 密度（札を引き伸ばす）: 目安＋実測のずれ（tip の窓と同じく規則で空けた区間は除く） */
+    const want0 = exWant(cursor);
+    const spanSoFar = Math.max(lastItemAt - CFG.LEAD_IN - tipSpan, 60);
+    const real = (spanSoFar >= 120) ? placed.total / spanSoFar * 100 : want0;
+    const want = Math.max(1, want0 + U.clamp(want0 - real, -2, 3));
+    /* 1枚の札を「いちばん早く置ける位置」で試す（置けなければ null）。世界反転は入口のゲートの位置だけ返す */
+    function tryUnit(def) {
+      const st = exStats(def);
+      let spread = 1;
+      if (!def.rigid && st.span > 0 && st.demands > 0) {
+        spread = U.clamp((st.demands * 100 / want - seam) / (st.span * scale), 1, EndlessKit.SPREAD_MAX);
+      }
+      const need = st.demands / want * 100 - st.span * scale * spread;
+      const gap = U.clamp(need, sp0 * 0.18, seam);
+      const f0 = st.firstAt * scale * spread, h0 = st.headAt * scale * spread;
+      const wantFirst = (lastItemAt > -1e9) ? (lastItemAt + gap) : (cursor + f0);
+      const step = Math.max(3, sp0 * 0.1);
+      if (def.flip) {
+        /* 入口のゲート: 区画の最短（FLIP_T 秒）＋戻りの猶予が次の区切りの手前に収まる所だけ */
+        const G = Math.max(cursor, lastItemAt + sp0 * 0.15, noDemandUntil + 0.5);
+        if (exWinOf(G) !== wi) return null;
+        if (!exBackFits(G + EndlessKit.FLIP_T * stage.speedAt(G) + sp0 * 1.5)) return null;
+        return { def: def, flip: true, G: G, firstM: G };
+      }
+      for (let k = 0; k < 18; k++) {
+        const startM = Math.max(cursor - f0, wantFirst + k * step - f0, noDemandUntil + 0.5 - h0);
+        const endM = startM + st.lastAt * scale * spread;
+        if (startM + st.tailEnd * scale * spread > spStart) return null;
+        /* 開いている世界反転の区画: 最短を越える札なら、その札の後ろで閉じられること */
+        const closeAfter = !!(exOpen && endM >= exOpen.minTo);
+        if (closeAfter && !exBackFits(exBackAt(endM))) return null;
+        const inst = instantiate(def, startM, nowDist, null, null, spread);
+        const errs = Fair.validate(tail.concat(inst.items), stage.speedAt,
+                                   { startLanes: 'any', reactBoth: RB, ex: true,
+                                     zeros: zeros.concat(inst.local.zeros), warps: warps,
+                                     mirrors: mirrors, swaps: swaps.concat(inst.local.swaps),
+                                     merges: merges });
+        if (errs.length) continue;
+        return { def: def, inst: inst, startM: startM, endM: endM, spread: spread, f0: f0,
+                 closeAfter: closeAfter, firstM: startM + f0 };
+      }
+      return null;
+    }
+    /* 重みで数枚引いて、いちばん早く置ける札を採る（継ぎ目の空白を詰める＝密度と 1000m の一巡の両方に効く） */
+    /* 窓が詰まっている時は「owed の重さ ÷ 札が食う距離」が最大の札を採る（8枚まで試す） */
+    const seen0 = exWin[wi] || {};
+    const owed0 = EXG.filter((g) => !seen0[g]);
+    const tight = owed0.length && exPlanSec(owed0, cands) / Math.max(0.1, exRoomSec(cursor)) > 0.7;
+    const eff = (r) => {
+      let v = 0;
+      r.def.gset.forEach((g) => { if (owed0.indexOf(g) >= 0) v += exCost(g); });
+      return v / Math.max(1, r.endM + sp0 * 0.6 - cursor);
+    };
+    let best = null, nOk = 0;
+    const nWant = tight ? 8 : EndlessKit.BEST_OF;
+    for (let tryI = 0; tryI < 24 && cands.length && nOk < nWant; tryI++) {
+      const def = exPick(cands, cursor, want);
+      cands = cands.filter((d) => d !== def);
+      const r = tryUnit(def);
+      if (!r) continue;
+      if (r.flip) { best = r; break; }
+      nOk++;
+      if (!best) best = r;
+      else if (tight ? (eff(r) > eff(best) + 1e-9) : (r.firstM < best.firstM - 1e-6)) best = r;
+    }
+    if (best && best.flip) {
+      exOpenFlip(best.G, nowDist);
+      exRec.push({ id: best.def.id, eg: best.def.eg, gset: best.def.gset, startM: best.G });
+      exMain[best.def.eg] = (exMain[best.def.eg] || 0) + 1;
+      log.push({ id: best.def.id, startM: best.G, lengthM: 0, eg: best.def.eg, spread: 1, firstAt: best.G, lastAt: best.G });
+      lastWallhole = false;
+      return true;
+    }
+    if (best) {
+      const def = best.def, inst = best.inst;
+      commit(inst);
+      inst.items.forEach((o) => out.push(o));
+      noteItems(inst.items);
+      noteDemands(inst.items);
+      exNoteItems(inst.items);
+      inst.events.forEach((e) => events.push(e));
+      exRec.push({ id: def.id, eg: def.eg, gset: def.gset, startM: best.startM });
+      exMain[def.eg] = (exMain[def.eg] || 0) + 1;
+      log.push({ id: def.id, startM: inst.startM, lengthM: inst.lengthM, eg: def.eg, spread: +best.spread.toFixed(2),
+                 firstAt: best.firstM, lastAt: best.endM });
+      cursor = Math.max(cursor, best.endM);
+      lastWallhole = !!def.wallhole;
+      if (best.closeAfter) exCloseFlip(exBackAt(best.endM), nowDist);
+      return true;
+    }
+    /* 置ける札が無い: 開いた区画はここで閉じる。区切りが近ければ区切りを置く／遠ければ短い空白 */
+    if (exOpen) { exCloseFlip(exBackAt(Math.max(cursor, lastItemAt)), nowDist); return true; }
+    if (isFinite(spStart) && cursor + sp0 * 2.5 >= spStart) {
+      log.push({ id: '(pre-setpiece)', startM: cursor, lengthM: Math.max(0, spStart - cursor) });
+      cursor = Math.max(cursor, spStart);
+      return appendSetpiece(nowDist);
+    }
+    const bl = sp0 * 0.5;
+    log.push({ id: '(blank)', startM: cursor, lengthM: bl });
+    cursor += bl;
+    lastItemAt = Math.max(lastItemAt, cursor - sp0 * 0.3);
+    lastWallhole = false;
+    return false;
+  }
+
   function appendOne(nowDist) {
     if (stage.intro && introPtr < stage.intro.length) return appendIntro(nowDist);
+    if (EX) return appendEx(nowDist);
     /* チュートリアル（S1）はランダム区間を持たない: 最後の項目の後はゴールまで空ける */
     if (stage.tutorial) { cursor = Math.max(cursor + 40, stage.lengthM + 1); return false; }
     if (!setpieceDone && cursor >= spStart) return appendSetpiece(nowDist);
