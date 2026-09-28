@@ -100,6 +100,15 @@
   th:first-child,td:first-child{text-align:left;}
   td.ng{color:#ff9bb0;} td.ok{color:#a8f4d8;}
   #diag-sum{font-size:12.5px; margin-top:8px; line-height:1.7;}
+  .gsec{margin-top:30px; padding-top:18px; border-top:1px solid var(--line);}
+  .gh{font-size:14px; font-weight:700; letter-spacing:.12em; margin:0 0 8px; text-align:center; word-break:keep-all; overflow-wrap:anywhere;}
+  .gsec .lead{text-align:center;}
+  .gsec code{font-size:12px; opacity:.9;}
+  .gopts{display:flex; flex-wrap:wrap; gap:6px 16px; margin-top:14px; font-size:13px; align-items:center;}
+  .gopts label{display:flex; align-items:center; gap:6px; min-height:44px; cursor:pointer;}
+  .gopts input{width:20px; height:20px; accent-color:#7dffc8;}
+  .gse{font:inherit; font-size:13px; font-weight:700; color:#d2ffe9; min-height:44px; padding:0 16px; border-radius:99px;
+    border:1px solid rgba(125,255,200,.5); background:rgba(125,255,200,.1); cursor:pointer;}
 </style>
 </head>
 <body>
@@ -107,11 +116,24 @@
   <header>
     <p class="logo"><span class="l">DUO</span> <span class="u">RUN</span></p>
     <h1>BGM 聴き比べ</h1>
-    <p class="lead">6つの作風を用意しました。カードをタップすると再生、もう一度タップで停止します。気に入った作風（組み合わせでも）を教えてください。</p>
+    <p class="lead">6つの作風の聴き比べ（3番「エレクトロ・ポップ」を採用）。カードをタップすると再生、もう一度タップで停止します。下の「ゲーム本体の曲」で各ゾーンの変奏を試聴できます。</p>
     <p class="note">iPhone は消音モード（サイドスイッチ）が ON だと鳴らないことがあります。</p>
   </header>
 
   <div class="grid" id="grid"></div>
+
+  <section class="gsec" id="gsec">
+    <h2 class="gh">ゲーム本体の曲（3番をもとにしたゾーン別の変奏）</h2>
+    <p class="lead">ゲームと同じ <code>js/audio.js</code> で鳴らしています。カードをタップで再生、もう一度で停止。「エンドレス」はゾーンを順に巡り、8小節ごとに2小節のクロスフェードで切り替えます。</p>
+    <div class="grid" id="ggrid"></div>
+    <div class="gopts">
+      <label><input type="checkbox" id="g-fast"> 高速（テンポ +15%）</label>
+      <label><input type="checkbox" id="g-hype"> 大演出中（盛り上げレイヤー）</label>
+      <label><input type="checkbox" id="g-float"> 自由飛行中（キックを抜く）</label>
+      <button type="button" class="gse" id="g-se">効果音を順に鳴らす</button>
+    </div>
+    <p class="note" id="g-st">停止中</p>
+  </section>
 
   <details class="diag" id="diag">
     <summary>自己診断（機械検証）</summary>
@@ -135,6 +157,9 @@
   </div>
 </div>
 
+<script src="../js/config.js"></script>
+<script src="../js/util.js"></script>
+<script src="../js/audio.js"></script>
 <script>
 'use strict';
 /* ==========================================================================
@@ -1331,6 +1356,85 @@ const UI = {
   }
 };
 UI.init();
+</script>
+<script>
+'use strict';
+/* ==========================================================================
+   10. ゲーム本体の各ゾーン曲（P9b）: js/audio.js の Audio.preview で鳴らす
+   ========================================================================== */
+const GZ = {
+  ids: ['white', 'neon', 'ruins', 'sea', 'space', 'mirror', 'core', 'endless'],
+  ring: ['neon', 'ruins', 'sea', 'space', 'mirror', 'core'],
+  cur: null, ringI: 0, cards: {},
+  opts() {
+    return { fast: document.getElementById('g-fast').checked, hype: document.getElementById('g-hype').checked,
+             nokick: document.getElementById('g-float').checked };
+  },
+  zoneOf(id) { return id === 'endless' ? GZ.ring[GZ.ringI] : id; },
+  play(id) {
+    if (MUSIC.playing() || MUSIC.busy) MUSIC.stop();
+    GZ.cur = id; GZ.ringI = 0;
+    Audio.settings.bgm = MUSIC.vol;
+    Audio.preview(GZ.zoneOf(id), GZ.opts());
+    GZ.render();
+  },
+  stop() { GZ.cur = null; Audio.preview(null); GZ.render(); },
+  init() {
+    const grid = document.getElementById('ggrid');
+    GZ.ids.forEach((id) => {
+      const Z = Audio.ZONES[id];
+      const nm = Z ? Z.name : 'エンドレス（ゾーン巡回）';
+      const ds = Z ? Z.desc : 'ネオン→遺跡→深海→宇宙→鏡→コアを8小節ごとに2小節のクロスフェードで切り替え。';
+      const mt = Z ? '<span>' + Z.bpm + ' BPM</span> ・ <span>' + Z.key + '</span> ・ <span>' + Z.bars + '小節 ' + Z.loopSec.toFixed(1) + '秒</span>'
+                   : '<span>6ゾーン</span> ・ <span>2小節クロスフェード</span>';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'card';
+      b.style.setProperty('--acc', '#7dffc8'); b.style.setProperty('--glow', 'rgba(125,255,200,.3)');
+      b.innerHTML = '<span class="eq"><i></i><i></i><i></i></span><div class="no">' + (Z ? id.toUpperCase() : 'ENDLESS') + '</div><div class="nm">' + nm +
+        '</div><div class="ds">' + ds + '</div><div class="mt">' + mt + '</div>';
+      b.addEventListener('click', () => { if (GZ.cur === id) GZ.stop(); else GZ.play(id); });
+      grid.appendChild(b);
+      GZ.cards[id] = b;
+    });
+    ['g-fast', 'g-hype', 'g-float'].forEach((k) => document.getElementById(k).addEventListener('change', () => {
+      if (GZ.cur) Audio.preview(GZ.zoneOf(GZ.cur), GZ.opts());
+    }));
+    let seI = 0;
+    document.getElementById('g-se').addEventListener('click', () => {
+      Audio.unlock();
+      const names = Audio.SE_NAMES();
+      const n = names[seI++ % names.length];
+      Audio.play(n, { who: 'lumen' });
+      document.getElementById('g-st').textContent = '効果音: ' + n + '（次を押すと次の音）';
+    });
+    /* 3番などのカードを押したらゲーム曲は止める */
+    const mp = MUSIC.play;
+    MUSIC.play = function (id) { if (GZ.cur) GZ.stop(); return mp.call(MUSIC, id); };
+    document.getElementById('vol').addEventListener('input', () => { Audio.settings.bgm = MUSIC.vol; Audio.applySettings(); });
+    GZ.render();
+    setInterval(GZ.loop, 200);
+  },
+  render() {
+    GZ.ids.forEach((id) => {
+      GZ.cards[id].classList.toggle('on', GZ.cur === id);
+      GZ.cards[id].classList.toggle('playing', GZ.cur === id);
+    });
+  },
+  loop() {
+    const E = Audio._eng, st = document.getElementById('g-st');
+    if (!GZ.cur || !E || !E.cur) { if (!GZ.cur && st.textContent.indexOf('効果音') < 0) st.textContent = '停止中'; return; }
+    const S = E.cur, Z = Audio.ZONES[S.id];
+    /* エンドレス: 8小節ごとに次のゾーンへ（2小節のクロスフェード） */
+    if (GZ.cur === 'endless' && S.bar >= 8) {
+      GZ.ringI = (GZ.ringI + 1) % GZ.ring.length;
+      Audio.preview(GZ.ring[GZ.ringI], Object.assign({ xfade: true }, GZ.opts()));
+    }
+    const lv = Audio.level();
+    st.textContent = Z.name + ' — ' + Math.round(S.bpm) + ' BPM — 小節 ' + (((S.bar - 1) % Z.bars) + 1) + '/' + Z.bars +
+      ' — ' + Audio.state() + ' — レベル ' + (lv > 0 ? (20 * Math.log10(lv)).toFixed(1) + 'dB' : '—');
+  }
+};
+GZ.init();
 </script>
 </body>
 </html>
