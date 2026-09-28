@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" href="data:,">
+<title>DUO RUN — BGM 聴き比べ</title>
+<!--
+  DUO RUN — BGM 聴き比べサンプル（P9a-2 / 契約 §3・§8 2026-09-28）
+  ・6作風 × 8〜16小節ループ。低速（ステージ序盤）／高速（終盤・テンポ +15%）。
+  ・外部依存なし・音源ファイルなし。すべて WebAudio で合成する
+    （減算合成・FM・加算合成のピアノ・カープラス・ストロングの琴。ピアノと琴は JS で波形を計算して AudioBuffer に書く）。
+  ・「機械音っぽさ」対策: 単一オシレータは鳴らさない（2本以上のデチューン／FM／物理モデル）、
+    全パートに ADSR とフィルタ、生成インパルス応答のリバーブ＋付点8分ディレイ（センド）、
+    ノートごとにベロシティ ±15%・タイミング ±8ms、4〜16小節のコード進行とフレーズ末の休符。
+  ・マスター: ハイシェルフ → グルー・コンプ → 作風ごとの音量補正（RMS を OfflineAudioContext で測って決めた値）→ リミッタ。
+  ・機械検証は「自己診断」ボタン（window.MUSIC.diag()）。
+-->
+<style>
+  :root{
+    --lumen:#ffb347; --umbra:#7d8cff; --ink:#e8ecff; --bg:#05070f;
+    --panel:rgba(18,23,50,.78); --line:rgba(150,175,255,.22);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html{background:var(--bg);}
+  body{
+    margin:0; color:var(--ink); min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+    background:radial-gradient(120% 60% at 50% -10%, #17204a 0%, #0a0e22 45%, var(--bg) 75%) fixed, var(--bg);
+    padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 250px);
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:780px; margin:0 auto;}
+  header{text-align:center; margin-bottom:18px;}
+  .logo{margin:0; font-weight:300; letter-spacing:.24em; font-size:clamp(30px,9vw,46px); line-height:1.05;}
+  .logo .l{color:#fff3dc; text-shadow:0 0 2px #fff,0 0 6px #ffcf8a,0 0 14px #ffb347,0 0 30px #ff9a1a;}
+  .logo .u{color:#eef0ff; text-shadow:0 0 2px #fff,0 0 6px #b9c3ff,0 0 14px #8c9bff,0 0 30px #5b6cff;}
+  h1{font-size:15px; font-weight:700; letter-spacing:.3em; margin:10px 0 6px; opacity:.9;}
+  .lead{font-size:13px; line-height:1.75; opacity:.72; margin:0 auto; max-width:34em; word-break:keep-all; overflow-wrap:anywhere;}
+  .note{font-size:12px; opacity:.6; margin:8px 0 0; word-break:keep-all; overflow-wrap:anywhere;}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px; margin-top:18px;}
+  .card{
+    --acc:#8c9bff; --glow:rgba(140,155,255,.35);
+    position:relative; display:block; width:100%; min-height:112px; text-align:left; cursor:pointer;
+    font:inherit; color:var(--ink); padding:14px 14px 12px; border-radius:16px;
+    background:linear-gradient(180deg,rgba(26,32,66,.78),rgba(12,16,38,.86));
+    border:1px solid var(--line); box-shadow:0 8px 24px rgba(0,0,0,.35);
+    transition:transform .12s, border-color .15s, box-shadow .15s;
+  }
+  .card:active{transform:scale(.98);}
+  .card .no{font-size:11px; letter-spacing:.14em; color:var(--acc); opacity:.9;}
+  .card .nm{font-size:17px; font-weight:700; margin:3px 0 5px; line-height:1.3; word-break:keep-all; overflow-wrap:anywhere;}
+  .card .mt span{white-space:nowrap;}
+  .card .ds{font-size:12px; line-height:1.55; opacity:.72;}
+  .card .mt{font-size:10.5px; letter-spacing:.04em; opacity:.5; margin-top:7px;}
+  .card .eq{position:absolute; top:12px; right:12px; display:none; gap:2px; align-items:flex-end; height:14px;}
+  .card .eq i{display:block; width:3px; background:var(--acc); border-radius:2px; animation:eq 0.9s ease-in-out infinite;}
+  .card .eq i:nth-child(2){animation-delay:.2s;} .card .eq i:nth-child(3){animation-delay:.45s;}
+  @keyframes eq{0%,100%{height:4px;} 50%{height:14px;}}
+  .card.on{border-color:var(--acc); box-shadow:0 0 0 1px var(--acc) inset, 0 0 26px var(--glow), 0 8px 24px rgba(0,0,0,.35);}
+  .card.on.playing .eq{display:flex;}
+  .card.busy .nm::after{content:" …準備中"; font-size:11px; font-weight:400; opacity:.6;}
+
+  .bar{
+    position:fixed; left:0; right:0; bottom:0; z-index:5;
+    padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    background:linear-gradient(180deg,rgba(8,11,26,.86),rgba(5,7,15,.96));
+    border-top:1px solid var(--line); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  .bar .in{max-width:780px; margin:0 auto; display:flex; flex-wrap:wrap; gap:10px 12px; align-items:center;}
+  .status{flex:1 1 100%; display:flex; align-items:center; gap:10px; font-size:12.5px; min-height:18px;}
+  .status .t{flex:1; opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .prog{flex:1 1 100%; height:3px; background:rgba(255,255,255,.08); border-radius:2px; overflow:hidden;}
+  .prog i{display:block; height:100%; width:0; background:linear-gradient(90deg,var(--lumen),var(--umbra));}
+  .meter{width:64px; height:6px; background:rgba(255,255,255,.08); border-radius:3px; overflow:hidden;}
+  .meter i{display:block; height:100%; width:0; background:linear-gradient(90deg,#7dffc8,#ffd479,#ff6a6a);}
+  button.ctl{
+    font:inherit; font-size:15px; font-weight:700; letter-spacing:.06em; color:var(--ink);
+    min-height:48px; min-width:48px; padding:0 20px; border-radius:99px; cursor:pointer;
+    border:1px solid rgba(255,179,71,.6); background:rgba(255,179,71,.10); color:#ffd9a6;
+  }
+  .seg{display:flex; border:1px solid var(--line); border-radius:99px; overflow:hidden;}
+  .seg button{font:inherit; font-size:13px; font-weight:700; color:var(--ink); opacity:.55; min-height:48px; padding:0 14px;
+    border:0; background:transparent; cursor:pointer;}
+  .seg button.on{opacity:1; background:rgba(125,140,255,.22); color:#dfe4ff;}
+  .vol{display:flex; align-items:center; gap:8px; flex:1 1 140px; font-size:12px; opacity:.85;}
+  input[type=range]{flex:1; min-width:90px; height:48px; accent-color:#8c9bff; background:transparent;}
+
+  details{margin-top:26px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 14px;}
+  summary{cursor:pointer; font-size:13px; font-weight:700; letter-spacing:.06em; min-height:32px; line-height:32px;}
+  .diag p{font-size:12px; opacity:.7; line-height:1.7;}
+  .diag button{font:inherit; font-size:13px; font-weight:700; color:#d2d8ff; min-height:44px; padding:0 18px; border-radius:99px;
+    border:1px solid rgba(125,140,255,.6); background:rgba(125,140,255,.12); cursor:pointer;}
+  .tbl{overflow-x:auto; margin-top:10px;}
+  table{border-collapse:collapse; font-size:11.5px; width:100%; min-width:560px;}
+  th,td{padding:5px 6px; border-bottom:1px solid rgba(255,255,255,.08); text-align:right; white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;}
+  td.ng{color:#ff9bb0;} td.ok{color:#a8f4d8;}
+  #diag-sum{font-size:12.5px; margin-top:8px; line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="logo"><span class="l">DUO</span> <span class="u">RUN</span></p>
+    <h1>BGM 聴き比べ</h1>
+    <p class="lead">6つの作風を用意しました。カードをタップすると再生、もう一度タップで停止します。気に入った作風（組み合わせでも）を教えてください。</p>
+    <p class="note">iPhone は消音モード（サイドスイッチ）が ON だと鳴らないことがあります。</p>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <details class="diag" id="diag">
+    <summary>自己診断（機械検証）</summary>
+    <p>各作風を OfflineAudioContext で 10 秒ずつ描画し、無音でないか・クリップしないか・作風間の音量差・ループ長・帯域のバランス（低域 &lt;250Hz／中域／高域 &gt;4kHz）を数値で確かめます。</p>
+    <button type="button" id="diag-run">診断を実行</button>
+    <div id="diag-sum"></div>
+    <div class="tbl" id="diag-out"></div>
+  </details>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <div class="status"><span class="t" id="st">作風を選んでください</span><span class="meter"><i id="mt"></i></span></div>
+    <div class="prog"><i id="pg"></i></div>
+    <button type="button" class="ctl" id="play" aria-label="再生・停止">▶ 再生</button>
+    <div class="seg" role="group" aria-label="テンポ">
+      <button type="button" id="slow" class="on">低速（序盤）</button>
+      <button type="button" id="fast">高速（終盤）</button>
+    </div>
+    <label class="vol">音量<input type="range" id="vol" min="0" max="100" value="80"></label>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ==========================================================================
+   1. 道具
+   ========================================================================== */
+const TAU = Math.PI * 2;
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+const dbToG = (d) => Math.pow(10, d / 20);
+const gToDb = (g) => 20 * Math.log10(Math.max(1e-9, g));
+const NOTE_BASE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function nm(s) {
+  const r = /^([A-G])(#|b)?(-?\d)$/.exec(s);
+  if (!r) throw new Error('bad note: ' + s);
+  return 12 * (+r[3] + 1) + NOTE_BASE[r[1]] + (r[2] === '#' ? 1 : r[2] === 'b' ? -1 : 0);
+}
+/* "F2 | F3 A3 C4 E4" → { b: ベース, n: [ボイシング] } */
+function chord(s) {
+  const p = s.split('|');
+  return { b: nm(p[0].trim()), n: p[1].trim().split(/\s+/).map(nm) };
+}
+/* 1小節 = 16分音符 16個。音名で打鍵、"." は伸ばす、"-" は休符、"|" は読みやすさのための区切り */
+function mel(s) {
+  const tk = s.trim().split(/\s+/).filter((x) => x !== '|');
+  if (tk.length !== 16) throw new Error('1小節は16個: ' + s);
+  const out = []; let cur = null;
+  tk.forEach((x, i) => {
+    if (x === '.') { if (cur) cur.len++; }
+    else if (x === '-') cur = null;
+    else { cur = { m: nm(x), s: i, len: 1 }; out.push(cur); }
+  });
+  return out;
+}
+function bq(c, type, f, q) {
+  const b = c.createBiquadFilter(); b.type = type; b.frequency.value = f;
+  if (q != null) b.Q.value = q;
+  return b;
+}
+/* ADSR（0 から立ち上げ、dur で離す）。止めてよい時刻を返す */
+function env(p, t, peak, a, d, s, dur, r) {
+  p.setValueAtTime(0, t);
+  p.linearRampToValueAtTime(peak, t + a);
+  p.setTargetAtTime(peak * s, t + a, Math.max(0.004, d / 3));
+  const te = t + Math.max(dur, a + 0.005);
+  p.setTargetAtTime(0, te, Math.max(0.004, r / 3));
+  return te + r * 1.8 + 0.05;
+}
+
+/* ==========================================================================
+   2. エンジン（AudioContext ごとに1つ。本番の再生とオフラインの診断で同じものを使う）
+   ========================================================================== */
+function Engine(ctx, dest) {
+  const E = this, c = ctx;
+  E.c = c; E.sr = c.sampleRate; E.cache = {};
+  E.input = c.createGain();
+  E.hs = bq(c, 'highshelf', 8000); E.hs.gain.value = 1.5;              // 軽いハイシェルフ
+  E.glue = c.createDynamicsCompressor();                                // まとめ役のコンプ
+  E.glue.threshold.value = -18; E.glue.knee.value = 12; E.glue.ratio.value = 2.5;
+  E.glue.attack.value = 0.02; E.glue.release.value = 0.25;
+  E.lim = c.createDynamicsCompressor();                                 // 天井（クリップ防止）
+  E.lim.threshold.value = -3; E.lim.knee.value = 0; E.lim.ratio.value = 20;
+  E.lim.attack.value = 0.001; E.lim.release.value = 0.09;
+  E.vol = c.createGain();
+  E.an = c.createAnalyser(); E.an.fftSize = 2048;
+  E.input.connect(E.hs); E.hs.connect(E.glue); E.glue.connect(E.lim);
+  E.lim.connect(E.vol); E.vol.connect(E.an); E.an.connect(dest);
+  /* 白色ノイズ 2秒（打楽器・息・テープの雑音の素） */
+  const nb = c.createBuffer(1, E.sr * 2, E.sr), nd = nb.getChannelData(0), r = mulberry32(7);
+  for (let i = 0; i < nd.length; i++) nd[i] = r() * 2 - 1;
+  E.noise = nb;
+  /* 位相をずらしたノコギリ波・矩形波（同時に鳴らしたデチューン波の頭が揃って「ビッ」と鳴るのを避ける） */
+  E.waves = { saw: [], sq: [] };
+  for (let k = 0; k < 5; k++) {
+    const ph = 0.37 + k * 1.31;
+    E.waves.saw.push(E.wave('saw', ph));
+    E.waves.sq.push(E.wave('sq', ph));
+  }
+}
+Engine.prototype.wave = function (kind, ph) {
+  const N = 80, re = new Float32Array(N + 1), im = new Float32Array(N + 1);
+  for (let k = 1; k <= N; k++) {
+    let b = kind === 'saw' ? ((k % 2 ? 1 : -1) / k) : (k % 2 ? 1 / k : 0);
+    b *= 1 / (1 + Math.pow(k / 40, 2));                                  // 上の倍音を少し丸める（耳に刺さらない）
+    re[k] = b * Math.sin(k * ph); im[k] = b * Math.cos(k * ph);
+  }
+  return this.c.createPeriodicWave(re, im);
+};
+/* 生成インパルス応答（ステレオ・減衰するノイズ・時間とともに高域が落ちる・初期反射） */
+Engine.prototype.ir = function (o) {
+  const key = 'ir' + o.dur + '_' + o.pow + '_' + o.damp + '_' + o.pre;
+  if (this.cache[key]) return this.cache[key];
+  const sr = this.sr, len = Math.floor(sr * (o.dur + o.pre)), b = this.c.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = b.getChannelData(ch), r = mulberry32(101 + ch * 17);
+    let lp = 0;
+    const p0 = Math.floor(o.pre * sr);
+    for (let i = p0; i < len; i++) {
+      const u = (i - p0) / (len - p0);
+      const e = Math.pow(1 - u, o.pow) * Math.exp(-u * 2.2);
+      const a = 0.92 - o.damp * u * 0.85;
+      lp += a * ((r() * 2 - 1) - lp);
+      d[i] = lp * e;
+    }
+    for (let k = 0; k < 9; k++) {
+      const idx = p0 + Math.floor((0.006 + k * 0.0113 + r() * 0.005) * sr);
+      if (idx < len) d[idx] += (r() < 0.5 ? -1 : 1) * 0.55 * (1 - k / 10);
+    }
+  }
+  this.cache[key] = b;
+  return b;
+};
+/* ピアノ（加算合成: 弦の非調和性・2本弦のうなり・倍音ごとの二段減衰・ハンマーの打撃音）を波形に書く */
+Engine.prototype.piano = function (m) {
+  const key = 'p' + m;
+  if (this.cache[key]) return this.cache[key];
+  const sr = this.sr, f0 = mtof(m), rr = mulberry32(m * 97 + 13);
+  const T = Math.min(6, 1.4 + 3.4 * Math.pow(2, -(m - 60) / 18));
+  const len = Math.floor(sr * T), L = new Float32Array(len), R = new Float32Array(len);
+  const B = 0.00015 * Math.pow(2, (m - 60) / 15);
+  const tau1 = Math.min(4.5, 2.2 * Math.pow(2, -(m - 60) / 20));
+  const pan = Math.max(-0.45, Math.min(0.45, (m - 64) / 40));
+  for (let k = 1; k <= 24; k++) {
+    const fk = k * f0 * Math.sqrt(1 + B * k * k);
+    if (fk > sr * 0.42) break;
+    const a = Math.pow(k, -1.05) * (0.25 + Math.abs(Math.sin(Math.PI * k * 0.12)));
+    const tauk = tau1 / (1 + 0.45 * (k - 1));
+    const ns = k <= 8 ? 2 : 1;
+    for (let s = 0; s < ns; s++) {
+      const f = ns === 2 ? fk * (1 + (s ? 1 : -1) * 0.00032) : fk;
+      const w = TAU * f / sr, c2 = 2 * Math.cos(w), ph = rr() * TAU;
+      let y1 = Math.sin(ph - w), y2 = Math.sin(ph - 2 * w);
+      let e1 = 0.7, e2 = 0.3;
+      const r1 = Math.exp(-1 / (tauk * 0.3 * sr)), r2 = Math.exp(-1 / (tauk * 1.6 * sr));
+      const p = pan + (ns === 2 ? (s ? 0.12 : -0.12) : 0);
+      const amp = a / ns, gl = Math.cos((p + 1) * Math.PI / 4) * amp, gr = Math.sin((p + 1) * Math.PI / 4) * amp;
+      const nEnd = Math.min(len, Math.floor(tauk * 1.6 * sr * 7));
+      for (let n = 0; n < nEnd; n++) {
+        const y = c2 * y1 - y2; y2 = y1; y1 = y;
+        const v = y * (e1 + e2); e1 *= r1; e2 *= r2;
+        L[n] += v * gl; R[n] += v * gr;
+      }
+    }
+  }
+  const atk = Math.floor(0.0025 * sr);
+  for (let n = 0; n < atk; n++) { const q = n / atk; L[n] *= q; R[n] *= q; }
+  let lp = 0;
+  const hl = Math.floor(0.03 * sr);
+  for (let n = 0; n < hl; n++) {
+    lp += 0.25 * ((rr() * 2 - 1) - lp);
+    const v = lp * 0.12 * Math.exp(-n / (0.005 * sr));
+    L[n] += v; R[n] += v;
+  }
+  const fo = Math.floor(0.05 * sr);
+  for (let n = 0; n < fo; n++) { const q = n / fo; L[len - 1 - n] *= q; R[len - 1 - n] *= q; }
+  let pk = 1e-6;
+  for (let n = 0; n < len; n++) pk = Math.max(pk, Math.abs(L[n]), Math.abs(R[n]));
+  const sc = 0.6 / pk;
+  const b = this.c.createBuffer(2, len, sr);
+  const dl = b.getChannelData(0), dr = b.getChannelData(1);
+  for (let n = 0; n < len; n++) { dl[n] = L[n] * sc; dr[n] = R[n] * sc; }
+  this.cache[key] = b;
+  return b;
+};
+/* 琴（カープラス・ストロング: 撥弦位置で色づけしたノイズを、平均化フィルタ付きの遅延線で回す） */
+Engine.prototype.ks = function (m) {
+  const key = 'k' + m;
+  if (this.cache[key]) return this.cache[key];
+  const sr = this.sr, f = mtof(m), P = sr / f, N = Math.max(4, Math.floor(P - 0.5));
+  const T60 = Math.max(1.2, Math.min(4.5, 3.6 * Math.pow(2, -(m - 57) / 24)));
+  const T = Math.min(5, T60 * 0.9 + 0.3), len = Math.floor(sr * T);
+  const rho = Math.pow(0.001, 1 / (T60 * f));
+  const rr = mulberry32(m * 31 + 5);
+  const ex = new Float32Array(N);
+  let lp = 0, mean = 0;
+  for (let i = 0; i < N; i++) { lp += 0.55 * ((rr() * 2 - 1) - lp); ex[i] = lp; }
+  const pp = Math.max(1, Math.round(N * 0.16));
+  const ex2 = new Float32Array(N);
+  for (let i = 0; i < N; i++) { ex2[i] = ex[i] - (i >= pp ? ex[i - pp] : 0); mean += ex2[i]; }
+  mean /= N;
+  const y = new Float32Array(len);
+  for (let n = 0; n < len; n++) {
+    const x = n < N ? ex2[n] - mean : 0;
+    const a = n >= N ? y[n - N] : 0, b2 = n >= N + 1 ? y[n - N - 1] : 0;
+    y[n] = x + rho * 0.5 * (a + b2);
+  }
+  let pk = 1e-6;
+  for (let n = 0; n < len; n++) pk = Math.max(pk, Math.abs(y[n]));
+  const fo = Math.floor(0.05 * sr);
+  for (let n = 0; n < fo; n++) y[len - 1 - n] *= n / fo;
+  const b = this.c.createBuffer(1, len, sr), d = b.getChannelData(0);
+  for (let n = 0; n < len; n++) d[n] = y[n] * (0.5 / pk);
+  const out = { buf: b, rate: (N + 0.5) / P };
+  this.cache[key] = out;
+  return out;
+};
+
+/* ==========================================================================
+   3. 楽器（S = 再生中のセッション、out = パートの入口）
+   ========================================================================== */
+function osc(S, kind, f) {
+  const o = S.c.createOscillator();
+  if (kind === 'saw' || kind === 'sq') { const w = S.E.waves[kind]; o.setPeriodicWave(w[(S.rnd() * w.length) | 0]); }
+  else o.type = kind === 'tri' ? 'triangle' : kind;
+  o.frequency.value = f;
+  return o;
+}
+function nsrc(S) {
+  const s = S.c.createBufferSource(); s.buffer = S.E.noise; s.loop = true; s.off = S.rnd() * 1.6;
+  return s;
+}
+/* 減算合成（デチューンした n 本＋フィルタ・エンベロープ＋ADSR＋任意でサブ・しゃくり・ビブラート） */
+function syn(S, out, t, m, dur, vel, o) {
+  const c = S.c, f = mtof(m) * (o.oct ? Math.pow(2, o.oct) : 1), n = o.n || 2, det = o.det || 8;
+  const nyq = S.E.sr * 0.45;
+  const fl = bq(c, 'lowpass', Math.min(nyq, o.cut || 2000), o.q || 0.7);
+  const fe = (o.fenv || 0) * vel;
+  if (fe) {
+    const cut = Math.min(nyq, o.cut || 2000), fa = o.fa || 0.005;
+    fl.frequency.setValueAtTime(cut, t);
+    fl.frequency.linearRampToValueAtTime(Math.min(nyq, cut + fe), t + fa);
+    fl.frequency.setTargetAtTime(cut + fe * (o.fs || 0), t + fa, (o.fd || 0.2) / 3);
+  }
+  const g = c.createGain(); fl.connect(g); g.connect(out);
+  const end = env(g.gain, t, vel * (o.lvl || 0.1), o.a || 0.005, o.d || 0.2, o.s == null ? 0.7 : o.s, dur, o.r || 0.15);
+  for (let i = 0; i < n; i++) {
+    const x = osc(S, o.type || 'saw', f);
+    const dd = n > 1 ? (i / (n - 1) * 2 - 1) * det : 0;
+    x.detune.value = dd + (S.rnd() * 2 - 1) * 2;
+    if (o.scoop) { x.detune.setValueAtTime(dd - o.scoop, t); x.detune.linearRampToValueAtTime(dd, t + 0.07); }
+    if (o.vib && S.vib) S.vib.connect(x.detune);
+    let node = x;
+    if (n > 1 && c.createStereoPanner) {
+      const p = c.createStereoPanner(); p.pan.value = (i / (n - 1) * 2 - 1) * (o.spread == null ? 0.5 : o.spread);
+      x.connect(p); node = p;
+    }
+    node.connect(fl); x.start(t); x.stop(end);
+  }
+  if (o.sub) {
+    const s = c.createOscillator(); s.type = 'sine'; s.frequency.value = f / 2;
+    const sg = c.createGain(); sg.gain.value = o.sub;
+    s.connect(sg); sg.connect(g); s.start(t); s.stop(end);
+  }
+  return end;
+}
+/* FM（エレピ・ビブラフォン・鐘）。キャリア2本（少しずらす）＋モジュレータ＋エレピの「チン」 */
+function fm(S, out, t, m, dur, vel, o) {
+  const c = S.c, f = mtof(m), end = t + dur + 0.9;
+  const g = c.createGain(); g.connect(out);
+  const pk = vel * (o.lvl || 0.12), tau = (o.tau || 1.4) * Math.pow(2, -(m - 60) / 24);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(pk, t + 0.004);
+  g.gain.setTargetAtTime(0, t + 0.004, tau);
+  g.gain.setTargetAtTime(0, t + dur, o.rel || 0.1);
+  const mod = c.createOscillator(); mod.frequency.value = f * (o.ratio || 1);
+  const mg = c.createGain();
+  mg.gain.setValueAtTime(f * (o.i0 || 1.2) * (0.5 + vel), t);
+  mg.gain.setTargetAtTime(f * (o.i1 || 0.2), t, o.itau || 0.3);
+  mod.connect(mg);
+  const cs = [0, o.chorus == null ? 6 : o.chorus].map((d, i) => {
+    const x = c.createOscillator(); x.frequency.value = f; x.detune.value = d;
+    mg.connect(x.frequency);
+    const xg = c.createGain(); xg.gain.value = i ? 0.5 : 1;
+    if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = i ? 0.3 : -0.1; x.connect(p); p.connect(xg); }
+    else x.connect(xg);
+    xg.connect(g); x.start(t); x.stop(end);
+    return x;
+  });
+  if (o.tine) {
+    const tn = c.createOscillator(); tn.frequency.value = f * (o.tr || 14);
+    const tg = c.createGain(); tg.gain.setValueAtTime(f * o.tine * vel, t); tg.gain.setTargetAtTime(0, t, 0.015);
+    tn.connect(tg); tg.connect(cs[0].frequency); tn.start(t); tn.stop(t + 0.2);
+  }
+  mod.start(t); mod.stop(end);
+  return end;
+}
+function piano(S, out, t, m, dur, vel, o) {
+  const c = S.c, b = S.E.piano(m), rel = (o && o.rel) || 0.4;
+  const src = c.createBufferSource(); src.buffer = b;
+  const lp = bq(c, 'lowpass', Math.min(S.E.sr * 0.45, 1600 + 9000 * vel), 0.5);
+  const g = c.createGain(), pk = ((o && o.lvl) || 0.5) * (0.25 + 0.75 * vel);
+  g.gain.setValueAtTime(pk, t); g.gain.setTargetAtTime(0, t + dur, rel);
+  src.connect(lp); lp.connect(g); g.connect(out);
+  src.start(t); src.stop(Math.min(t + b.duration, t + dur + rel * 6));
+}
+function koto(S, out, t, m, dur, vel, o) {
+  const c = S.c, k = S.E.ks(m);
+  const src = c.createBufferSource(); src.buffer = k.buf;
+  src.playbackRate.setValueAtTime(k.rate * 1.007, t);                    // はじいた瞬間だけ少し高い（弦の張力）
+  src.playbackRate.setTargetAtTime(k.rate, t, 0.035);
+  const g = c.createGain(), pk = vel * ((o && o.lvl) || 0.5);
+  g.gain.setValueAtTime(pk, t); g.gain.setTargetAtTime(0, t + dur, 0.35);
+  let node = g;
+  if (c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = Math.max(-0.5, Math.min(0.5, (m - 64) / 30)); g.connect(p); node = p; }
+  src.connect(g); node.connect(out);
+  src.start(t); src.stop(Math.min(t + k.buf.duration / k.rate, t + dur + 2));
+}
+/* 篠笛: サイン＋三角＋2倍音、しゃくり上げ、遅れて掛かるビブラート、息のノイズ（音高に合わせた帯域） */
+function fue(S, out, t, m, dur, vel, o) {
+  const c = S.c, f = mtof(m), lvl = vel * ((o && o.lvl) || 0.12);
+  const g = c.createGain(); g.connect(out);
+  const end = env(g.gain, t, lvl, 0.05, 0.25, 0.85, dur, 0.12);
+  const lfo = c.createOscillator(); lfo.frequency.value = 5.1 + S.rnd() * 0.6;
+  const lg = c.createGain(); lg.gain.setValueAtTime(0, t);
+  lg.gain.setValueAtTime(0, t + Math.min(0.3, dur * 0.4)); lg.gain.linearRampToValueAtTime(16, t + Math.min(0.8, dur * 0.9));
+  lfo.connect(lg); lfo.start(t); lfo.stop(end);
+  [['sine', 1, 1], ['triangle', 1, 0.28], ['sine', 2, 0.07]].forEach((v) => {
+    const x = c.createOscillator(); x.type = v[0]; x.frequency.value = f * v[1];
+    x.detune.setValueAtTime(-80, t); x.detune.linearRampToValueAtTime(0, t + 0.08);
+    lg.connect(x.detune);
+    const xg = c.createGain(); xg.gain.value = v[2];
+    x.connect(xg); xg.connect(g); x.start(t); x.stop(end);
+  });
+  const n = nsrc(S), bp = bq(c, 'bandpass', f, 6), ng = c.createGain();
+  ng.gain.setValueAtTime(0, t); ng.gain.linearRampToValueAtTime(lvl * 1.6, t + 0.02);
+  ng.gain.setTargetAtTime(lvl * 0.45, t + 0.02, 0.05); ng.gain.setTargetAtTime(0, t + dur, 0.04);
+  n.connect(bp); bp.connect(ng); ng.connect(out); n.start(t, n.off); n.stop(end);
+  const n2 = nsrc(S), hp = bq(c, 'highpass', 4500, 0.7), n2g = c.createGain();
+  n2g.gain.setValueAtTime(0, t); n2g.gain.linearRampToValueAtTime(lvl * 0.25, t + 0.02);
+  n2g.gain.setTargetAtTime(lvl * 0.06, t + 0.03, 0.06); n2g.gain.setTargetAtTime(0, t + dur, 0.04);
+  n2.connect(hp); hp.connect(n2g); n2g.connect(out); n2.start(t, n2.off); n2.stop(end);
+}
+/* --- 打楽器 --- */
+function kick(S, out, t, vel, o) {
+  o = o || {};
+  const c = S.c, dec = o.dec || 0.32;
+  const x = c.createOscillator(); x.type = 'sine';
+  x.frequency.setValueAtTime(o.f0 || 160, t); x.frequency.exponentialRampToValueAtTime(o.f1 || 47, t + (o.pd || 0.08));
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + 0.003); g.gain.setTargetAtTime(0, t + 0.02, dec / 3.5);
+  x.connect(g); g.connect(out); x.start(t); x.stop(t + dec * 2 + 0.05);
+  const n = nsrc(S), hp = bq(c, 'highpass', o.clickHz || 2500, 0.7), ng = c.createGain();
+  ng.gain.setValueAtTime(vel * (o.click == null ? 0.22 : o.click), t); ng.gain.setTargetAtTime(0, t, 0.004);
+  n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t, n.off); n.stop(t + 0.05);
+}
+function snare(S, out, t, vel, o) {
+  o = o || {};
+  const c = S.c, dec = o.dec || 0.16;
+  const n = nsrc(S), hp = bq(c, 'highpass', o.hp || 900, 0.7), lp = bq(c, 'lowpass', o.lp || 9000, 0.5), g = c.createGain();
+  g.gain.setValueAtTime(vel * (o.nl || 0.55), t); g.gain.setTargetAtTime(0, t, dec / 3);
+  n.connect(hp); hp.connect(lp); lp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + dec * 2.5);
+  const b = c.createOscillator(); b.type = 'triangle';
+  b.frequency.setValueAtTime(o.body || 200, t); b.frequency.exponentialRampToValueAtTime((o.body || 200) * 0.78, t + 0.08);
+  const bg = c.createGain(); bg.gain.setValueAtTime(vel * 0.5, t); bg.gain.setTargetAtTime(0, t, 0.035);
+  b.connect(bg); bg.connect(out); b.start(t); b.stop(t + 0.25);
+}
+function clap(S, out, t, vel) {
+  const c = S.c, n = nsrc(S), bp = bq(c, 'bandpass', 1300, 0.9), g = c.createGain();
+  g.gain.setValueAtTime(0, t);
+  for (let k = 0; k < 3; k++) {
+    const tt = t + k * 0.011;
+    g.gain.setValueAtTime(vel * 0.7, tt); g.gain.setTargetAtTime(vel * 0.05, tt + 0.001, 0.004);
+  }
+  g.gain.setValueAtTime(vel * 0.6, t + 0.034); g.gain.setTargetAtTime(0, t + 0.035, 0.05);
+  n.connect(bp); bp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + 0.45);
+}
+function hat(S, out, t, vel, open, o) {
+  o = o || {};
+  const c = S.c, n = nsrc(S), hp = bq(c, 'highpass', o.hp || 7000, 0.7), bp = bq(c, 'bandpass', o.bp || 10000, 0.8), g = c.createGain();
+  const dec = open ? (o.open || 0.14) : (o.dec || 0.022);
+  g.gain.setValueAtTime(vel * 0.5, t); g.gain.setTargetAtTime(0, t, dec / 3);
+  n.connect(hp); hp.connect(bp); bp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + dec * 3 + 0.02);
+}
+function crash(S, out, t, vel) {
+  const c = S.c, n = nsrc(S), hp = bq(c, 'highpass', 4500, 0.6), g = c.createGain();
+  g.gain.setValueAtTime(vel * 0.4, t); g.gain.setTargetAtTime(0, t, 0.55);
+  n.connect(hp); hp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + 2.8);
+}
+/* 逆回しシンバル（次の区切りへ吸い込む） */
+function swell(S, out, t, dur, vel) {
+  const c = S.c, n = nsrc(S), hp = bq(c, 'highpass', 3500, 0.6), g = c.createGain();
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + dur); g.gain.setTargetAtTime(0, t + dur, 0.03);
+  n.connect(hp); hp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + dur + 0.3);
+}
+function riser(S, out, t, dur, vel) {
+  const c = S.c, n = nsrc(S), bp = bq(c, 'bandpass', 500, 2.5), g = c.createGain();
+  bp.frequency.setValueAtTime(500, t); bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + dur); g.gain.setTargetAtTime(0, t + dur, 0.02);
+  n.connect(bp); bp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + dur + 0.2);
+}
+function timp(S, out, t, m, vel) {
+  const c = S.c, f = mtof(m);
+  [[1, 1, 0.9], [1.5, 0.5, 0.45], [1.98, 0.28, 0.3], [2.44, 0.16, 0.2]].forEach((p) => {
+    const x = c.createOscillator(); x.type = 'sine';
+    x.frequency.setValueAtTime(f * p[0] * 1.025, t); x.frequency.exponentialRampToValueAtTime(f * p[0], t + 0.09);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel * p[1] * 0.9, t + 0.004); g.gain.setTargetAtTime(0, t + 0.004, p[2]);
+    x.connect(g); g.connect(out); x.start(t); x.stop(t + p[2] * 7);
+  });
+  const n = nsrc(S), lp = bq(c, 'lowpass', 900, 0.7), ng = c.createGain();
+  ng.gain.setValueAtTime(vel * 0.3, t); ng.gain.setTargetAtTime(0, t, 0.02);
+  n.connect(lp); lp.connect(ng); ng.connect(out); n.start(t, n.off); n.stop(t + 0.2);
+}
+function taiko(S, out, t, vel, o) {
+  o = o || {};
+  const c = S.c, f0 = o.f || 90;
+  [[1, 1, o.dec || 0.3], [2.6, 0.22, 0.07]].forEach((p) => {
+    const x = c.createOscillator(); x.type = 'sine';
+    x.frequency.setValueAtTime(f0 * p[0] * 1.5, t); x.frequency.exponentialRampToValueAtTime(f0 * p[0], t + 0.05);
+    x.frequency.exponentialRampToValueAtTime(f0 * p[0] * 0.84, t + 0.7);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel * p[1], t + 0.004); g.gain.setTargetAtTime(0, t + 0.01, p[2]);
+    x.connect(g); g.connect(out); x.start(t); x.stop(t + p[2] * 7 + 0.05);
+  });
+  const n = nsrc(S), lp = bq(c, 'lowpass', 700, 0.7), ng = c.createGain();
+  ng.gain.setValueAtTime(vel * 0.45, t); ng.gain.setTargetAtTime(0, t, 0.025);
+  n.connect(lp); lp.connect(ng); ng.connect(out); n.start(t, n.off); n.stop(t + 0.2);
+}
+function shime(S, out, t, vel) {
+  const c = S.c, x = c.createOscillator(); x.type = 'sine';
+  x.frequency.setValueAtTime(480, t); x.frequency.exponentialRampToValueAtTime(410, t + 0.08);
+  const g = c.createGain(); g.gain.setValueAtTime(vel * 0.45, t); g.gain.setTargetAtTime(0, t, 0.045);
+  x.connect(g); g.connect(out); x.start(t); x.stop(t + 0.3);
+  const n = nsrc(S), bp = bq(c, 'bandpass', 2200, 2), ng = c.createGain();
+  ng.gain.setValueAtTime(vel * 0.4, t); ng.gain.setTargetAtTime(0, t, 0.018);
+  n.connect(bp); bp.connect(ng); ng.connect(out); n.start(t, n.off); n.stop(t + 0.12);
+}
+function ka(S, out, t, vel) {
+  const c = S.c, n = nsrc(S), bp = bq(c, 'bandpass', 3200, 4), g = c.createGain();
+  g.gain.setValueAtTime(vel * 0.9, t); g.gain.setTargetAtTime(0, t, 0.009);
+  n.connect(bp); bp.connect(g); g.connect(out); n.start(t, n.off); n.stop(t + 0.08);
+  const x = c.createOscillator(); x.type = 'triangle'; x.frequency.value = 1150;
+  const xg = c.createGain(); xg.gain.setValueAtTime(vel * 0.25, t); xg.gain.setTargetAtTime(0, t, 0.01);
+  x.connect(xg); xg.connect(out); x.start(t); x.stop(t + 0.08);
+}
+
+/* ==========================================================================
+   4. セッション（1回の再生。パートのバス・リバーブ・ディレイ・サイドチェイン・シーケンサ）
+   ========================================================================== */
+function Session(E, st, opt) {
+  const S = this, c = E.c;
+  S.E = E; S.c = c; S.st = st; S.alive = true; S.nodes = []; S.ducks = []; S.parts = {}; S.solo = opt.solo || null;
+  S.rnd = mulberry32(opt.seed != null ? opt.seed : (Math.random() * 4294967296) >>> 0);
+  S.mul = opt.fast ? 1.15 : 1; S.bar = 0; S.nextT = 0; S.marks = [];
+  S.out = c.createGain(); S.out.gain.value = 0; S.out.connect(E.input);
+  S.bus = c.createGain();
+  const tail = st.insert ? st.insert(S, S.bus) : S.bus;
+  tail.connect(S.out);
+  /* リバーブ（生成 IR）: 送りの手前で低域を切ってにごりを防ぐ */
+  S.revIn = c.createGain();
+  const rhp = bq(c, 'highpass', 220, 0.7);
+  S.rev = c.createConvolver(); S.rev.buffer = E.ir(st.rev);
+  const rret = c.createGain(); rret.gain.value = st.rev.ret || 1;
+  S.revIn.connect(rhp); rhp.connect(S.rev); S.rev.connect(rret); rret.connect(S.bus);
+  /* 付点8分ディレイ（帰還に LP/HP。返りを少しリバーブにも送る） */
+  S.dlyIn = c.createGain();
+  S.dly = c.createDelay(2.0);
+  const dlp = bq(c, 'lowpass', st.dly.lp || 3200, 0.5), dhp = bq(c, 'highpass', 260, 0.5);
+  const fb = c.createGain(); fb.gain.value = st.dly.fb;
+  const dret = c.createGain(); dret.gain.value = st.dly.ret;
+  S.dlyIn.connect(S.dly); S.dly.connect(dlp); dlp.connect(dhp); dhp.connect(fb); fb.connect(S.dly);
+  dhp.connect(dret); dret.connect(S.bus);
+  const d2r = c.createGain(); d2r.gain.value = 0.3; dret.connect(d2r); d2r.connect(S.revIn);
+  /* 共有ビブラート（弦・リード） */
+  const lfo = c.createOscillator(); lfo.frequency.value = 5.3;
+  S.vib = c.createGain(); S.vib.gain.value = st.vib == null ? 7 : st.vib;
+  lfo.connect(S.vib); lfo.start(); S.nodes.push(lfo);
+  Object.keys(st.parts).forEach((k) => { S.parts[k] = S.part(k, st.parts[k]); });
+  S.setTempo(0);
+}
+Session.prototype.part = function (name, o) {
+  const S = this, c = S.c, g = c.createGain();
+  g.gain.value = (S.solo && S.solo !== name) ? 0 : (o.gain == null ? 1 : o.gain);
+  let node = g;
+  if (o.hp) { const f = bq(c, 'highpass', o.hp, 0.6); node.connect(f); node = f; }
+  if (o.lp) { const f = bq(c, 'lowpass', o.lp, 0.6); node.connect(f); node = f; }
+  if (o.pan && c.createStereoPanner) { const p = c.createStereoPanner(); p.pan.value = o.pan; node.connect(p); node = p; }
+  if (o.duck) { const d = c.createGain(); node.connect(d); node = d; S.ducks.push({ g: d, depth: o.duck, rel: o.duckRel || 0.07 }); }
+  node.connect(S.bus);
+  if (o.rev) { const s = c.createGain(); s.gain.value = o.rev; node.connect(s); s.connect(S.revIn); }
+  if (o.dly) { const s = c.createGain(); s.gain.value = o.dly; node.connect(s); s.connect(S.dlyIn); }
+  return g;
+};
+Session.prototype.setTempo = function (t) {
+  const S = this;
+  S.bpm = S.st.bpm * S.mul; S.beat = 60 / S.bpm; S.t16 = S.beat / 4; S.barDur = S.beat * 4;
+  S.dly.delayTime.setTargetAtTime(0.75 * S.beat, t, 0.02);
+};
+/* 16分の step の時刻（スウィング: sw16 は奇数の16分、sw8 は裏の8分を遅らせる。単位は16分音符） */
+Session.prototype.at = function (t0, st) {
+  const w = this.st;
+  return t0 + st * this.t16 + ((st % 2 === 1) ? (w.sw16 || 0) * this.t16 : 0) + ((st % 4 === 2) ? (w.sw8 || 0) * this.t16 : 0);
+};
+Session.prototype.j = function () { return (this.rnd() * 2 - 1) * 0.008; };          // タイミング ±8ms
+Session.prototype.v = function (x) { return x * (1 + (this.rnd() * 2 - 1) * 0.15); }; // ベロシティ ±15%
+Session.prototype.duck = function (t) {
+  this.ducks.forEach((d) => {
+    d.g.gain.setTargetAtTime(1 - d.depth, t, 0.004);
+    d.g.gain.setTargetAtTime(1, t + 0.03, d.rel);
+  });
+};
+Session.prototype.chord = function (fn, out, t, dur, ms, vel, o, strum) {
+  ms.forEach((m, k) => fn(this, out, t + k * (strum || 0) + this.j(), m, dur, this.v(vel), o));
+};
+Session.prototype.melody = function (fn, out, t0, notes, vel, o, gate, shift) {
+  notes.forEach((n) => {
+    const t = this.at(t0, n.s) + this.j();
+    fn(this, out, t, n.m + (shift || 0), n.len * this.t16 * (gate || 0.92), this.v(vel * (n.s % 4 === 0 ? 1 : 0.88)), o);
+  });
+};
+Session.prototype.schedBar = function () {
+  const S = this;
+  if (S.pendingMul != null) { S.mul = S.pendingMul; S.pendingMul = null; S.setTempo(S.nextT); }
+  const i = S.bar % S.st.bars;
+  S.marks.push({ t: S.nextT, i: i, dur: S.barDur });
+  if (S.marks.length > 8) S.marks.shift();
+  S.st.bar(S, i, S.nextT);
+  S.nextT += S.barDur; S.bar++;
+};
+Session.prototype.kill = function (when) {
+  const S = this;
+  S.alive = false;
+  S.out.gain.cancelScheduledValues(when);
+  S.out.gain.setValueAtTime(S.out.gain.value, when);
+  S.out.gain.setTargetAtTime(0, when, 0.08);
+  setTimeout(() => {
+    try { S.out.disconnect(); } catch (e) { /* noop */ }
+    S.nodes.forEach((n) => { try { n.stop(); } catch (e) { /* noop */ } });
+  }, 900);
+};
+
+/* ==========================================================================
+   5. 楽器の設定（プリセット）
+   ========================================================================== */
+const I = {
+  swPad:   { type: 'saw', n: 3, det: 11, cut: 850, fenv: 1000, fa: 0.6, fs: 0.55, fd: 1.2, q: 0.6, a: 0.35, d: 0.9, s: 0.8, r: 1.1, spread: 0.7, lvl: 0.045 },
+  swBass:  { type: 'saw', n: 2, det: 4, cut: 150, fenv: 700, fa: 0.003, fd: 0.2, q: 2.2, a: 0.004, d: 0.3, s: 0.5, r: 0.08, sub: 0.55, spread: 0.1, lvl: 0.16 },
+  swArp:   { type: 'saw', n: 2, det: 7, cut: 600, fenv: 2600, fa: 0.003, fd: 0.14, q: 1.5, a: 0.003, d: 0.25, s: 0, r: 0.12, spread: 0.6, lvl: 0.07 },
+  swLead:  { type: 'saw', n: 2, det: 6, cut: 1300, fenv: 1500, fa: 0.03, fs: 0.45, fd: 0.3, q: 0.9, a: 0.025, d: 0.35, s: 0.75, r: 0.28, vib: 1, spread: 0.3, lvl: 0.075 },
+  lofiEP:  { ratio: 1, i0: 1.1, i1: 0.18, itau: 0.35, tau: 1.3, tine: 0.8, tr: 14, chorus: 7, lvl: 0.07, rel: 0.12 },
+  lofiVibe:{ ratio: 4, i0: 0.55, i1: 0.04, itau: 0.12, tau: 1.0, chorus: 4, lvl: 0.075, rel: 0.25 },
+  lofiBass:{ type: 'tri', n: 1, cut: 420, fenv: 500, fd: 0.12, q: 0.8, a: 0.008, d: 0.45, s: 0.45, r: 0.12, sub: 0.7, lvl: 0.23 },
+  popBass: { type: 'sq', n: 2, det: 5, cut: 200, fenv: 1500, fd: 0.1, q: 2.6, a: 0.003, d: 0.18, s: 0.35, r: 0.06, sub: 0.5, spread: 0.2, lvl: 0.12 },
+  popPad:  { type: 'saw', n: 3, det: 14, cut: 1500, a: 0.02, d: 0.4, s: 0.9, r: 0.3, spread: 0.8, lvl: 0.03 },
+  popLead: { type: 'saw', n: 2, det: 9, cut: 700, fenv: 5200, fa: 0.002, fs: 0.05, fd: 0.16, q: 1.8, a: 0.002, d: 0.34, s: 0.2, r: 0.12, spread: 0.4, lvl: 0.1 },
+  popArp:  { type: 'sq', n: 2, det: 6, cut: 900, fenv: 3000, fd: 0.07, q: 1.2, a: 0.002, d: 0.12, s: 0, r: 0.06, spread: 0.7, lvl: 0.045 },
+  pno:     { lvl: 0.55, rel: 0.45 },
+  air:     { type: 'tri', n: 2, det: 7, cut: 1100, a: 1.4, d: 1, s: 0.9, r: 2.2, spread: 0.8, lvl: 0.05 },
+  str:     { type: 'saw', n: 5, det: 16, cut: 2300, fenv: 900, fa: 0.4, fs: 1, q: 0.5, a: 0.45, d: 0.5, s: 0.9, r: 0.7, vib: 1, spread: 0.85, lvl: 0.03 },
+  spic:    { type: 'saw', n: 3, det: 10, cut: 380, fenv: 1600, fa: 0.01, fd: 0.13, q: 0.9, a: 0.008, d: 0.16, s: 0.12, r: 0.1, spread: 0.5, lvl: 0.11 },
+  horn:    { type: 'saw', n: 2, det: 6, cut: 380, fenv: 2300, fa: 0.09, fs: 0.45, fd: 0.4, q: 1.1, a: 0.06, d: 0.4, s: 0.85, r: 0.25, scoop: 35, vib: 1, spread: 0.25, lvl: 0.1 },
+  bell:    { ratio: 3.5, i0: 0.9, i1: 0.05, itau: 0.15, tau: 1.1, chorus: 3, lvl: 0.05, rel: 0.5 },
+  drone:   { type: 'saw', n: 3, det: 9, cut: 520, a: 1.6, d: 1, s: 1, r: 2.0, spread: 0.8, lvl: 0.022 },
+  fue:     { lvl: 0.1 },
+  koto:    { lvl: 0.42 },
+  bkoto:   { lvl: 0.5 }
+};
+
+/* ==========================================================================
+   6. 作風（6種）。各小節の中身は bar(S, i, t0) が予約する
+   ========================================================================== */
+function tanhCurve(k) {
+  const n = 1024, cv = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; cv[i] = Math.tanh(k * x) / k; }
+  return cv;
+}
+const STYLES = [
+  /* ---------------------------------------------------------------- 1 */
+  {
+    id: 'synthwave', no: '01', name: 'チル・シンセウェーブ', acc: '#ff7ad9', glow: 'rgba(255,122,217,.35)',
+    desc: '温かいパッドと柔らかいアルペジオ。夜の高速道路のうねり。',
+    key: 'A minor', bpm: 96, bars: 16, prog: 'F G Em Am F G C E Dm G Em Am F G Am E'.split(' '),
+    rev: { dur: 2.6, pow: 2.2, damp: 0.55, pre: 0.02, ret: 0.9 }, dly: { fb: 0.34, lp: 3200, ret: 0.55 },
+    parts: {
+      pad: { rev: 0.5, duck: 0.55 }, bass: { gain: 0.8, duck: 0.3 }, arp: { gain: 2.3, rev: 0.3, dly: 0.4, duck: 0.35, pan: -0.1 },
+      lead: { gain: 1.5, rev: 0.35, dly: 0.28 }, kick: { gain: 0.33 }, snare: { gain: 1.1, rev: 0.55 },
+      hat: { gain: 2.2, rev: 0.08, pan: 0.2 }, fx: { rev: 0.4 }
+    },
+    C: {
+      F: 'F2 | F3 A3 C4 E4', G: 'G2 | G3 B3 D4 A4', Em: 'E2 | E3 G3 B3 D4', Am: 'A2 | A3 C4 E4 G4',
+      C: 'C3 | E3 G3 C4 D4', E: 'E2 | E3 G#3 B3 D4', Dm: 'D2 | F3 A3 C4 E4'
+    },
+    M: [
+      'A4 . . . | C5 . . . | E5 . . . | D5 . C5 .',
+      'D5 . . . | . . . . | - - B4 . | G4 . . .',
+      'B4 . . . | . . G4 . | E5 . . . | D5 . . .',
+      'C5 . . . | . . . . | - - - - | - - - -',
+      'A4 . . . | C5 . . . | F5 . . . | E5 . D5 .',
+      'D5 . . . | . . E5 . | D5 . . . | B4 . . .',
+      'C5 . . . | . . . . | G4 . . . | C5 . D5 .',
+      'E5 . . . | . . . . | . . . . | - - - -',
+      'F5 . . . | E5 . D5 . | . . . . | A4 . . .',
+      'B4 . . . | D5 . . . | G5 . . . | F5 . E5 .',
+      'E5 . . . | . . . . | D5 . B4 . | . . G4 .',
+      'A4 . . . | . . . . | - - - - | - - - -',
+      'C5 . . . | A4 . C5 . | F5 . . . | E5 . C5 .',
+      'D5 . . . | . . . . | - - D5 . | E5 . F5 .',
+      'E5 . . . | . . . . | C5 . . . | A4 . . .',
+      'B4 . . . | . . . . | G#4 . . . | - - - -'
+    ],
+    bar(S, i, t0) {
+      const P = S.parts, C = this.CH[this.prog[i]];
+      S.chord(syn, P.pad, t0, S.barDur * 0.97, C.n, 0.6, I.swPad, 0.006);
+      for (let k = 0; k < 8; k++) syn(S, P.bass, S.at(t0, k * 2) + S.j() * 0.4, C.b, S.t16 * 1.5, S.v(k % 2 ? 0.62 : 0.9), I.swBass);
+      [0, 8].concat(i % 2 ? [10] : []).forEach((st) => {
+        const t = S.at(t0, st);
+        kick(S, P.kick, t + S.j() * 0.3, S.v(0.85), { f0: 140, f1: 45, dec: 0.4, click: 0.12 });
+        S.duck(t);
+      });
+      [4, 12].forEach((st) => {
+        const t = S.at(t0, st) + S.j();
+        snare(S, P.snare, t, S.v(0.5), { hp: 700, dec: 0.22 });
+        clap(S, P.snare, t + 0.004, S.v(0.32));
+      });
+      for (let st = 2; st < 16; st += 4) hat(S, P.hat, S.at(t0, st) + S.j(), S.v(0.42), false);
+      for (let st = 1; st < 16; st += 2) if (S.rnd() < 0.5) hat(S, P.hat, S.at(t0, st) + S.j(), S.v(0.14), false);
+      if (i === 15 || i === 7) {
+        [13, 14, 15].forEach((st, k) => snare(S, P.snare, S.at(t0, st) + S.j(), S.v(0.2 + 0.1 * k), { hp: 900, dec: 0.12 }));
+        swell(S, P.fx, S.at(t0, 8), S.barDur / 2, 0.08);
+      }
+      const an = C.n.map((m) => m + 12), seq = [0, 1, 2, 3, 2, 1, 2, 3, 0, 2, 1, 3, 2, 1, 3, 2];
+      if (i < 8) for (let k = 0; k < 8; k++) syn(S, P.arp, S.at(t0, k * 2) + S.j(), an[seq[k] % an.length], S.t16 * 1.2, S.v(k % 2 ? 0.45 : 0.6), I.swArp);
+      else for (let k = 0; k < 16; k++) syn(S, P.arp, S.at(t0, k) + S.j(), an[seq[k] % an.length], S.t16 * 0.9, S.v(k % 4 === 0 ? 0.55 : 0.38), I.swArp);
+      S.melody(syn, P.lead, t0, this.MM[i], 0.8, I.swLead, 0.95);
+    }
+  },
+  /* ---------------------------------------------------------------- 2 */
+  {
+    id: 'lofi', no: '02', name: 'ローファイ', acc: '#ffc27a', glow: 'rgba(255,194,122,.32)',
+    desc: 'エレピのジャズ和音とゆるいスウィング。テープの揺れとノイズ。',
+    key: 'F major', bpm: 82, bars: 12, sw16: 0.22,
+    prog: ['Gm9', 'C13', 'Fmaj9', 'Dm9', 'Gm9', 'C7b9', 'Fmaj9', 'Bbmaj9', 'Am7', 'Dm9', 'Gm9|C9', 'Am7|D7b9'],
+    rev: { dur: 1.8, pow: 2.5, damp: 0.7, pre: 0.015, ret: 0.8 }, dly: { fb: 0.3, lp: 2400, ret: 0.4 }, vib: 0,
+    parts: {
+      ep: { gain: 1.3, rev: 0.3, hp: 120 }, vibe: { gain: 1.7, rev: 0.4, dly: 0.3, pan: 0.15 }, bass: { gain: 0.8 },
+      kick: { gain: 0.45 }, snare: { gain: 1.3, rev: 0.15 }, hat: { gain: 3.6, pan: -0.15, lp: 8500 }
+    },
+    C: {
+      Gm9: 'G2 | Bb3 D4 F4 A4', C13: 'C3 | Bb3 D4 E4 A4', Fmaj9: 'F2 | A3 C4 E4 G4', Dm9: 'D3 | F3 A3 C4 E4',
+      C7b9: 'C3 | Bb3 Db4 E4 G4', Bbmaj9: 'Bb2 | A3 C4 D4 F4', Am7: 'A2 | G3 C4 E4 A4', C9: 'C3 | Bb3 D4 E4 G4',
+      D7b9: 'D3 | C4 Eb4 F#4 A4'
+    },
+    M: [
+      '- - - - | - - A4 . | Bb4 . D5 . | . . . .',
+      'C5 . . . | A4 . . . | G4 . . . | - - - -',
+      '- - - - | - - E5 . | F5 . A5 . | . . G5 .',
+      'E5 . . . | . . . . | - - - - | - - - -',
+      '- - - - | - - Bb4 . | D5 . F5 . | . . E5 .',
+      'Db5 . . . | Bb4 . . . | G4 . . . | - - - -',
+      'A4 . . . | . . . . | C5 . . . | E5 . . .',
+      'D5 . . . | . . . . | - - - - | C5 . D5 .',
+      'E5 . . . | . . . . | G5 . . . | E5 . . .',
+      'F5 . . . | . . . . | - - - - | - - - -',
+      '- - - - | - - D5 . | E5 . . . | G5 . . .',
+      'E5 . . . | . . . . | Eb5 . . . | C5 . . .'
+    ],
+    /* テープの揺れ（遅延時間をゆっくり変調＝ピッチが数セント揺れる）・軽い飽和・高域を少し丸める・ヒスとチリノイズ */
+    insert(S, inp) {
+      const c = S.c, d = c.createDelay(0.1); d.delayTime.value = 0.015;
+      const l1 = c.createOscillator(); l1.frequency.value = 0.33;
+      const g1 = c.createGain(); g1.gain.value = 0.0011; l1.connect(g1); g1.connect(d.delayTime);
+      const l2 = c.createOscillator(); l2.frequency.value = 5.7;
+      const g2 = c.createGain(); g2.gain.value = 0.00005; l2.connect(g2); g2.connect(d.delayTime);
+      l1.start(); l2.start(); S.nodes.push(l1, l2);
+      const sat = c.createWaveShaper(); sat.curve = tanhCurve(1.4); sat.oversample = '2x';
+      const lp = bq(c, 'lowpass', 7000, 0.6), mix = c.createGain();
+      inp.connect(d); d.connect(sat); sat.connect(lp); lp.connect(mix);
+      const hs = nsrc(S), hbp = bq(c, 'bandpass', 5000, 0.5), hg = c.createGain(); hg.gain.value = 0.006;
+      hs.connect(hbp); hbp.connect(hg); hg.connect(mix); hs.start(0, hs.off); S.nodes.push(hs);
+      const sr = S.E.sr, cb = c.createBuffer(1, sr * 3, sr), cd = cb.getChannelData(0), r = mulberry32(55);
+      for (let k = 0; k < 40; k++) {
+        const p = Math.floor(r() * (cd.length - 200)), a = (0.2 + r() * 0.8) * (r() < 0.5 ? -1 : 1);
+        for (let q = 0; q < 60; q++) cd[p + q] += a * Math.exp(-q / 6) * (r() * 2 - 1);
+      }
+      const cs = c.createBufferSource(); cs.buffer = cb; cs.loop = true;
+      const clp = bq(c, 'lowpass', 4500, 0.7), cg = c.createGain(); cg.gain.value = 0.05;
+      cs.connect(clp); clp.connect(cg); cg.connect(mix); cs.start(0); S.nodes.push(cs);
+      return mix;
+    },
+    bar(S, i, t0) {
+      const P = S.parts, segs = this.prog[i].split('|'), half = segs.length === 2;
+      const next = this.CH[this.prog[(i + 1) % this.bars].split('|')[0]];
+      segs.forEach((name, h) => {
+        const C = this.CH[name], off = h * 8;
+        const comp = half ? [[0, 5, 0.72], [6, 2, 0.42]] : [[0, 6, 0.75], [7, 2, 0.42], [10, 6, 0.62]];
+        comp.forEach((x, k) => {
+          if (k > 0 && S.rnd() < 0.15) return;
+          S.chord(fm, P.ep, S.at(t0, off + x[0]), x[1] * S.t16, C.n, x[2], I.lofiEP, 0.016);
+        });
+        syn(S, P.bass, S.at(t0, off) + S.j(), C.b, (half ? 5 : 7) * S.t16, S.v(0.9), I.lofiBass);
+        if (!half) syn(S, P.bass, S.at(t0, 10) + S.j(), C.b + 7, 2 * S.t16, S.v(0.6), I.lofiBass);
+      });
+      syn(S, P.bass, S.at(t0, 14) + S.j(), next.b + (i % 2 ? -1 : 1), 1.6 * S.t16, S.v(0.5), I.lofiBass);
+      const kk = { f0: 110, f1: 44, dec: 0.36, click: 0.05 };
+      kick(S, P.kick, S.at(t0, 0), S.v(0.9), kk);
+      kick(S, P.kick, S.at(t0, 10) + S.j(), S.v(0.72), kk);
+      if (i % 2) kick(S, P.kick, S.at(t0, 7) + S.j(), S.v(0.4), kk);
+      [4, 12].forEach((st) => snare(S, P.snare, S.at(t0, st) + S.j(), S.v(0.55), { hp: 450, lp: 5200, dec: 0.2, body: 180 }));
+      if (S.rnd() < 0.5) snare(S, P.snare, S.at(t0, 15) + S.j(), S.v(0.12), { hp: 600, lp: 4000, dec: 0.08, body: 180 });
+      for (let st = 0; st < 16; st += 2) hat(S, P.hat, S.at(t0, st) + S.j(), S.v(st % 4 === 0 ? 0.36 : 0.26), false, { hp: 6000, dec: 0.02 });
+      for (let st = 1; st < 16; st += 2) if (S.rnd() < 0.35) hat(S, P.hat, S.at(t0, st) + S.j(), S.v(0.11), false, { hp: 6000, dec: 0.015 });
+      S.melody(fm, P.vibe, t0, this.MM[i], 0.7, I.lofiVibe, 1.0);
+    }
+  },
+  /* ---------------------------------------------------------------- 3 */
+  {
+    id: 'electropop', no: '03', name: 'エレクトロ・ポップ', acc: '#7dffc8', glow: 'rgba(125,255,200,.3)',
+    desc: '明るいプラックのリードと4つ打ち。オクターブで跳ねるベースで疾走。',
+    key: 'D major', bpm: 122, bars: 16, prog: 'Bm G D A Bm G D A G A F#m Bm G A D A'.split(' '),
+    rev: { dur: 1.6, pow: 2.4, damp: 0.5, pre: 0.012, ret: 0.8 }, dly: { fb: 0.32, lp: 4200, ret: 0.5 },
+    parts: {
+      lead: { gain: 1.9, rev: 0.25, dly: 0.35 }, pad: { gain: 1.2, rev: 0.35, duck: 0.7, duckRel: 0.06 },
+      bass: { gain: 0.9, duck: 0.45, duckRel: 0.05 }, arp: { gain: 1.2, rev: 0.2, dly: 0.25, duck: 0.4, pan: 0.2 },
+      kick: { gain: 0.27 }, clap: { gain: 1.6, rev: 0.25 }, hat: { gain: 1.15, pan: 0.15 }, fx: { gain: 0.6, rev: 0.3 }
+    },
+    C: {
+      Bm: 'B1 | B3 D4 F#4', G: 'G1 | B3 D4 G4', D: 'D2 | A3 D4 F#4', A: 'A1 | A3 C#4 E4', 'F#m': 'F#1 | A3 C#4 F#4'
+    },
+    M: [
+      'F#5 . . D5 | . . B4 . | - - D5 . | E5 . F#5 .',
+      'G5 . . F#5 | . . D5 . | . . B4 . | - - - -',
+      'A5 . . F#5 | . . D5 . | - - F#5 . | G5 . A5 .',
+      'E5 . . . | . . C#5 . | . . - - | - - - -',
+      'F#5 . . D5 | . . B4 . | - - D5 . | E5 . F#5 .',
+      'B5 . . A5 | . . G5 . | . . F#5 . | E5 . D5 .',
+      'F#5 . . . | E5 . D5 . | . . - - | A4 . B4 .',
+      'C#5 . . . | . . . . | E5 . . . | - - - -',
+      'D5 . . D5 | . . D5 . | E5 . . F#5 | . . G5 .',
+      'E5 . . . | . . - - | C#5 . E5 . | A5 . . .',
+      'A5 . . F#5 | . . C#5 . | . . E5 . | F#5 . . .',
+      'D5 . . . | . . B4 . | . . - - | - - - -',
+      'B4 . D5 . | G5 . . . | F#5 . . . | E5 . D5 .',
+      'C#5 . E5 . | A5 . . . | G5 . . . | F#5 . E5 .',
+      'F#5 . . . | . . A5 . | . . . . | F#5 . . .',
+      'E5 . . . | . . . . | - - - - | - - - -'
+    ],
+    bar(S, i, t0) {
+      const P = S.parts, C = this.CH[this.prog[i]];
+      for (let b = 0; b < 4; b++) {
+        const t = S.at(t0, b * 4) + S.j() * 0.25;
+        kick(S, P.kick, t, S.v(0.92), { f0: 170, f1: 50, dec: 0.3, click: 0.3 });
+        S.duck(t);
+      }
+      [4, 12].forEach((st) => {
+        const t = S.at(t0, st) + S.j();
+        clap(S, P.clap, t, S.v(0.7)); snare(S, P.clap, t, S.v(0.22), { hp: 1500, dec: 0.1 });
+      });
+      const hv = [0.3, 0.13, 0, 0.13];
+      for (let st = 0; st < 16; st++) {
+        if (st % 4 === 2) hat(S, P.hat, S.at(t0, st) + S.j(), S.v(0.38), true, { open: 0.13 });
+        else hat(S, P.hat, S.at(t0, st) + S.j(), S.v(hv[st % 4]), false);
+      }
+      if (i === 0 || i === 8) crash(S, P.fx, t0, 0.5);
+      if (i === 7 || i === 15) riser(S, P.fx, t0, S.barDur, 0.1);
+      for (let k = 0; k < 8; k++) syn(S, P.bass, S.at(t0, k * 2) + S.j() * 0.4, C.b + (k % 2 ? 12 : 0), S.t16 * 1.4, S.v(k % 2 ? 0.72 : 0.95), I.popBass);
+      S.chord(syn, P.pad, t0, S.barDur * 0.97, C.n.concat([C.n[0] + 12]), 0.55, I.popPad, 0);
+      if (i >= 8) {
+        const an = C.n.map((m) => m + 24), seq = [0, 1, 2, 1];
+        for (let k = 0; k < 16; k++) syn(S, P.arp, S.at(t0, k) + S.j(), an[seq[k % 4]], S.t16 * 0.8, S.v(k % 4 === 0 ? 0.5 : 0.32), I.popArp);
+      }
+      S.melody(syn, P.lead, t0, this.MM[i], 0.85, I.popLead, 0.9);
+    }
+  },
+  /* ---------------------------------------------------------------- 4 */
+  {
+    id: 'piano', no: '04', name: 'アンビエント・ピアノ', acc: '#b9c3ff', glow: 'rgba(185,195,255,.32)',
+    desc: '少ない音数のピアノと長い残響。静かに集中する。',
+    key: 'D major', bpm: 72, bars: 12,
+    prog: ['Dmaj9', 'F#m7', 'Gmaj9', 'Gm6', 'Dmaj9', 'Bm9', 'Em9', 'A7sus4', 'Gmaj9', 'F#m7', 'Em9', 'Asus4'],
+    rev: { dur: 3.0, pow: 1.8, damp: 0.6, pre: 0.03, ret: 1.1 }, dly: { fb: 0.4, lp: 2600, ret: 0.35 },
+    parts: { pno: { gain: 0.75, rev: 0.45 }, mel: { gain: 1.85, rev: 0.55, dly: 0.3 }, pad: { gain: 0.7, rev: 0.6, hp: 150 } },
+    C: {
+      Dmaj9: 'D2 | F#3 A3 C#4 E4', 'F#m7': 'F#2 | A3 C#4 E4', Gmaj9: 'G2 | B3 D4 F#4 A4', Gm6: 'G2 | Bb3 D4 E4',
+      Bm9: 'B1 | D4 F#4 A4 C#5', Em9: 'E2 | G3 B3 D4 F#4', A7sus4: 'A1 | G3 D4 E4', Asus4: 'A1 | D4 E4 A4'
+    },
+    M: [
+      'F#5 . . . | . . . . | E5 . . . | . . . .',
+      'C#5 . . . | . . . . | - - - - | A4 . . .',
+      'B4 . . . | . . . . | D5 . . . | F#5 . . .',
+      'E5 . . . | . . . . | . . . . | - - - -',
+      'A5 . . . | . . F#5 . | . . . . | E5 . . .',
+      'D5 . . . | . . . . | C#5 . . . | - - - -',
+      'B4 . . . | . . . . | F#5 . . . | . . . .',
+      'E5 . . . | . . . . | D5 . . . | - - - -',
+      'D5 . . . | . . . . | B4 . . . | A4 . . .',
+      'C#5 . . . | . . . . | - - - - | - - - -',
+      'G5 . . . | F#5 . . . | E5 . . . | B4 . . .',
+      'A4 . . . | . . . . | . . . . | - - - -'
+    ],
+    bar(S, i, t0) {
+      const P = S.parts, C = this.CH[this.prog[i]], bd = S.barDur;
+      const lo = C.b < 40 ? C.b + 12 : C.b;
+      piano(S, P.pno, t0 + S.j(), lo, bd * 1.02, S.v(0.5), I.pno);
+      piano(S, P.pno, S.at(t0, 6) + S.j(), lo + 7, bd * 0.6, S.v(0.3), I.pno);
+      const pat = i % 2 ? [[3, 0], [7, 1], [11, 2]] : [[2, 0], [5, 1], [9, 2], [13, 3]];
+      pat.forEach((x) => piano(S, P.pno, S.at(t0, x[0]) + S.j(), C.n[x[1] % C.n.length], bd * 0.75, S.v(0.3), I.pno));
+      S.melody(piano, P.mel, t0, this.MM[i], 0.62, I.pno, 1.6);
+      S.chord(syn, P.pad, t0, bd, [lo + 12, C.n[0], C.n[C.n.length - 1]], 0.5, I.air, 0.12);
+    }
+  },
+  /* ---------------------------------------------------------------- 5 */
+  {
+    id: 'orchestra', no: '05', name: '冒険オーケストラ風', acc: '#ffd479', glow: 'rgba(255,212,121,.32)',
+    desc: '弦の刻みとホルンの旋律、ティンパニ。遺跡を駆け抜ける高揚感。',
+    key: 'D minor', bpm: 104, bars: 16, prog: 'Dm Bb F C Dm Bb Gm A Bb C Am Dm Gm Bb C A'.split(' '),
+    rev: { dur: 2.8, pow: 1.9, damp: 0.55, pre: 0.025, ret: 1.0 }, dly: { fb: 0.22, lp: 2500, ret: 0.2 },
+    parts: {
+      str: { gain: 1.1, rev: 0.55, hp: 110, lp: 9000 }, lo: { gain: 1.6, rev: 0.3 }, horn: { rev: 0.5, dly: 0.12, lp: 5000 },
+      bell: { rev: 0.5, dly: 0.2, pan: 0.2 }, timp: { gain: 0.15, rev: 0.4 }, fx: { rev: 0.5 }, cym: { gain: 0.8, rev: 0.6, pan: -0.2 }
+    },
+    C: {
+      Dm: 'D2 | D3 A3 D4 F4', Bb: 'Bb1 | D3 Bb3 D4 F4', F: 'F2 | F3 A3 C4 F4', C: 'C2 | E3 G3 C4 E4',
+      Gm: 'G1 | D3 G3 Bb3 D4', A: 'A1 | E3 A3 C#4 E4', Am: 'A1 | E3 A3 C4 E4'
+    },
+    M: [
+      'D4 . . . | . . A4 . | . . . . | . . . .',
+      'G4 . . . | F4 . . . | D4 . . . | F4 . . .',
+      'C5 . . . | . . A4 . | . . . . | F4 . . .',
+      'G4 . . . | . . . . | . . . . | - - - -',
+      'D4 . . . | . . A4 . | . . . . | D5 . . .',
+      'D5 . . . | C5 . Bb4 . | . . A4 . | G4 . . .',
+      'Bb4 . . . | . . A4 . | G4 . . . | F4 . . .',
+      'E4 . . . | . . A4 . | C#5 . . . | E5 . . .',
+      'D5 . . . | . . F5 . | . . . . | D5 . . .',
+      'E5 . . . | . . G5 . | . . . . | E5 . . .',
+      'C5 . . . | . . E5 . | . . D5 . | C5 . . .',
+      'A4 . . . | . . . . | - - - - | D4 . E4 .',
+      'F4 . . . | . . G4 . | Bb4 . . . | D5 . . .',
+      'F5 . . . | . . D5 . | . . . . | Bb4 . . .',
+      'C5 . . . | . . E5 . | G5 . . . | . . . .',
+      'A4 . . . | . . . . | . . . . | - - - -'
+    ],
+    bar(S, i, t0) {
+      const P = S.parts, C = this.CH[this.prog[i]], bd = S.barDur;
+      S.chord(syn, P.str, t0, bd * 0.99, C.n, 0.55, I.str, 0.012);
+      if (i >= 8) S.chord(syn, P.str, t0, bd * 0.99, C.n.slice(1).map((m) => m + 12), 0.32, I.str, 0.012);
+      const acc = [1, 0.5, 0.6, 1, 0.5, 0.6, 1, 0.7];
+      const lo = C.b < 36 ? C.b + 12 : C.b;
+      for (let k = 0; k < 8; k++) syn(S, P.lo, S.at(t0, k * 2) + S.j(), lo + (k === 7 ? 12 : 0), S.t16 * 1.5, S.v(0.85 * acc[k]), I.spic);
+      timp(S, P.timp, t0 + S.j() * 0.5, lo, S.v(0.85));
+      if (i % 2) timp(S, P.timp, S.at(t0, 12) + S.j(), lo, S.v(0.55));
+      if (i === 7 || i === 15) {
+        for (let st = 8; st < 16; st++) timp(S, P.timp, S.at(t0, st) + S.j() * 0.5, lo, S.v(0.2 + 0.06 * (st - 8)));
+        swell(S, P.fx, S.at(t0, 8), bd / 2, 0.14);
+      }
+      S.melody(syn, P.horn, t0, this.MM[i], 0.85, I.horn, 0.95);
+      S.melody(syn, P.horn, t0, this.MM[i], 0.35, I.horn, 0.95, -12);
+      if (i >= 8) S.melody(fm, P.bell, t0, this.MM[i], 0.5, I.bell, 1, 12);
+      if (i % 4 === 0) crash(S, P.cym, t0 + S.j(), S.v(i % 8 === 0 ? 0.4 : 0.25));
+    }
+  },
+  /* ---------------------------------------------------------------- 6 */
+  {
+    id: 'wafu', no: '06', name: '和風・民族調', acc: '#ff8a7a', glow: 'rgba(255,138,122,.32)',
+    desc: 'ヨナ抜き音階。琴の分散和音、太鼓、篠笛のしゃくり。',
+    key: 'A ヨナ抜き短音階（A B C E F）', bpm: 96, bars: 16, sw8: 0.3,
+    prog: 'Am F E Am F C E Am F Am F E Am F E Am'.split(' '),
+    rev: { dur: 2.2, pow: 2.0, damp: 0.6, pre: 0.02, ret: 0.9 }, dly: { fb: 0.28, lp: 2800, ret: 0.3 },
+    parts: {
+      koto: { gain: 2.3, rev: 0.35, dly: 0.12, hp: 140 }, bkoto: { gain: 1.8, rev: 0.25 }, fue: { rev: 0.45, dly: 0.2 },
+      drone: { gain: 1.25, rev: 0.5, hp: 90 }, taiko: { gain: 0.17, rev: 0.3 }, shime: { gain: 0.9, rev: 0.18, pan: 0.25 }
+    },
+    C: {
+      Am: 'A2 | A3 E4 A4 B4 C5 B4 A4 E4', F: 'F2 | F3 C4 F4 A4 C5 A4 F4 C4',
+      E: 'E2 | E3 B3 E4 F4 A4 F4 E4 B3', C: 'C3 | C4 E4 A4 C5 E5 C5 A4 E4'
+    },
+    M: [
+      'A5 . . . | . . . . | C6 . B5 . | A5 . . .',
+      'F5 . . . | . . . . | E5 . . . | - - - -',
+      'E5 . . . | F5 . E5 . | C5 . . . | B4 . . .',
+      'A4 . . . | . . . . | . . . . | - - - -',
+      'C5 . . . | E5 . . . | F5 . . . | A5 . . .',
+      'B5 . . . | . . A5 . | . . . . | E5 . . .',
+      'F5 . . . | E5 . . . | C5 . B4 . | . . . .',
+      'A4 . . . | . . . . | - - - - | - - - -',
+      'A5 . . . | . . C6 . | . . . . | B5 . A5 .',
+      'E6 . . . | . . . . | C6 . . . | B5 . . .',
+      'C6 . . . | B5 . A5 . | . . F5 . | . . . .',
+      'E5 . . . | . . . . | - - - - | - - - -',
+      'A5 . . . | B5 . C6 . | . . E6 . | . . . .',
+      'C6 . . . | . . B5 . | A5 . . . | F5 . . .',
+      'E5 . . . | F5 . E5 . | B4 . . . | C5 . B4 .',
+      'A4 . . . | . . . . | . . . . | - - - -'
+    ],
+    bar(S, i, t0) {
+      const P = S.parts, C = this.CH[this.prog[i]], bd = S.barDur;
+      C.n.forEach((m, k) => {
+        if (k === 0 && i % 4 === 0) return;
+        koto(S, P.koto, S.at(t0, k * 2) + S.j(), m, S.t16 * 3, S.v(k % 2 ? 0.45 : 0.6), I.koto);
+      });
+      if (i % 4 === 0) [C.n[0], C.n[1], C.n[2]].forEach((m, k) => koto(S, P.koto, t0 + k * 0.024, m, S.t16 * 8, S.v(0.85), I.koto));
+      koto(S, P.bkoto, t0 + S.j(), C.b, bd * 0.6, S.v(0.85), I.bkoto);
+      koto(S, P.bkoto, S.at(t0, 10) + S.j(), C.b, S.t16 * 5, S.v(0.5), I.bkoto);
+      S.chord(syn, P.drone, t0, bd, [C.b + 12, C.b + 19], 0.6, I.drone, 0);
+      taiko(S, P.taiko, t0 + S.j() * 0.3, S.v(1));
+      taiko(S, P.taiko, S.at(t0, 6) + S.j(), S.v(0.5));
+      taiko(S, P.taiko, S.at(t0, 8) + S.j(), S.v(0.8));
+      if (i % 4 === 3) [10, 12, 14].forEach((st, k) => taiko(S, P.taiko, S.at(t0, st) + S.j(), S.v(0.55 + 0.15 * k)));
+      [2, 6, 10, 14].forEach((st) => shime(S, P.shime, S.at(t0, st) + S.j(), S.v(0.45)));
+      [4, 12].forEach((st) => ka(S, P.shime, S.at(t0, st) + S.j(), S.v(0.4)));
+      S.melody(fue, P.fue, t0, this.MM[i], 0.75, I.fue, 0.97);
+    }
+  }
+];
+/* 作風ごとの音量補正（dB）。自己診断（OfflineAudioContext で 10秒描画→RMS）で測って揃えた値 */
+const NORM = { synthwave: -1.9, lofi: -2.1, electropop: -1.7, piano: -0.7, orchestra: -1.4, wafu: -1.1 };
+const TARGET_RMS = -17.5; // dBFS。K特性の近似で -14 LUFS 前後になる値
+
+/* 楽譜を読む（書き間違いはここで例外＝診断で見つかる） */
+STYLES.forEach((st) => {
+  st.CH = {}; Object.keys(st.C).forEach((k) => { st.CH[k] = chord(st.C[k]); });
+  st.MM = st.M.map(mel);
+  if (st.MM.length !== st.bars) throw new Error(st.id + ': 旋律の小節数 ' + st.MM.length + ' ≠ ' + st.bars);
+  if (st.prog.length !== st.bars) throw new Error(st.id + ': コード進行の小節数');
+  st.prog.forEach((p) => p.split('|').forEach((k) => { if (!st.CH[k]) throw new Error(st.id + ': 和音がない ' + k); }));
+  st.loopSec = st.bars * 4 * 60 / st.bpm;
+});
+const STY = {}; STYLES.forEach((s) => { STY[s.id] = s; });
+/* ピアノ・琴は波形を先に計算しておく（使う音だけ） */
+function needs(st) {
+  const set = {};
+  Object.keys(st.CH).forEach((k) => { const c = st.CH[k]; set[c.b] = 1; set[c.b + 12] = 1; set[c.b + 7] = 1; set[c.b + 19] = 1; c.n.forEach((m) => { set[m] = 1; }); });
+  st.MM.forEach((b) => b.forEach((n) => { set[n.m] = 1; }));
+  return Object.keys(set).map(Number);
+}
+const PREP = { piano: 'piano', wafu: 'ks' };
+function prepSync(E, st) { const k = PREP[st.id]; if (k) needs(st).forEach((m) => E[k](m)); }
+async function prepAsync(E, st) {
+  const k = PREP[st.id]; if (!k) return;
+  const list = needs(st);
+  for (let x = 0; x < list.length; x++) { E[k](list[x]); if (x % 3 === 2) await new Promise((r) => setTimeout(r, 0)); }
+}
+
+/* ==========================================================================
+   7. 再生（本番の AudioContext）
+   ========================================================================== */
+const MUSIC = {
+  E: null, S: null, cur: 'synthwave', fast: false, vol: 0.8, timer: null, busy: false, reqId: 0,
+  styles: STYLES.map((s) => s.id),
+  ensure() {
+    if (MUSIC.E) { if (MUSIC.E.c.state !== 'running') MUSIC.E.c.resume(); return MUSIC.E; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* noop */ }
+    let c;
+    try { c = new AC({ latencyHint: 'playback' }); } catch (e) { c = new AC(); }
+    MUSIC.E = new Engine(c, c.destination);
+    MUSIC.E.vol.gain.value = MUSIC.vol;
+    c.resume();
+    MUSIC.timer = setInterval(MUSIC.tick, 25);
+    document.addEventListener('visibilitychange', () => {
+      if (!MUSIC.E) return;
+      if (document.visibilityState === 'hidden') MUSIC.E.c.suspend();
+      else if (MUSIC.S) MUSIC.E.c.resume();
+    });
+    return MUSIC.E;
+  },
+  tick() {
+    const S = MUSIC.S, E = MUSIC.E;
+    if (!S || !S.alive || !E) return;
+    const now = E.c.currentTime;
+    /* 先読み 1.3秒（裏に回ってタイマーが 1秒に1回へ間引かれても途切れない） */
+    let guard = 0;
+    while (S.nextT < now + 1.3 && guard++ < 4) {
+      if (S.nextT < now) S.nextT = now + 0.05;
+      S.schedBar();
+    }
+  },
+  async play(id) {
+    const E = MUSIC.ensure(); if (!E) return false;
+    const st = STY[id || MUSIC.cur]; if (!st) return false;
+    MUSIC.cur = st.id;
+    const req = ++MUSIC.reqId;
+    if (MUSIC.S) { MUSIC.S.kill(E.c.currentTime); MUSIC.S = null; }
+    MUSIC.busy = true; UI.render();
+    await prepAsync(E, st);
+    if (req !== MUSIC.reqId) return false;
+    MUSIC.busy = false;
+    const S = new Session(E, st, { fast: MUSIC.fast });
+    const now = E.c.currentTime;
+    S.out.gain.setValueAtTime(0, now);
+    S.out.gain.linearRampToValueAtTime(dbToG(NORM[st.id]), now + 0.08);
+    S.nextT = now + 0.12;
+    MUSIC.S = S;
+    MUSIC.tick();
+    UI.render();
+    return true;
+  },
+  stop() {
+    MUSIC.reqId++; MUSIC.busy = false;
+    if (MUSIC.S && MUSIC.E) { MUSIC.S.kill(MUSIC.E.c.currentTime); MUSIC.S = null; }
+    UI.render();
+  },
+  setFast(b) { MUSIC.fast = !!b; if (MUSIC.S) MUSIC.S.pendingMul = b ? 1.15 : 1; UI.render(); },
+  setVol(v) { MUSIC.vol = v; if (MUSIC.E) MUSIC.E.vol.gain.setTargetAtTime(v, MUSIC.E.c.currentTime, 0.03); },
+  playing() { return !!(MUSIC.S && MUSIC.S.alive); },
+  state() { return MUSIC.E ? MUSIC.E.c.state : 'none'; },
+  /* 今の出力レベル（RMS・リニア） */
+  level() {
+    if (!MUSIC.E) return 0;
+    const a = MUSIC.E.an, d = new Float32Array(a.fftSize);
+    a.getFloatTimeDomainData(d);
+    let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i];
+    return Math.sqrt(s / d.length);
+  },
+  position() {
+    const S = MUSIC.S; if (!S || !MUSIC.E) return null;
+    const now = MUSIC.E.c.currentTime;
+    let m = null; S.marks.forEach((x) => { if (x.t <= now) m = x; });
+    if (!m) return { bar: 0, frac: 0, bars: S.st.bars };
+    return { bar: m.i, frac: Math.min(1, (m.i + (now - m.t) / m.dur) / S.st.bars), bars: S.st.bars };
+  }
+};
+
+/* ==========================================================================
+   8. 自己診断（OfflineAudioContext で描画して数値で確かめる）
+   ========================================================================== */
+async function renderStyle(id, sec, opt) {
+  opt = opt || {};
+  const sr = 44100, OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const oc = new OAC(2, Math.floor(sr * sec), sr);
+  const E = new Engine(oc, oc.destination);
+  const st = STY[id];
+  prepSync(E, st);
+  const S = new Session(E, st, { fast: !!opt.fast, seed: opt.seed == null ? 12345 : opt.seed, solo: opt.solo });
+  S.out.gain.value = dbToG(opt.norm != null ? opt.norm : NORM[id]);
+  S.nextT = 0.05;
+  while (S.nextT < sec) S.schedBar();
+  return await oc.startRendering();
+}
+/* K特性（BS.1770 の近似: ハイシェルフ +4dB@1.5k ＋ ハイパス 38Hz）→ 400ms ブロック・ゲート付きの積分ラウドネス */
+async function lufs(buf) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const oc = new OAC(2, buf.length, buf.sampleRate);
+  const src = oc.createBufferSource(); src.buffer = buf;
+  const hs = bq(oc, 'highshelf', 1500); hs.gain.value = 4;
+  const hp = bq(oc, 'highpass', 38, 0.5);
+  src.connect(hs); hs.connect(hp); hp.connect(oc.destination); src.start(0);
+  const k = await oc.startRendering();
+  const L = k.getChannelData(0), R = k.getChannelData(1), sr = k.sampleRate;
+  const blk = Math.floor(0.4 * sr), hop = Math.floor(0.1 * sr), zs = [];
+  for (let s = 0; s + blk <= L.length; s += hop) {
+    let z = 0; for (let n = s; n < s + blk; n++) z += L[n] * L[n] + R[n] * R[n];
+    zs.push(z / blk);
+  }
+  const lb = (z) => -0.691 + 10 * Math.log10(Math.max(1e-12, z));
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length);
+  const g1 = zs.filter((z) => lb(z) > -70);
+  const rel = lb(mean(g1)) - 10;
+  return lb(mean(g1.filter((z) => lb(z) > rel)));
+}
+function fftPow(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit;
+    if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -TAU / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2;
+        const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+      }
+    }
+  }
+}
+function analyse(buf) {
+  const L = buf.getChannelData(0), R = buf.getChannelData(1), sr = buf.sampleRate;
+  let ss = 0, pk = 0;
+  for (let i = 0; i < L.length; i++) { ss += L[i] * L[i] + R[i] * R[i]; pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i])); }
+  const rms = Math.sqrt(ss / (2 * L.length));
+  const N = 4096, bands = [0, 0, 0], acc = new Float64Array(N / 2);
+  const re = new Float64Array(N), im = new Float64Array(N);
+  let frames = 0;
+  for (let s = 0; s + N <= L.length; s += N) {
+    for (let n = 0; n < N; n++) { const w = 0.5 - 0.5 * Math.cos(TAU * n / (N - 1)); re[n] = (L[s + n] + R[s + n]) * 0.5 * w; im[n] = 0; }
+    fftPow(re, im);
+    for (let k = 1; k < N / 2; k++) acc[k] += re[k] * re[k] + im[k] * im[k];
+    frames++;
+  }
+  let tot = 0, cen = 0;
+  for (let k = 1; k < N / 2; k++) {
+    const f = k * sr / N, p = acc[k];
+    if (f < 250) bands[0] += p; else if (f < 4000) bands[1] += p; else bands[2] += p;
+    tot += p; cen += p * f;
+  }
+  return { rms: gToDb(rms), peak: pk, bands: bands.map((b) => b / tot * 100), centroid: cen / tot };
+}
+async function diag(opt) {
+  opt = opt || {};
+  const sec = opt.sec || 10, rows = [];
+  for (const st of STYLES) {
+    const t0 = performance.now();
+    const buf = await renderStyle(st.id, sec, { norm: opt.raw ? 0 : undefined });
+    const a = analyse(buf);
+    a.lufs = await lufs(buf);
+    a.id = st.id; a.name = st.name; a.ms = Math.round(performance.now() - t0);
+    a.loopSec = st.loopSec; a.loopFast = st.loopSec / 1.15; a.bars = st.bars; a.bpm = st.bpm;
+    a.loopOk = Number.isInteger(st.bars) && st.bars >= 8 && st.bars <= 16 && st.loopSec >= 30 && st.loopSec <= 40.05;
+    a.sound = a.rms > -40; a.clip = a.peak < 0.98;
+    rows.push(a);
+    if (opt.onRow) opt.onRow(a);
+  }
+  const mean = rows.reduce((s, r) => s + r.rms, 0) / rows.length;
+  rows.forEach((r) => { r.dev = r.rms - mean; r.devOk = Math.abs(r.dev) <= 2; });
+  const ok = rows.every((r) => r.sound && r.clip && r.devOk && r.loopOk);
+  return { ok: ok, meanRms: mean, spread: Math.max.apply(null, rows.map((r) => r.rms)) - Math.min.apply(null, rows.map((r) => r.rms)), rows: rows };
+}
+/* パートごとの音量（開発用: どのパートが出すぎ／引っ込みすぎかを数値で見る） */
+async function partLevels(id, sec) {
+  const st = STY[id], out = {};
+  for (const k of Object.keys(st.parts)) {
+    const a = analyse(await renderStyle(id, sec || 6, { solo: k }));
+    out[k] = +a.rms.toFixed(1);
+  }
+  return out;
+}
+MUSIC.diag = diag; MUSIC.renderStyle = renderStyle; MUSIC.analyse = analyse; MUSIC.lufs = lufs; MUSIC.partLevels = partLevels;
+MUSIC.NORM = NORM; MUSIC.TARGET_RMS = TARGET_RMS;
+window.MUSIC = MUSIC;
+
+/* ==========================================================================
+   9. 画面
+   ========================================================================== */
+const UI = {
+  cards: {},
+  init() {
+    const grid = document.getElementById('grid');
+    STYLES.forEach((st) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'card';
+      b.style.setProperty('--acc', st.acc); b.style.setProperty('--glow', st.glow);
+      b.innerHTML = '<span class="eq"><i></i><i></i><i></i></span><div class="no">' + st.no + '</div><div class="nm">' + st.name.replace(/・/g, '・<wbr>') +
+        '</div><div class="ds">' + st.desc + '</div><div class="mt"><span>' + st.bpm + ' BPM</span> ・ <span>' + st.key + '</span> ・ <span>' + st.bars + '小節 ' + st.loopSec.toFixed(1) + '秒</span></div>';
+      b.addEventListener('click', () => {
+        if (MUSIC.cur === st.id && (MUSIC.playing() || MUSIC.busy)) MUSIC.stop();
+        else MUSIC.play(st.id);
+      });
+      grid.appendChild(b);
+      UI.cards[st.id] = b;
+    });
+    document.getElementById('play').addEventListener('click', () => { if (MUSIC.playing() || MUSIC.busy) MUSIC.stop(); else MUSIC.play(MUSIC.cur); });
+    document.getElementById('slow').addEventListener('click', () => MUSIC.setFast(false));
+    document.getElementById('fast').addEventListener('click', () => MUSIC.setFast(true));
+    const vol = document.getElementById('vol');
+    vol.addEventListener('input', () => MUSIC.setVol(vol.value / 100));
+    document.getElementById('diag-run').addEventListener('click', UI.runDiag);
+    UI.render();
+    UI.loop();
+  },
+  render() {
+    STYLES.forEach((st) => {
+      const b = UI.cards[st.id];
+      b.classList.toggle('on', MUSIC.cur === st.id);
+      b.classList.toggle('playing', MUSIC.cur === st.id && MUSIC.playing());
+      b.classList.toggle('busy', MUSIC.cur === st.id && MUSIC.busy);
+    });
+    document.getElementById('play').textContent = (MUSIC.playing() || MUSIC.busy) ? '■ 停止' : '▶ 再生';
+    document.getElementById('slow').classList.toggle('on', !MUSIC.fast);
+    document.getElementById('fast').classList.toggle('on', MUSIC.fast);
+  },
+  loop() {
+    const st = STY[MUSIC.cur], pos = MUSIC.position();
+    const lv = MUSIC.playing() ? MUSIC.level() : 0;
+    document.getElementById('mt').style.width = Math.min(100, Math.max(0, (gToDb(lv) + 48) / 48 * 100)) + '%';
+    document.getElementById('pg').style.width = pos ? (pos.frac * 100).toFixed(1) + '%' : '0';
+    const tempo = MUSIC.fast ? '高速 ' + Math.round(st.bpm * 1.15) : '低速 ' + st.bpm;
+    document.getElementById('st').textContent = MUSIC.busy ? st.name + ' — 準備中…'
+      : MUSIC.playing() ? st.name + ' — ' + tempo + ' BPM — 小節 ' + ((pos ? pos.bar : 0) + 1) + '/' + st.bars
+      : st.name + '（停止中）';
+    requestAnimationFrame(UI.loop);
+  },
+  async runDiag() {
+    const btn = document.getElementById('diag-run'), out = document.getElementById('diag-out'), sum = document.getElementById('diag-sum');
+    btn.disabled = true; btn.textContent = '診断中…'; out.innerHTML = ''; sum.textContent = '';
+    const f = (x, d) => x.toFixed(d);
+    const cell = (v, ok) => '<td class="' + (ok ? 'ok' : 'ng') + '">' + v + '</td>';
+    let html = '<table><tr><th>作風</th><th>RMS dBFS</th><th>差</th><th>LUFS≈</th><th>ピーク</th><th>低/中/高 %</th><th>重心 Hz</th><th>ループ 秒（高速）</th></tr>';
+    try {
+      const r = await diag({ onRow: (a) => { sum.textContent = a.name + ' を描画しました（' + a.ms + 'ms）'; } });
+      r.rows.forEach((a) => {
+        html += '<tr><td>' + a.name + '</td>' + cell(f(a.rms, 1), a.sound) + cell((a.dev >= 0 ? '+' : '') + f(a.dev, 1), a.devOk) +
+          '<td>' + f(a.lufs, 1) + '</td>' + cell(f(a.peak, 3), a.clip) +
+          '<td>' + a.bands.map((b) => f(b, 1)).join(' / ') + '</td><td>' + Math.round(a.centroid) + '</td>' +
+          cell(a.bars + '小節 ' + f(a.loopSec, 1) + '（' + f(a.loopFast, 1) + '）', a.loopOk) + '</tr>';
+      });
+      html += '</table>';
+      out.innerHTML = html;
+      sum.innerHTML = (r.ok ? '<b style="color:#a8f4d8">合格</b>' : '<b style="color:#ff9bb0">不合格あり</b>') +
+        ' — 無音なし・ピーク &lt; 0.98・作風間の RMS 差 ±2dB（幅 ' + f(r.spread, 1) + 'dB）・ループ＝8〜16小節の整数・30〜40秒';
+    } catch (e) {
+      sum.textContent = '診断に失敗: ' + (e && e.message ? e.message : e);
+    }
+    btn.disabled = false; btn.textContent = '診断を実行';
+  }
+};
+UI.init();
+</script>
+</body>
+</html>
