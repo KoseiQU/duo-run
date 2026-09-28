@@ -23,18 +23,19 @@
 const EndlessKit = (function () {
   /* ---- 採用ギミック（§4.5b）。basic は相方として常に出る基本障害物 ---------- */
   const GIMMICKS = ['hurdle', 'lowl', 'pillar', 'wide', 'laserv',
-                    'scan', 'rot', 'blink', 'net', 'sync', 'bridge', 'rock', 'vent', 'zero', 'flip'];
+                    'scan', 'rot', 'blink', 'net', 'sync', 'bridge', 'vent', 'zero', 'flip'];
   /* サメの横断はエンドレスから除外（契約§4.5b 2026-09-27 実機評「サーフボードみたいな板」。S4 には残す）。
-     壁の穴も失効（スライディング廃止）。＝ 採用ギミックは 15種 */
+     転がる丸岩もエンドレスから除外（§4.5b 2026-09-28 実機評「背景によって横から出る球が非常に見づらい」。S3 には残す）。
+     壁の穴も失効（スライディング廃止）。＝ 採用ギミックは 14種 */
   const BASIC = { hurdle: 1, lowl: 1, pillar: 1, wide: 1, laserv: 1 };
   /* 相方としてほぼ全部の札に出る基本障害物（均等化の「重い順」で後回しにしてよい） */
   const COMMON = { hurdle: 1, lowl: 1 };
   const LABEL = { hurdle: 'ハードル', lowl: 'ローレーザー', pillar: 'ピラー', wide: 'ワイド梁', laserv: '縦レーザー',
                   scan: '横スキャン（振り子）', rot: '回転レーザー', blink: '点滅レーザー',
-                  net: 'レーザーネット', sync: '同時スイッチ', bridge: '崩れる橋', rock: '転がる丸岩',
+                  net: 'レーザーネット', sync: '同時スイッチ', bridge: '崩れる橋',
                   vent: '泡の噴出口', zero: '無重力ジャンプ', flip: '世界反転ゲート' };
   /* クリアで解放（エンドレスは「クリア済みのステージが持ち込んだギミック」だけ / 契約§4.4・§4.6） */
-  const UNLOCK = { S2: ['scan', 'rot', 'blink'], S3: ['sync', 'bridge', 'rock'],
+  const UNLOCK = { S2: ['scan', 'rot', 'blink'], S3: ['sync', 'bridge'],
                    S4: ['vent'], S5: ['net', 'zero'], S6: ['flip'] };
   /* 世界反転の区画（秒）。契約「speed×8秒 以上」＋速度の上昇ぶんの余裕 */
   const FLIP_T = 8.6;
@@ -56,8 +57,6 @@ const EndlessKit = (function () {
   const S = (from, to, ph) => b('LASER_SCAN', 0, { scan: { from: from, to: to, phase: ph } });
   const fR = (l, ph) => f('LASER_ROT', l, { rot: { phase: ph } });
   const cR = (l, ph) => c('LASER_ROT', l, { rot: { phase: ph } });
-  const fK = (l, dir) => f('ROCK', Math.round(l), { roll: { lane: l, dir: dir } });
-  const cK = (l, dir) => c('ROCK', Math.round(l), { roll: { lane: l, dir: dir } });
   const Hlow = () => b('LASER_H', -1, { hbeam: { y0: CFG.NET.Y_LOW, y1: CFG.NET.Y_HIGH, phase: 0 } });
   const Hhigh = () => b('LASER_H', -1, { hbeam: { y0: CFG.NET.Y_HIGH, y1: CFG.NET.Y_LOW, phase: 0 } });
   const D = (f0, c0) => b('LASER_DIAG', 0, { diag: { f0: f0, c0: c0 } });
@@ -105,9 +104,9 @@ const EndlessKit = (function () {
     { id: 'sy2', eg: 'sync', w: [w(0, SY(-1, 1, -1, 1)), w(19.4, cL(1)), w(24.2, fj(-1, 0))] },
     /* --- 崩れる橋（2レーン。at＝崩落点＝踏み口の 2.0秒先。相方の面は跳び続ける） --- */
     { id: 'br1', eg: 'bridge', w: [w(20, fBR(-1), fBR(0)), w(6, cj(-1, 0, 1)), w(13.4, cL(0, 1)), w(27, cj(-1))] },
-    /* --- 転がる丸岩 --- */
-    { id: 'rk1', eg: 'rock', w: [w(0, fK(0, 1)), w(4.8, cK(1, -1)), w(9.6, fK(-0.5, 1))] },
-    { id: 'rk2', eg: 'rock', w: [w(0, fK(1, -1), V(-1)), w(9.7, cK(0, 1)), w(14.5, fj(-1, 0))] },
+    /* 転がる丸岩が主役の札（rk1 / rk2 / x1）はエンドレスから除外（§4.5b 2026-09-28）。y1 は丸岩を
+       回転レーザーに替えて噴出口の札に。丸岩を相方に持っていた札（x5 / x10 / y2 / y6 / y9 / y10 / y11 / y12 / q3 / q4 / z5）は、
+       丸岩を回転レーザー（片面・横に避ける）か点滅ローレーザー（片面・跳ぶ）に置き換えた */
     /* サメ（sh1 / sh2 / x2 / x8 / y5 / q5）はエンドレスから除外（§4.5b 2026-09-27）。
        サメを相方に持っていた同時スイッチの札（y10 / q2 / q6）は、サメを横スキャンの光柱に置き換えた */
     /* --- 泡の噴出口（床だけ＝入れ替えなし） --- */
@@ -120,33 +119,33 @@ const EndlessKit = (function () {
     { id: 'fl1', eg: 'flip', rigid: 1, flip: 1, w: [w(0, FLIP())] },
 
     /* --- 組み札（1枚で2つのギミック。速い区間でも 1000m に全部を回すため） --- */
-    { id: 'x1', eg: 'rock', w: [w(0, fK(0, 1)), w(4.8, cR(1, 0.25)), w(9.6, fR(-1, 0.5)), w(14.4, cK(-1, 1))] },
     { id: 'x3', eg: 'vent', noSwap: 1, w: [w(0, VENT(0), S(0, 1, 0.5)), w(9.7, cj(-1, 0)), w(14.5, VENT(-1), VENT(1))] },
     { id: 'x4', eg: 'bridge', w: [w(20, fBR(-1), fBR(0)), w(2, NETG()), w(6, Hhigh()), w(13.4, Hhigh()), w(25, cj(1))] },
-    { id: 'x5', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, fK(0, 1)), w(24.2, cK(1, -1))] },
+    { id: 'x5', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, fR(0, 0.25)), w(24.2, cLon(0, 1))] },
     { id: 'x7', eg: 'zero', rigid: 1, w: [w(0, ZG(2.4)), w(2, NETG()), w(4, Hlow()), w(10, Hhigh()), w(15, fj(-1, 0, 1))] },
     { id: 'x9', eg: 'rot', w: [w(0, fR(0, 0.25), cj(-1, 1)), w(9.7, S(-1, 1, 0), fj(0, 1))] },
-    { id: 'x10', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cK(-1, 1)), w(13.4, cK(1, -1)), w(27, cj(0))] },
+    { id: 'x10', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cR(-1, 0.5)), w(13.4, cR(1, 0)), w(27, cj(0))] },
 
     /* --- 三つ組の札（1枚で3つ。速い区間でミニ大演出と同じ 1000m に入っても全部を回すため） --- */
-    { id: 'y1', eg: 'rock', noSwap: 1, w: [w(0, fK(0, 1)), w(4.8, cLon(-1, 0, 1)), w(9.6, VENT(-1), VENT(1))] },
-    { id: 'y2', eg: 'net', w: [w(-2, NETG()), w(0, Hlow()), w(4.8, cK(1, -1)), w(9.6, fR(-1, 0.5))] },
+    /* y1: 主役だった丸岩を回転レーザーに置き換え、主ギミックを泡の噴出口にした（短く密な三つ組を残すため） */
+    { id: 'y1', eg: 'vent', noSwap: 1, w: [w(0, fR(0, 0.25)), w(4.8, cLon(-1, 0, 1)), w(9.6, VENT(-1), VENT(1))] },
+    { id: 'y2', eg: 'net', w: [w(-2, NETG()), w(0, Hlow()), w(4.8, cR(1, 0)), w(9.6, fR(-1, 0.5))] },
     { id: 'y3', eg: 'vent', noSwap: 1, w: [w(0, VENT(0)), w(4.8, Hhigh()), w(9.6, fLon(-1, 0, 1))] },
-    { id: 'y6', eg: 'wide', w: [w(0, fW(-1), cK(1, -1)), w(10.6, S(-1, 1, 0), fj(0, 1))] },
+    { id: 'y6', eg: 'wide', w: [w(0, fW(-1), cR(1, 0)), w(10.6, S(-1, 1, 0), fj(0, 1))] },
     { id: 'y8', eg: 'pillar', w: [w(0, P(0), fLon(-1, 1)), w(10.6, cR(1, 0.25), fj(0))] },
-    { id: 'y9', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cK(-1, 1)), w(13.4, Hhigh()), w(27, cLon(-1, 0, 1), V(0))] },
-    { id: 'y10', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, S(-1, 0, 0), cj(1)), w(26, fK(0, 1))] },
-    { id: 'y11', eg: 'zero', rigid: 1, noSwap: 1, w: [w(0, ZG(2.4)), w(5, VENT(-1), VENT(1)), w(11, cK(0, 1)), w(16, fLon(0))] },
-    { id: 'y12', eg: 'sync', w: [w(0, SY(-1, 1, -1, 1)), w(19.4, cK(1, -1))] },
+    { id: 'y9', eg: 'bridge', w: [w(20, fBR(0), fBR(1)), w(6, cR(-1, 0.5), fL(-1)), w(13.4, Hhigh()), w(27, cLon(-1, 0, 1), V(0))] },
+    { id: 'y10', eg: 'sync', w: [w(0, SY(0, 0, 0, 0)), w(19.4, S(-1, 0, 0), cj(1)), w(26, fR(0, 0.25)), w(30.8, cj(-1, 0))] },
+    { id: 'y11', eg: 'zero', rigid: 1, noSwap: 1, w: [w(0, ZG(2.4)), w(5, VENT(-1), VENT(1)), w(11, cR(0, 0.25)), w(16, fLon(0))] },
+    { id: 'y12', eg: 'sync', w: [w(0, SY(-1, 1, -1, 1)), w(19.4, cR(1, 0))] },
     { id: 'y13', eg: 'laserv', w: [w(0, V(-1), fj(0, 1)), w(9.7, cW(0), fj(-1)), w(20.3, D(1, -1))] },
 
     /* --- 四つ組の札（ミニ大演出の入った速い 1000m でも、5〜6枚で採用ギミックが一巡する） --- */
     { id: 'q2', eg: 'sync', noSwap: 1, w: [w(0, SY(0, 0, 0, 0)), w(19.4, S(0, 1, 0), VENT(-1)), w(29.1, cR(1, 0.25))] },
     /* q3: 4 の床の壁の穴は失効＝取り除いただけ（天井の点滅ローレーザーだけが残る＝上下非対称のまま） */
-    { id: 'q3', eg: 'zero', rigid: 1, w: [w(0, ZG(2.4)), w(4, cLon(-1, 0, 1)), w(14.6, fK(0, 1)), w(20, cK(1, -1))] },
-    { id: 'q4', eg: 'wide', w: [w(0, fW(-1), cK(1, -1)), w(10.6, S(-1, 1, 0), fj(0, 1)), w(20.3, P(1), cj(-1, 0)), w(30.9, fR(-1, 0.25))] },
+    { id: 'q3', eg: 'zero', rigid: 1, w: [w(0, ZG(2.4)), w(4, cLon(-1, 0, 1)), w(14.6, fR(0, 0.25)), w(20, cR(1, 0))] },
+    { id: 'q4', eg: 'wide', w: [w(0, fW(-1), cLon(1)), w(10.6, S(-1, 1, 0), fj(0, 1)), w(20.3, P(1), cj(-1, 0)), w(30.9, fR(-1, 0.25))] },
     /* --- 五つ組の札（無重力の中で崩れる橋／同時スイッチ→横スキャン＋噴出口→回転） --- */
-    { id: 'z5', eg: 'zero', rigid: 1, w: [w(0, ZG(3.0)), w(2, NETG()), w(22, fBR(0), fBR(1)), w(6, cK(-1, 1)),
+    { id: 'z5', eg: 'zero', rigid: 1, w: [w(0, ZG(3.0)), w(2, NETG()), w(22, fBR(0), fBR(1)), w(6, cR(-1, 0.5)),
                                          w(16.3, cLon(-1, 0, 1)), w(28, Hhigh(), V(0))] },
     { id: 'q6', eg: 'sync', noSwap: 1, w: [w(0, SY(0, 0, 0, 0)), w(19.4, S(0, 1, 0), VENT(-1)),
                                           w(29.1, cR(-1, 0.25))] }

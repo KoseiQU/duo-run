@@ -63,6 +63,8 @@
       }));
       /* サメはエンドレスから除外（§4.5b 2026-09-27）＝生成にも1匹も出ない */
       list.forEach((o) => { if (o.type === 'SHARK') miss.push('seed' + seed + ' SHARK@' + o.at.toFixed(0)); });
+      /* 転がる丸岩もエンドレスから除外（§4.5b 2026-09-28）＝生成に1個も出ない */
+      list.forEach((o) => { if (o.type === 'ROCK') miss.push('seed' + seed + ' ROCK@' + o.at.toFixed(0)); });
       /* 同じ主ギミックの札を3枚続けない */
       const units = g.log.filter((l) => l.eg && l.startM < L);
       units.forEach((u) => { mains[u.eg] = (mains[u.eg] || 0) + 1; });
@@ -105,7 +107,7 @@
     t.ok(nFlip >= n * (L / 1000) * 0.9, '世界反転が 1000m にほぼ1回（' + (nFlip / n).toFixed(2) + '回 / ' + L + 'm）');
     t.eq(asymLow.length, 0, '上下で違う動きが必須動作の 60% 以上（最小 ' + asymMin.toFixed(3) + '・平均 ' + (asymSum / n).toFixed(3) + '）');
     /* ゾーン（背景）と無関係: ステージ固有だったギミックが 4ゾーン以上で出る */
-    ['bridge', 'rock', 'vent', 'sync', 'zero', 'net', 'flip'].forEach((x) => {
+    ['bridge', 'vent', 'sync', 'zero', 'net', 'flip'].forEach((x) => {
       const zs = Object.keys(zonesOf[x] || {});
       t.ok(zs.length >= 4, x + ' がゾーンと無関係に出る（' + zs.join(',') + '）');
     });
@@ -125,10 +127,13 @@
       const In = I(), EK = In.EndlessKit;
       const types = {};
       EK.UNITS.forEach((d) => (d.floor || []).concat(d.ceil || []).forEach((e) => { types[e.type] = 1; }));
-      ['MIRRORZ', 'GRAVWARP', 'MERGE', 'SHARK', 'WALLHOLE'].forEach((x) => t.ok(!types[x], '札に ' + x + ' が無い（§4.5b 除外）'));
+      ['MIRRORZ', 'GRAVWARP', 'MERGE', 'SHARK', 'ROCK', 'WALLHOLE'].forEach((x) => t.ok(!types[x], '札に ' + x + ' が無い（§4.5b 除外）'));
       t.ok(EK.GIMMICKS.indexOf('shark') < 0 && EK.available(ALL).indexOf('shark') < 0, 'サメは採用ギミックに無い（2026-09-27 エンドレスから除外）');
       t.ok(EK.available(['S1', 'S2', 'S3', 'S4']).indexOf('vent') >= 0, 'S4 クリアで泡の噴出口だけが解放される（サメは入らない）');
-      t.eq(EK.GIMMICKS.length, 15, '採用ギミックは15種（17 − 壁の穴 − サメ）');
+      t.ok(EK.GIMMICKS.indexOf('rock') < 0 && EK.available(ALL).indexOf('rock') < 0, '転がる丸岩は採用ギミックに無い（2026-09-28 エンドレスから除外）');
+      t.eq(EK.available(['S1', 'S2', 'S3']).filter((x) => ['sync', 'bridge'].indexOf(x) >= 0).length, 2, 'S3 クリアで同時スイッチ・崩れる橋だけが解放される（丸岩は入らない）');
+      t.eq(EK.GIMMICKS.length, 14, '採用ギミックは14種（17 − 壁の穴 − サメ − 転がる丸岩）');
+      t.ok(EK.UNITS.every((d) => d.gset.indexOf('rock') < 0), 'どの札にも転がる丸岩が入っていない（' + EK.UNITS.length + '枚）');
       t.ok(EK.UNITS.every((d) => d.gset.indexOf('shark') < 0), 'どの札にもサメが入っていない（' + EK.UNITS.length + '枚）');
       t.ok(!!types.HANDSWAP, '世界反転ゲートは採用（§4.5b）');
       t.eq(In.makeStage('endless').p8b, true, 'エンドレスは P8b の生成（stage.p8b）');
@@ -155,6 +160,9 @@
         let sh = 0;
         for (let seed = 1; seed <= 3; seed++) sh += gen(seed).list.filter((o) => o.type === 'SHARK').length;
         t.eq(sh, 0, '3シード×5000m: サメは1匹も出ない');
+        let rk = 0;
+        for (let seed = 1; seed <= 3; seed++) rk += gen(seed).list.filter((o) => o.type === 'ROCK').length;
+        t.eq(rk, 0, '3シード×5000m: 転がる丸岩は1個も出ない');
       });
     }
   });
