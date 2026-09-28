@@ -597,11 +597,12 @@
     quick: true,
     run(t) {
       const A = I().Audio;
-      t.eq(Object.keys(A.ZONES).sort().join(','), 'core,mirror,neon,ruins,sea,space', '6ゾーンの BGM 定義');
-      Object.keys(A.ZONES).forEach((z) => t.eq(typeof A.PATTERN[z], 'function', z + ' に専用のパターン'));
+      /* P9b: エレクトロ・ポップのゾーン別変奏 7曲（S1 白空間を含む）。詳細な数値検証は test_p9b.js */
+      t.eq(Object.keys(A.ZONES).sort().join(','), 'core,mirror,neon,ruins,sea,space,white', '7ゾーンの BGM 定義');
+      Object.keys(A.ZONES).forEach((z) => t.eq(typeof A.ZONES[z].bar, 'function', z + ' に専用の小節の組み立て'));
       t.near(A.tempoFor(16), 1.0, 1e-9, '16 m/s はテンポそのまま');
-      t.near(A.tempoFor(44), 1.2, 1e-9, '44 m/s でテンポ +20%');
-      t.near(A.stepDur('neon', 1) * 16 * A.BARS, 8 * 4 * 60 / A.ZONES.neon.bpm, 1e-9, '8小節ループ');
+      t.near(A.tempoFor(44), 1.15, 1e-9, '44 m/s でテンポ +15%（P9b）');
+      t.near(A.stepDur('neon', 1) * 16 * A.BARS, A.ZONES.neon.loopSec, 1e-9, '16小節ループ');
       /* ゾーンが変われば BGM もそのゾーンへ */
       const Zs = I().Zones, keep = Zs.id();
       Zs.switchTo('sea', true);
